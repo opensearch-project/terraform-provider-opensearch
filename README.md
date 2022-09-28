@@ -2,6 +2,7 @@
 
 - [Terraform Provider OpenSearch](#Terraform-Provider-OpenSearch)
 - [Contributing](#contributing)
+- [Maintainer Responsibilities](MAINTAINERS.md)
 - [Getting Help](#getting-help)
 - [Code of Conduct](#code-of-conduct)
 - [Security](#security)
@@ -9,7 +10,7 @@
 - [Copyright](#copyright)
 
 ## Terraform Provider OpenSearch
-This is a terraform provider that lets you provision OpenSearch resources.
+This is a terraform provider to provision OpenSearch resources.
 
 ## Contributing
 
