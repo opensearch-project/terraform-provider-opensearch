@@ -1,6 +1,6 @@
 <img src="https://opensearch.org/assets/brand/SVG/Logo/opensearch_logo_default.svg" height="64px"/>
 
-- [OpenSearch Build Libraries](#Terraform-Provider-OpenSearch)
+- [Terraform Provider OpenSearch](#Terraform-Provider-OpenSearch)
 - [Contributing](#contributing)
 - [Getting Help](#getting-help)
 - [Code of Conduct](#code-of-conduct)
