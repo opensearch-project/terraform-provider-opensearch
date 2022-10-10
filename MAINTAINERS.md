@@ -8,6 +8,7 @@
 | ---------------- | --------------------------------------------------- | ----------- |
 | Peter Zhu        | [peterzhuamazon](https://github.com/peterzhuamazon) | Amazon      |
 | Prudhvi Godithi  | [prudhvigodithi](https://github.com/prudhvigodithi) | Amazon      | 
+| jackson Theisen  | [jackson-theisen](https://github.com/jackson-theisen)| Theisen Consulting | 
 
 
 [This document](https://github.com/opensearch-project/.github/blob/main/MAINTAINERS.md) explains what maintainers do in this repo, and how they should be doing it. If you're interested in contributing, see [CONTRIBUTING](CONTRIBUTING.md).
