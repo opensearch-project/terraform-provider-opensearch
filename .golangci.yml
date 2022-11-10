@@ -1,0 +1,10 @@
+linters:
+  enable:
+    - gofmt
+
+issues:
+  exclude-rules:
+    - linters:
+        - staticcheck
+      text: "SA1019:"
+      path: provider/resource_opensearch_index_template.*.go
