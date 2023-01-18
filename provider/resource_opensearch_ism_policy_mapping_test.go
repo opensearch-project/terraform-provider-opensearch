@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -19,27 +18,11 @@ func TestAccOpensearchOpenDistroISMPolicyMapping(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var allowed bool
-
-	switch esClient.(type) {
-	case *elastic6.Client:
-		allowed = false
-	default:
-		allowed = true
-	}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 			// TODO add check for OpenDistro <= 1.13
-			if !allowed {
-				t.Skip("OpenDistroISMPolicies only supported on ES 7.")
-			}
 		},
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: testCheckOpensearchISMPolicyMappingDestroy,
@@ -96,15 +79,10 @@ func indicesMappedToPolicy(policy string) ([]string, error) {
 	var err error
 	var indices map[string]interface{}
 	mappedIndices := []string{}
-	esClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return mappedIndices, err
 	}
-	switch esClient.(type) {
-	case *elastic7.Client:
-		indices, err = resourceOpensearchGetOpendistroPolicyMapping(policy, meta.(*ProviderConf))
-	default:
-	}
+	indices, err = resourceOpensearchGetOpendistroPolicyMapping(policy, meta.(*ProviderConf))
 
 	if err != nil {
 		return mappedIndices, err

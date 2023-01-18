@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -321,24 +320,20 @@ func resourceOpensearchGetAuditConfig(m interface{}) (getAuditConfigResponse, er
 	audit := new(getAuditConfigResponse)
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return *audit, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   "/_plugins/_security/api/audit",
-		})
-		if err != nil {
-			return *audit, err
-		}
-		body = res.Body
-	default:
-		return *audit, errors.New("audit config resource not implemented prior to OpenSearch v1")
+
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   "/_plugins/_security/api/audit",
+	})
+	if err != nil {
+		return *audit, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, &audit); err != nil {
 		return *audit, fmt.Errorf("Error unmarshalling user body: %+v: %+v", err, body)
@@ -431,37 +426,32 @@ func resourceOpensearchPutAuditConfig(d *schema.ResourceData, m interface{}) (*p
 	}
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		log.Printf("[INFO] put audit config: %+v", auditConfig)
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method:           "PUT",
-			Path:             "/_plugins/_security/api/audit/config",
-			Body:             string(auditConfigJSON),
-			RetryStatusCodes: []int{http.StatusInternalServerError},
-			Retrier: elastic7.NewBackoffRetrier(
-				elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-			),
-		})
-		if err != nil {
-			e, ok := err.(*elastic7.Error)
-			if !ok {
-				log.Printf("[ERROR] expected error to be of type *elastic.Error")
-			} else {
-				log.Printf("[ERROR] error creating audit config: %v %v %v", res, res.Body, e)
-			}
-			return response, err
+	var res *elastic7.Response
+	log.Printf("[INFO] put audit config: %+v", auditConfig)
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method:           "PUT",
+		Path:             "/_plugins/_security/api/audit/config",
+		Body:             string(auditConfigJSON),
+		RetryStatusCodes: []int{http.StatusInternalServerError},
+		Retrier: elastic7.NewBackoffRetrier(
+			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+		),
+	})
+	if err != nil {
+		e, ok := err.(*elastic7.Error)
+		if !ok {
+			log.Printf("[ERROR] expected error to be of type *elastic.Error")
+		} else {
+			log.Printf("[ERROR] error creating audit config: %v %v %v", res, res.Body, e)
 		}
-
-		body = res.Body
-	default:
-		return response, errors.New("audit config resource not implemented prior to OpenSearch v1")
+		return response, err
 	}
+
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("failed to unmarshal audit config body: %+v: %+v", err, body)

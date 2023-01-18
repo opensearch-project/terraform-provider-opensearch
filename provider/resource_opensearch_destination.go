@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/olivere/elastic/uritemplates"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 const DESTINATION_TYPE = "_doc"
@@ -67,7 +65,7 @@ func resourceOpensearchOpenDistroDestinationCreate(d *schema.ResourceData, m int
 func resourceOpensearchOpenDistroDestinationRead(d *schema.ResourceData, m interface{}) error {
 	destination, err := resourceOpensearchOpenDistroQueryOrGetDestination(d.Id(), m)
 
-	if elastic6.IsNotFound(err) || elastic7.IsNotFound(err) {
+	if elastic7.IsNotFound(err) {
 		log.Printf("[WARN] Destination (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -106,100 +104,72 @@ func resourceOpensearchOpenDistroDestinationDelete(d *schema.ResourceData, m int
 		return fmt.Errorf("error building URL path for destination: %+v", err)
 	}
 
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "DELETE",
-			Path:   path,
-		})
-	case *elastic6.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "DELETE",
-			Path:   path,
-		})
-	default:
-		err = errors.New("destination resource not implemented prior to v6")
-	}
+	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "DELETE",
+		Path:   path,
+	})
 
 	return err
 }
 
-func resourceOpensearchOpenDistroGetDestination(destinationID string, esClient interface{}) (Destination, error) {
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		path, err := uritemplates.Expand("/_opendistro/_alerting/destinations/{id}", map[string]string{
-			"id": destinationID,
-		})
-		if err != nil {
-			return Destination{}, fmt.Errorf("error building URL path for destination: %+v", err)
-		}
+func resourceOpensearchOpenDistroGetDestination(destinationID string, client *elastic7.Client) (Destination, error) {
 
-		httpResponse, err := client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-		if err != nil {
-			return Destination{}, err
-		}
+	path, err := uritemplates.Expand("/_opendistro/_alerting/destinations/{id}", map[string]string{
+		"id": destinationID,
+	})
+	if err != nil {
+		return Destination{}, fmt.Errorf("error building URL path for destination: %+v", err)
+	}
 
-		var drg destinationResponseGet
-		if err := json.Unmarshal(httpResponse.Body, &drg); err != nil {
-			return Destination{}, fmt.Errorf("error unmarshalling destination body: %+v", err)
-		}
-		// The response structure from the API is the same for the index and get
-		// endpoints :|, and different from the other endpoints. Normalize the
-		// response here.
-		if len(drg.Destinations) > 0 {
-			return drg.Destinations[0], nil
-		} else {
-			return Destination{}, fmt.Errorf("endpoint returned empty set of destinations: %+v", drg)
-		}
-	default:
-		return Destination{}, errors.New("destination get api not implemented prior to ODFE 1.11.0")
+	httpResponse, err := client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return Destination{}, err
+	}
+
+	var drg destinationResponseGet
+	if err := json.Unmarshal(httpResponse.Body, &drg); err != nil {
+		return Destination{}, fmt.Errorf("error unmarshalling destination body: %+v", err)
+	}
+	// The response structure from the API is the same for the index and get
+	// endpoints :|, and different from the other endpoints. Normalize the
+	// response here.
+	if len(drg.Destinations) > 0 {
+		return drg.Destinations[0], nil
+	} else {
+		return Destination{}, fmt.Errorf("endpoint returned empty set of destinations: %+v", drg)
 	}
 }
 
 func resourceOpensearchOpenDistroQueryOrGetDestination(destinationID string, m interface{}) (Destination, error) {
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return Destination{}, err
 	}
 
 	var dr destinationResponse
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		// See https://github.com/opendistro-for-elasticsearch/alerting/issues/56,
-		// no API endpoint for retrieving destination prior to ODFE 1.11.0. So do
-		// a request, if it 404s, fall back to trying to query the index.
-		destination, err := resourceOpensearchOpenDistroGetDestination(destinationID, client)
-		if err == nil {
-			return destination, err
-		} else {
-			result, err := elastic7GetObject(client, DESTINATION_INDEX, destinationID)
+	// See https://github.com/opendistro-for-elasticsearch/alerting/issues/56,
+	// no API endpoint for retrieving destination prior to ODFE 1.11.0. So do
+	// a request, if it 404s, fall back to trying to query the index.
+	destination, err := resourceOpensearchOpenDistroGetDestination(destinationID, client)
+	if err == nil {
+		return destination, err
+	} else {
+		result, err := elastic7GetObject(client, DESTINATION_INDEX, destinationID)
 
-			if err != nil {
-				return Destination{}, err
-			}
-			if err := json.Unmarshal(result.Source, &dr); err != nil {
-				return Destination{}, fmt.Errorf("error unmarshalling destination body: %+v: %+v", err, result.Source)
-			}
-			return dr.Destination, nil
-		}
-	case *elastic6.Client:
-		result, err := elastic6GetObject(client, DESTINATION_TYPE, DESTINATION_INDEX, destinationID)
 		if err != nil {
 			return Destination{}, err
 		}
-		if err := json.Unmarshal(*result.Source, &dr); err != nil {
+		if err := json.Unmarshal(result.Source, &dr); err != nil {
 			return Destination{}, fmt.Errorf("error unmarshalling destination body: %+v: %+v", err, result.Source)
 		}
 		return dr.Destination, nil
-	default:
-		return Destination{}, errors.New("destination resource not implemented prior to v6")
 	}
 }
 
@@ -212,36 +182,20 @@ func resourceOpensearchOpenDistroPostDestination(d *schema.ResourceData, m inter
 	path := "/_opendistro/_alerting/destinations/"
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "POST",
-			Path:   path,
-			Body:   destinationJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-		res, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "POST",
-			Path:   path,
-			Body:   destinationJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	default:
-		return response, errors.New("destination resource not implemented prior to v6")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "POST",
+		Path:   path,
+		Body:   destinationJSON,
+	})
+	if err != nil {
+		return response, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling destination body: %+v: %+v", err, body)
@@ -264,41 +218,24 @@ func resourceOpensearchOpenDistroPutDestination(d *schema.ResourceData, m interf
 	}
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "PUT",
-			Path:   path,
-			Body:   destinationJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-		res, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "PUT",
-			Path:   path,
-			Body:   destinationJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	default:
-		return response, errors.New("destination resource not implemented prior to v6")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "PUT",
+		Path:   path,
+		Body:   destinationJSON,
+	})
+	if err != nil {
+		return response, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling destination body: %+v: %+v", err, body)
 	}
-
 	return response, nil
 }
 

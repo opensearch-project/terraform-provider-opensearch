@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -230,25 +229,20 @@ func resourceOpensearchPostOpendistroPolicyMapping(d *schema.ResourceData, m int
 	}
 
 	var body *json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "POST",
-			Path:   path,
-			Body:   requestBody,
-		})
-		if err != nil {
-			return response, fmt.Errorf("error posting policy attachment: %+v : %+v : %+v", path, requestBody, err)
-		}
-		body = &res.Body
-	default:
-		err = errors.New("policy resource not implemented prior to v7")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "POST",
+		Path:   path,
+		Body:   requestBody,
+	})
+	if err != nil {
+		return response, fmt.Errorf("error posting policy attachment: %+v : %+v : %+v", path, requestBody, err)
 	}
+	body = &res.Body
 
 	if err != nil {
 		return response, fmt.Errorf("error creating policy mapping: %+v", err)
@@ -271,24 +265,20 @@ func resourceOpensearchGetOpendistroPolicyMapping(indexPattern string, m interfa
 	}
 
 	var body *json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-		if err != nil {
-			return *response, fmt.Errorf("error getting policy attachment: %+v, %w", path, err)
-		}
-		body = &res.Body
-	default:
-		err = errors.New("policy mapping resource not implemented prior to v7")
+
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return *response, fmt.Errorf("error getting policy attachment: %+v, %w", path, err)
 	}
+	body = &res.Body
 
 	if err != nil {
 		return *response, fmt.Errorf("error creating policy mapping: %+v", err)

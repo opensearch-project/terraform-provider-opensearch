@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
@@ -42,17 +39,10 @@ func testCheckOpensearchMonitorExists(name string) resource.TestCheckFunc {
 		meta := testAccOpendistroProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch esClient.(type) {
-		case *elastic7.Client:
-			_, err = resourceOpensearchOpenDistroGetMonitor(rs.Primary.ID, meta.(*ProviderConf))
-		case *elastic6.Client:
-			_, err = resourceOpensearchOpenDistroGetMonitor(rs.Primary.ID, meta.(*ProviderConf))
-		default:
-		}
+		_, err = resourceOpensearchOpenDistroGetMonitor(rs.Primary.ID, meta.(*ProviderConf))
 
 		if err != nil {
 			return err
@@ -71,18 +61,10 @@ func testCheckOpensearchMonitorDestroy(s *terraform.State) error {
 		meta := testAccOpendistroProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch esClient.(type) {
-		case *elastic7.Client:
-			_, err = resourceOpensearchOpenDistroGetMonitor(rs.Primary.ID, meta.(*ProviderConf))
-
-		case *elastic6.Client:
-			_, err = resourceOpensearchOpenDistroGetMonitor(rs.Primary.ID, meta.(*ProviderConf))
-		default:
-		}
+		_, err = resourceOpensearchOpenDistroGetMonitor(rs.Primary.ID, meta.(*ProviderConf))
 
 		if err != nil {
 			return nil // should be not found error

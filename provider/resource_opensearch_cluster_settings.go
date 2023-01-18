@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -15,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 var (
@@ -292,7 +290,7 @@ func resourceOpensearchClusterSettingsCreate(d *schema.ResourceData, meta interf
 func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface{}) error {
 	var err error
 
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -304,28 +302,14 @@ func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface
 		return err
 	}
 
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		// client doesn't support PUTing settings: https://github.com/olivere/elastic/issues/1274
-		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "PUT",
-			Path:   "/_cluster/settings",
-			Body:   string(body),
-		})
-		if err != nil {
-			return err
-		}
-	case *elastic6.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "PUT",
-			Path:   "/_cluster/settings",
-			Body:   string(body),
-		})
-		if err != nil {
-			return err
-		}
-	default:
-		return errors.New("opensearch version not supported")
+	// elastic doesn't support PUTing settings: https://github.com/olivere/elastic/issues/1274
+	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "PUT",
+		Path:   "/_cluster/settings",
+		Body:   string(body),
+	})
+	if err != nil {
+		return err
 	}
 
 	return err
@@ -359,37 +343,21 @@ func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interfac
 	var settings map[string]interface{}
 	var response *json.RawMessage
 
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return settings, err
 	}
 
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
+	var res *elastic7.Response
 
-		res, err := client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   "/_cluster/settings?flat_settings=true",
-		})
-		if err != nil {
-			return settings, err
-		}
-		response = &res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-
-		res, err := client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "GET",
-			Path:   "/_cluster/settings?flat_settings=true",
-		})
-		if err != nil {
-			return settings, err
-		}
-		response = &res.Body
-	default:
-		return settings, errors.New("opensearch version not supported")
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   "/_cluster/settings?flat_settings=true",
+	})
+	if err != nil {
+		return settings, err
 	}
+	response = &res.Body
 
 	err = json.Unmarshal(*response, &settings)
 	if err != nil {
@@ -402,7 +370,7 @@ func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interfac
 func clearAllSettings(meta interface{}) error {
 	var err error
 
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -417,27 +385,13 @@ func clearAllSettings(meta interface{}) error {
 		}
 	  }`
 
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "PUT",
-			Path:   "/_cluster/settings",
-			Body:   body,
-		})
-		if err != nil {
-			return err
-		}
-	case *elastic6.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "PUT",
-			Path:   "/_cluster/settings",
-			Body:   body,
-		})
-		if err != nil {
-			return err
-		}
-	default:
-		return errors.New("opensearch version not supported")
+	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "PUT",
+		Path:   "/_cluster/settings",
+		Body:   body,
+	})
+	if err != nil {
+		return err
 	}
 
 	return err

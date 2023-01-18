@@ -10,9 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 const (
@@ -133,22 +130,22 @@ resource "opensearch_index" "test_doctype" {
 EOF
 }
 `
-	testAccOpensearchMappingWithoutDocType = `
-resource "opensearch_index" "test_doctype" {
-  name               = "terraform-test"
-  number_of_replicas = "1"
-  include_type_name  = false
-  mappings           = <<EOF
-{
-  "properties": {
-    "name": {
-      "type": "text"
-    }
-  }
-}
-EOF
-}
-`
+	//	testAccOpensearchMappingWithoutDocType = `
+	//resource "opensearch_index" "test_doctype" {
+	//  name               = "terraform-test"
+	//  number_of_replicas = "1"
+	//  include_type_name  = false
+	//  mappings           = <<EOF
+	//{
+	//  "properties": {
+	//    "name": {
+	//      "type": "text"
+	//    }
+	//  }
+	//}
+	//EOF
+	//}
+	//`
 	testAccOpensearchIndexUpdateForceDestroy = `
 resource "opensearch_index" "test" {
   name               = "terraform-test"
@@ -358,21 +355,7 @@ func TestAccOpensearchIndex_doctype(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var config string
-
-	switch esClient.(type) {
-	case *elastic7.Client:
-		config = testAccOpensearchMappingWithDocType
-	case *elastic6.Client:
-		config = testAccOpensearchMappingWithoutDocType
-	default:
-		t.Skipf("doctypes removed after v6/v7")
-	}
+	config := testAccOpensearchMappingWithDocType
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -395,26 +378,10 @@ func TestAccOpensearchIndex_rolloverAliasOpendistro(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var allowed bool
-
-	switch esClient.(type) {
-	case *elastic6.Client:
-		allowed = false
-	default:
-		allowed = true
-	}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			if !allowed {
-				t.Skip("Opendistro index policies only supported on ES 7")
-			}
 		},
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: checkOpensearchIndexRolloverAliasDestroy(testAccOpendistroProvider, "terraform-test"),
@@ -452,18 +419,11 @@ func checkOpensearchIndexExists(name string) resource.TestCheckFunc {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
 
 		return err
 	}
@@ -483,28 +443,15 @@ func checkOpensearchIndexUpdated(name string) resource.TestCheckFunc {
 		var settings map[string]interface{}
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			resp, err := client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			settings = resp[rs.Primary.ID].Settings["index"].(map[string]interface{})
-
-		case *elastic6.Client:
-			resp, err := client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			settings = resp[rs.Primary.ID].Settings["index"].(map[string]interface{})
-
-		default:
-			return errors.New("opensearch version not supported")
+		resp, err := client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
+		if err != nil {
+			return err
 		}
+		settings = resp[rs.Primary.ID].Settings["index"].(map[string]interface{})
 
 		r, ok := settings["number_of_replicas"]
 		if ok {
@@ -527,18 +474,11 @@ func checkOpensearchIndexDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
 
 		if err != nil {
 			return nil // should be not found error
@@ -555,26 +495,15 @@ func checkOpensearchIndexRolloverAliasExists(provider *schema.Provider, alias st
 		meta := provider.Meta()
 
 		var count int
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		case *elastic6.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		default:
-			return errors.New("opensearch version not supported")
+		r, err := client.CatAliases().Alias(alias).Do(context.TODO())
+		if err != nil {
+			return err
 		}
+		count = len(r)
 
 		if count == 0 {
 			return fmt.Errorf("rollover alias %q not found", alias)
@@ -603,26 +532,15 @@ func checkOpensearchIndexRolloverAliasDestroy(provider *schema.Provider, alias s
 		meta := provider.Meta()
 
 		var count int
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		case *elastic6.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		default:
-			return errors.New("opensearch version not supported")
+		r, err := client.CatAliases().Alias(alias).Do(context.TODO())
+		if err != nil {
+			return err
 		}
+		count = len(r)
 
 		if count > 0 {
 			return fmt.Errorf("rollover alias %q still exists", alias)

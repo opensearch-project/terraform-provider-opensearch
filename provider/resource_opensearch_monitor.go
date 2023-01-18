@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/olivere/elastic/uritemplates"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 var openDistroMonitorSchema = map[string]*schema.Schema{
@@ -62,7 +60,7 @@ func resourceOpensearchOpenDistroMonitorCreate(d *schema.ResourceData, m interfa
 func resourceOpensearchOpenDistroMonitorRead(d *schema.ResourceData, m interface{}) error {
 	res, err := resourceOpensearchOpenDistroGetMonitor(d.Id(), m)
 
-	if elastic6.IsNotFound(err) || elastic7.IsNotFound(err) {
+	if elastic7.IsNotFound(err) {
 		log.Printf("[WARN] Monitor (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -106,24 +104,14 @@ func resourceOpensearchOpenDistroMonitorDelete(d *schema.ResourceData, m interfa
 		return fmt.Errorf("error building URL path for monitor: %+v", err)
 	}
 
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "DELETE",
-			Path:   path,
-		})
-	case *elastic6.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "DELETE",
-			Path:   path,
-		})
-	default:
-		err = errors.New("monitor resource not implemented prior to Elastic v6")
-	}
+	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "DELETE",
+		Path:   path,
+	})
 
 	return err
 }
@@ -140,34 +128,19 @@ func resourceOpensearchOpenDistroGetMonitor(monitorID string, m interface{}) (*m
 	}
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-		res, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	default:
-		return response, errors.New("monitor resource not implemented prior to Elastic v6")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return response, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling monitor body: %+v: %+v", err, body)
@@ -185,36 +158,20 @@ func resourceOpensearchOpenDistroPostMonitor(d *schema.ResourceData, m interface
 	path := "/_opendistro/_alerting/monitors/"
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "POST",
-			Path:   path,
-			Body:   monitorJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-		res, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "POST",
-			Path:   path,
-			Body:   monitorJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	default:
-		return response, errors.New("monitor resource not implemented prior to Elastic v6")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "POST",
+		Path:   path,
+		Body:   monitorJSON,
+	})
+	if err != nil {
+		return response, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling monitor body: %+v: %+v", err, body)
@@ -237,36 +194,20 @@ func resourceOpensearchOpenDistroPutMonitor(d *schema.ResourceData, m interface{
 	}
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "PUT",
-			Path:   path,
-			Body:   monitorJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-		res, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "PUT",
-			Path:   path,
-			Body:   monitorJSON,
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	default:
-		return response, errors.New("monitor resource not implemented prior to Elastic v6")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "PUT",
+		Path:   path,
+		Body:   monitorJSON,
+	})
+	if err != nil {
+		return response, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling monitor body: %+v: %+v", err, body)

@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -121,23 +120,18 @@ func resourceOpensearchOpenDistroDashboardTenantDelete(d *schema.ResourceData, m
 		return fmt.Errorf("error building URL path for tenant: %+v", err)
 	}
 
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method:           "DELETE",
-			Path:             path,
-			RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-			Retrier: elastic7.NewBackoffRetrier(
-				elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-			),
-		})
-	default:
-		err = errors.New("Creating tenants requires v7 client")
-	}
+	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method:           "DELETE",
+		Path:             path,
+		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
+		Retrier: elastic7.NewBackoffRetrier(
+			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+		),
+	})
 
 	return err
 }
@@ -155,24 +149,19 @@ func resourceOpensearchGetOpenDistroDashboardTenant(tenantID string, m interface
 	}
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return *tenant, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-		if err != nil {
-			return *tenant, err
-		}
-		body = res.Body
-	default:
-		return *tenant, errors.New("Creating tenants requires elastic v7 client")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return *tenant, err
 	}
+	body = res.Body
 
 	var tenantDefinition map[string]TenantBody
 
@@ -205,29 +194,24 @@ func resourceOpensearchPutOpenDistroDashboardTenant(d *schema.ResourceData, m in
 	}
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method:           "PUT",
-			Path:             path,
-			Body:             string(tenantJSON),
-			RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-			Retrier: elastic7.NewBackoffRetrier(
-				elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-			),
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	default:
-		return response, errors.New("Creating tenants requires v7 client")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method:           "PUT",
+		Path:             path,
+		Body:             string(tenantJSON),
+		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
+		Retrier: elastic7.NewBackoffRetrier(
+			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+		),
+	})
+	if err != nil {
+		return response, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling tenant body: %+v: %+v", err, body)

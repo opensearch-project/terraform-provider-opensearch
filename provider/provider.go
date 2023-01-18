@@ -26,7 +26,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 type ServerFlavor int64
@@ -275,7 +274,7 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 	}, nil
 }
 
-func getClient(conf *ProviderConf) (interface{}, error) {
+func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 	opts := []elastic7.ClientOptionFunc{
 		elastic7.SetURL(conf.rawUrl),
 		elastic7.SetScheme(conf.parsedUrl.Scheme),
@@ -344,7 +343,6 @@ func getClient(conf *ProviderConf) (interface{}, error) {
 		opts = append(opts, elastic7.SetErrorLog(errorLogger))
 	}
 
-	var relevantClient interface{}
 	client, err := elastic7.NewClient(opts...)
 	if err != nil {
 		if errors.Is(err, elastic7.ErrNoClient) {
@@ -353,7 +351,6 @@ func getClient(conf *ProviderConf) (interface{}, error) {
 		}
 		return nil, err
 	}
-	relevantClient = client
 
 	// Use the v7 client to ping the cluster to determine the version if one was not provided
 	if conf.osVersion == "" {
@@ -379,82 +376,15 @@ func getClient(conf *ProviderConf) (interface{}, error) {
 		log.Printf("[INFO] OS version %+v", info.Version)
 		switch info.Version.BuildFlavor {
 		case "default":
+			conf.flavor = Unknown
+		default:
 			conf.flavor = OpenSearch
 		}
+	} else if conf.flavor == Unknown || conf.osVersion < "1.0.0" {
+		return nil, fmt.Errorf("opensearch version %s is older than 1.0.0 and is not supported, flavor: %v.", conf.osVersion, conf.flavor)
 	}
 
-	if conf.osVersion < "7.0.0" && conf.osVersion >= "6.0.0" {
-		log.Printf("[INFO] Using ES 6")
-		opts := []elastic6.ClientOptionFunc{
-			elastic6.SetURL(conf.rawUrl),
-			elastic6.SetScheme(conf.parsedUrl.Scheme),
-			elastic6.SetSniff(conf.sniffing),
-			elastic6.SetHealthcheck(conf.healthchecking),
-		}
-
-		if conf.parsedUrl.User.Username() != "" {
-			p, _ := conf.parsedUrl.User.Password()
-			opts = append(opts, elastic6.SetBasicAuth(conf.parsedUrl.User.Username(), p))
-		}
-		if conf.username != "" && conf.password != "" {
-			opts = append(opts, elastic6.SetBasicAuth(conf.username, conf.password))
-		}
-
-		if m := awsUrlRegexp.FindStringSubmatch(conf.parsedUrl.Hostname()); m != nil && conf.signAWSRequests {
-			log.Printf("[INFO] Using AWS: %+v", m[1])
-			client, err := awsHttpClient(m[1], conf, map[string]string{})
-			if err != nil {
-				return nil, err
-			}
-			opts = append(opts, elastic6.SetHttpClient(client), elastic6.SetSniff(false))
-		} else if awsRegion := conf.awsRegion; conf.awsRegion != "" && conf.signAWSRequests {
-			log.Printf("[INFO] Using AWS: %+v", conf.awsRegion)
-			client, err := awsHttpClient(awsRegion, conf, map[string]string{})
-			if err != nil {
-				return nil, err
-			}
-			opts = append(opts, elastic6.SetHttpClient(client), elastic6.SetSniff(false))
-		} else if conf.insecure || conf.cacertFile != "" {
-			opts = append(opts, elastic6.SetHttpClient(tlsHttpClient(conf, map[string]string{})), elastic6.SetSniff(false))
-		} else if conf.token != "" {
-			opts = append(opts, elastic6.SetHttpClient(tokenHttpClient(conf, map[string]string{})), elastic6.SetSniff(false))
-		} else {
-			opts = append(opts, elastic6.SetHttpClient(defaultHttpClient(conf, map[string]string{})))
-		}
-
-		switch logProviderLevel {
-		case "TRACE":
-			traceLogger := esLogger.StandardLogger(&hclog.StandardLoggerOptions{
-				ForceLevel: hclog.LevelFromString("TRACE"),
-			})
-			opts = append(opts, elastic6.SetTraceLog(traceLogger))
-			fallthrough
-		case "INFO":
-			infoLogger := esLogger.StandardLogger(&hclog.StandardLoggerOptions{
-				ForceLevel: hclog.LevelFromString("INFO"),
-			})
-			opts = append(opts, elastic6.SetInfoLog(infoLogger))
-			fallthrough
-		default:
-			errorLogger := esLogger.StandardLogger(&hclog.StandardLoggerOptions{
-				ForceLevel: hclog.LevelFromString("ERROR"),
-			})
-			opts = append(opts, elastic6.SetErrorLog(errorLogger))
-		}
-
-		relevantClient, err = elastic6.NewClient(opts...)
-		if err != nil {
-			return nil, err
-		}
-	} else if conf.flavor == Unknown && conf.osVersion < "2.0.0" && conf.osVersion >= "1.0.0" {
-		// Version 1.x of OpenSearch very likely. Nothing to do since it's API
-		// compatible with 7.x of ES. If elastic client library supports detecting
-		// flavor, update to Opensearch.
-	} else if conf.osVersion < "6.0.0" {
-		return nil, fmt.Errorf("opensearch version %s is older than 6.0.0 and is not supported, flavor: %v.", conf.osVersion, conf.flavor)
-	}
-
-	return relevantClient, nil
+	return client, nil
 }
 
 func assumeRoleCredentials(region, roleARN, profile string) *awscredentials.Credentials {

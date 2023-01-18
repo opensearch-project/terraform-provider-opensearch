@@ -2,12 +2,8 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
-
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -19,21 +15,8 @@ func TestAccOpensearchIngestPipeline(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var config string
+	config := testAccOpensearchIngestPipelineV7
 
-	switch esClient.(type) {
-	case *elastic7.Client:
-		config = testAccOpensearchIngestPipelineV7
-	case *elastic6.Client:
-		config = testAccOpensearchIngestPipelineV6
-	default:
-		config = testAccOpensearchIngestPipelineV5
-	}
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -57,20 +40,8 @@ func TestAccOpensearchIngestPipeline_importBasic(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var config string
-	switch esClient.(type) {
-	case *elastic7.Client:
-		config = testAccOpensearchIngestPipelineV7
-	case *elastic6.Client:
-		config = testAccOpensearchIngestPipelineV6
-	default:
-		config = testAccOpensearchIngestPipelineV5
-	}
+
+	config := testAccOpensearchIngestPipelineV7
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -104,18 +75,11 @@ func testCheckOpensearchIngestPipelineExists(name string) resource.TestCheckFunc
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
 
 		if err != nil {
 			return err
@@ -134,18 +98,11 @@ func testCheckOpensearchIngestPipelineDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
 
 		if err != nil {
 			return nil // should be not found error
@@ -157,44 +114,44 @@ func testCheckOpensearchIngestPipelineDestroy(s *terraform.State) error {
 	return nil
 }
 
-var testAccOpensearchIngestPipelineV5 = `
-resource "opensearch_ingest_pipeline" "test" {
-  name = "terraform-test"
-  body = <<EOF
-{
-  "description" : "describe pipeline",
-  "processors" : [
-    {
-      "set" : {
-        "field": "foo",
-        "value": "bar"
-      }
-    }
-  ]
-}
-EOF
-}
-`
+//var testAccOpensearchIngestPipelineV5 = `
+//resource "opensearch_ingest_pipeline" "test" {
+//  name = "terraform-test"
+//  body = <<EOF
+//{
+//  "description" : "describe pipeline",
+//  "processors" : [
+//    {
+//      "set" : {
+//        "field": "foo",
+//        "value": "bar"
+//      }
+//    }
+//  ]
+//}
+//EOF
+//}
+//`
 
-var testAccOpensearchIngestPipelineV6 = `
-resource "opensearch_ingest_pipeline" "test" {
-  name = "terraform-test"
-  body = <<EOF
-{
-  "description" : "describe pipeline",
-  "version": 123,
-  "processors" : [
-    {
-      "set" : {
-        "field": "foo",
-        "value": "bar"
-      }
-    }
-  ]
-}
-EOF
-}
-`
+//var testAccOpensearchIngestPipelineV6 = `
+//resource "opensearch_ingest_pipeline" "test" {
+//  name = "terraform-test"
+//  body = <<EOF
+//{
+//  "description" : "describe pipeline",
+//  "version": 123,
+//  "processors" : [
+//    {
+//      "set" : {
+//        "field": "foo",
+//        "value": "bar"
+//      }
+//    }
+//  ]
+//}
+//EOF
+//}
+//`
 
 var testAccOpensearchIngestPipelineV7 = `
 resource "opensearch_ingest_pipeline" "test" {

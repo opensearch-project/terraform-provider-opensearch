@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
@@ -18,29 +15,12 @@ func TestAccOpensearchOpenDistroISMPolicy(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var allowed bool
 
-	var config string
-	switch esClient.(type) {
-	case *elastic6.Client:
-		allowed = true
-		config = testAccOpensearchOpenDistroISMPolicyV6
-	default:
-		allowed = true
-		config = testAccOpensearchOpenDistroISMPolicyV7
-	}
+	config := testAccOpensearchOpenDistroISMPolicyV7
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			if !allowed {
-				t.Skip("OpenDistroISMPolicies only supported on ES 6.")
-			}
 		},
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: testCheckOpensearchISMPolicyDestroy,
@@ -73,17 +53,7 @@ func testCheckOpensearchISMPolicyExists(name string) resource.TestCheckFunc {
 		meta := testAccOpendistroProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
-		if err != nil {
-			return err
-		}
-		switch esClient.(type) {
-		case *elastic7.Client:
-			_, err = resourceOpensearchGetOpenDistroISMPolicy(rs.Primary.ID, meta.(*ProviderConf))
-		case *elastic6.Client:
-			_, err = resourceOpensearchGetOpenDistroISMPolicy(rs.Primary.ID, meta.(*ProviderConf))
-		default:
-		}
+		_, err = resourceOpensearchGetOpenDistroISMPolicy(rs.Primary.ID, meta.(*ProviderConf))
 
 		if err != nil {
 			return err
@@ -102,17 +72,10 @@ func testCheckOpensearchISMPolicyDestroy(s *terraform.State) error {
 		meta := testAccOpendistroProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch esClient.(type) {
-		case *elastic7.Client:
-			_, err = resourceOpensearchGetOpenDistroISMPolicy(rs.Primary.ID, meta.(*ProviderConf))
-		case *elastic6.Client:
-			_, err = resourceOpensearchGetOpenDistroISMPolicy(rs.Primary.ID, meta.(*ProviderConf))
-		default:
-		}
+		_, err = resourceOpensearchGetOpenDistroISMPolicy(rs.Primary.ID, meta.(*ProviderConf))
 
 		if err != nil {
 			return nil // should be not found error
@@ -124,60 +87,60 @@ func testCheckOpensearchISMPolicyDestroy(s *terraform.State) error {
 	return nil
 }
 
-var testAccOpensearchOpenDistroISMPolicyV6 = `
-resource "opensearch_ism_policy" "test_policy" {
-  policy_id = "test_policy"
-  body      = <<EOF
-  {
-		"policy": {
-		  "description": "ingesting logs",
-		  "default_state": "ingest",
-		  "error_notification": {
-        "destination": {
-          "slack": {
-            "url": "https://webhook.slack.example.com"
-          }
-        },
-        "message_template": {
-          "lang": "mustache",
-          "source": "The index *{{ctx.index}}* failed to rollover."
-        }
-      },
-		  "states": [
-				{
-				  "name": "ingest",
-				  "actions": [{
-					  "rollover": {
-						"min_doc_count": 5
-					  }
-					}],
-				  "transitions": [{
-					  "state_name": "search"
-					}]
-				},
-				{
-				  "name": "search",
-				  "actions": [],
-				  "transitions": [{
-					  "state_name": "delete",
-					  "conditions": {
-						"min_index_age": "5m"
-					  }
-					}]
-				},
-				{
-				  "name": "delete",
-				  "actions": [{
-					  "delete": {}
-					}],
-				  "transitions": []
-				}
-			]
-		}
-	}
-  EOF
-}
-`
+//var testAccOpensearchOpenDistroISMPolicyV6 = `
+//resource "opensearch_ism_policy" "test_policy" {
+//  policy_id = "test_policy"
+//  body      = <<EOF
+//  {
+//		"policy": {
+//		  "description": "ingesting logs",
+//		  "default_state": "ingest",
+//		  "error_notification": {
+//        "destination": {
+//          "slack": {
+//            "url": "https://webhook.slack.example.com"
+//          }
+//        },
+//        "message_template": {
+//          "lang": "mustache",
+//          "source": "The index *{{ctx.index}}* failed to rollover."
+//        }
+//      },
+//		  "states": [
+//				{
+//				  "name": "ingest",
+//				  "actions": [{
+//					  "rollover": {
+//						"min_doc_count": 5
+//					  }
+//					}],
+//				  "transitions": [{
+//					  "state_name": "search"
+//					}]
+//				},
+//				{
+//				  "name": "search",
+//				  "actions": [],
+//				  "transitions": [{
+//					  "state_name": "delete",
+//					  "conditions": {
+//						"min_index_age": "5m"
+//					  }
+//					}]
+//				},
+//				{
+//				  "name": "delete",
+//				  "actions": [{
+//					  "delete": {}
+//					}],
+//				  "transitions": []
+//				}
+//			]
+//		}
+//	}
+//  EOF
+//}
+//`
 
 var testAccOpensearchOpenDistroISMPolicyV7 = `
 resource "opensearch_ism_policy" "test_policy" {

@@ -2,11 +2,8 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
-
-	elastic7 "github.com/olivere/elastic/v7"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -18,28 +15,11 @@ func TestAccOpensearchDataStream(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-
-	var allowed bool
-	switch esClient.(type) {
-	case *elastic7.Client:
-		allowed = true
-	default:
-		allowed = false
-	}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 
-			if !allowed {
-				t.Skip("/_data_stream endpoint only supported on ES >= 7.9")
-			}
 		},
 		Providers:    testAccProviders,
 		CheckDestroy: testCheckOpensearchDataStreamDestroy,
@@ -67,17 +47,11 @@ func testCheckOpensearchDataStreamExists(name string) resource.TestCheckFunc {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			err = elastic7GetDataStream(client, rs.Primary.ID)
-		default:
-			return errors.New("opensearch version not supported")
-		}
-
+		err = elastic7GetDataStream(client, rs.Primary.ID)
 		if err != nil {
 			return err
 		}
@@ -95,16 +69,11 @@ func testCheckOpensearchDataStreamDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			err = elastic7GetDataStream(client, rs.Primary.ID)
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		err = elastic7GetDataStream(client, rs.Primary.ID)
 
 		if err != nil {
 			return nil // should be not found error

@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -121,23 +120,18 @@ func resourceOpensearchOpenDistroRolesMappingDelete(d *schema.ResourceData, m in
 		return fmt.Errorf("error building URL path for role mapping: %+v", err)
 	}
 
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method:           "DELETE",
-			Path:             path,
-			RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-			Retrier: elastic7.NewBackoffRetrier(
-				elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-			),
-		})
-	default:
-		err = errors.New("role mapping resource not implemented prior to v7")
-	}
+	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method:           "DELETE",
+		Path:             path,
+		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
+		Retrier: elastic7.NewBackoffRetrier(
+			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+		),
+	})
 
 	return err
 }
@@ -154,24 +148,19 @@ func resourceOpensearchGetOpenDistroRolesMapping(roleID string, m interface{}) (
 		return *roleMapping, fmt.Errorf("error building URL path for role mapping: %+v", err)
 	}
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return *roleMapping, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-		if err != nil {
-			return *roleMapping, err
-		}
-		body = res.Body
-	default:
-		err = errors.New("role mapping resource not implemented prior to v7")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return *roleMapping, err
 	}
+	body = res.Body
 
 	if err != nil {
 		return *roleMapping, err
@@ -213,34 +202,29 @@ func resourceOpensearchPutOpenDistroRolesMapping(d *schema.ResourceData, m inter
 	}
 
 	var body json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "PUT",
-			Path:   path,
-			Body:   string(roleJSON),
-			// see https://github.com/opendistro-for-
-			// elasticsearch/security/issues/1095, this should return a 409, but
-			// retry on the 500 as well. We can't parse the message to only retry on
-			// the conlict exception becaues the client doesn't directly
-			// expose the error response body
-			RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-			Retrier: elastic7.NewBackoffRetrier(
-				elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-			),
-		})
-		if err != nil {
-			return response, err
-		}
-		body = res.Body
-	default:
-		return response, errors.New("role mapping resource not implemented prior to v7")
+	var res *elastic7.Response
+	res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "PUT",
+		Path:   path,
+		Body:   string(roleJSON),
+		// see https://github.com/opendistro-for-
+		// elasticsearch/security/issues/1095, this should return a 409, but
+		// retry on the 500 as well. We can't parse the message to only retry on
+		// the conlict exception becaues the client doesn't directly
+		// expose the error response body
+		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
+		Retrier: elastic7.NewBackoffRetrier(
+			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+		),
+	})
+	if err != nil {
+		return response, err
 	}
+	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling role mapping body: %+v: %+v", err, body)

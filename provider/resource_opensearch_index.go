@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 var (
@@ -523,39 +521,20 @@ func resourceOpensearchIndexCreate(d *schema.ResourceData, meta interface{}) err
 
 	// Note: the CreateIndex call handles URL encoding under the hood to handle
 	// non-URL friendly characters and functionality like date math
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		put := client.CreateIndex(name)
-		if d.Get("include_type_name").(string) == "true" {
-			put = put.IncludeTypeName(true)
-		} else if d.Get("include_type_name").(string) == "false" {
-			put = put.IncludeTypeName(false)
-		}
-		resp, requestErr := put.BodyJson(body).Do(ctx)
-		err = requestErr
-		if err == nil {
-			resolvedName = resp.Index
-		}
-
-	case *elastic6.Client:
-		put := client.CreateIndex(name)
-		if d.Get("include_type_name").(string) == "true" {
-			put = put.IncludeTypeName(true)
-		} else if d.Get("include_type_name").(string) == "false" {
-			put = put.IncludeTypeName(false)
-		}
-		resp, requestErr := put.BodyJson(body).Do(ctx)
-		err = requestErr
-		if err == nil {
-			resolvedName = resp.Index
-		}
-
-	default:
-		return errors.New("opensearch version not supported")
+	put := client.CreateIndex(name)
+	if d.Get("include_type_name").(string) == "true" {
+		put = put.IncludeTypeName(true)
+	} else if d.Get("include_type_name").(string) == "false" {
+		put = put.IncludeTypeName(false)
+	}
+	resp, requestErr := put.BodyJson(body).Do(ctx)
+	err = requestErr
+	if err == nil {
+		resolvedName = resp.Index
 	}
 
 	if err == nil {
@@ -617,20 +596,12 @@ func resourceOpensearchIndexDelete(d *schema.ResourceData, meta interface{}) err
 		return fmt.Errorf("There are documents in the index (or the index could not be , set force_destroy to true to allow destroying.")
 	}
 
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.DeleteIndex(name).Do(ctx)
 
-	case *elastic6.Client:
-		_, err = client.DeleteIndex(name).Do(ctx)
-
-	default:
-		err = errors.New("opensearch version not supported")
-	}
+	_, err = client.DeleteIndex(name).Do(ctx)
 
 	return err
 }
@@ -643,20 +614,11 @@ func allowIndexDestroy(indexName string, d *schema.ResourceData, meta interface{
 		count int64
 		err   error
 	)
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return false
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		count, err = client.Count(indexName).Do(ctx)
-
-	case *elastic6.Client:
-		count, err = client.Count(indexName).Do(ctx)
-
-	default:
-		err = errors.New("opensearch version not supported")
-	}
+	count, err = client.Count(indexName).Do(ctx)
 
 	if err != nil {
 		log.Printf("[INFO] allowIndexDestroy: %+v", err)
@@ -699,19 +661,12 @@ func resourceOpensearchIndexUpdate(d *schema.ResourceData, meta interface{}) err
 		name = getWriteIndexByAlias(alias.(string), d, meta)
 	}
 
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.IndexPutSettings(name).BodyJson(body).Do(ctx)
-	case *elastic6.Client:
-		_, err = client.IndexPutSettings(name).BodyJson(body).Do(ctx)
-	default:
-		return errors.New("opensearch version not supported")
-	}
 
+	_, err = client.IndexPutSettings(name).BodyJson(body).Do(ctx)
 	if err == nil {
 		return resourceOpensearchIndexRead(d, meta.(*ProviderConf))
 	}
@@ -725,38 +680,20 @@ func getWriteIndexByAlias(alias string, d *schema.ResourceData, meta interface{}
 		columns = []string{"index", "is_write_index"}
 	)
 
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
 		return index
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		r, err := client.CatAliases().Alias(alias).Columns(columns...).Do(ctx)
-		if err != nil {
-			log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
-			return index
+	r, err := client.CatAliases().Alias(alias).Columns(columns...).Do(ctx)
+	if err != nil {
+		log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
+		return index
+	}
+	for _, column := range r {
+		if column.IsWriteIndex == "true" {
+			return column.Index
 		}
-		for _, column := range r {
-			if column.IsWriteIndex == "true" {
-				return column.Index
-			}
-		}
-
-	case *elastic6.Client:
-		r, err := client.CatAliases().Alias(alias).Columns(columns...).Do(ctx)
-		if err != nil {
-			log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
-			return index
-		}
-		for _, column := range r {
-			if column.IsWriteIndex == "true" {
-				return column.Index
-			}
-		}
-
-	default:
-		log.Printf("[INFO] opensearch version not supported")
 	}
 
 	return index
@@ -774,42 +711,23 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 	}
 
 	// The logic is repeated strictly because of the types
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		r, err := client.IndexGetSettings(index).FlatSettings(true).Do(ctx)
-		if err != nil {
-			if elastic7.IsNotFound(err) {
-				log.Printf("[WARN] Index (%s) not found, removing from state", index)
-				d.SetId("")
-				return nil
-			}
 
-			return err
+	r, err := client.IndexGetSettings(index).FlatSettings(true).Do(ctx)
+	if err != nil {
+		if elastic7.IsNotFound(err) {
+			log.Printf("[WARN] Index (%s) not found, removing from state", index)
+			d.SetId("")
+			return nil
 		}
+		return err
+	}
 
-		if resp, ok := r[index]; ok {
-			settings = resp.Settings
-		}
-	case *elastic6.Client:
-		r, err := client.IndexGetSettings(index).FlatSettings(true).Do(ctx)
-		if err != nil {
-			if elastic6.IsNotFound(err) {
-				log.Printf("[WARN] Index (%s) not found, removing from state", index)
-				d.SetId("")
-				return nil
-			}
-			return err
-		}
-
-		if resp, ok := r[index]; ok {
-			settings = resp.Settings
-		}
-	default:
-		return errors.New("opensearch version not supported")
+	if resp, ok := r[index]; ok {
+		settings = resp.Settings
 	}
 
 	// Don't override name otherwise it will force a replacement

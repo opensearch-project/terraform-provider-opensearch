@@ -3,14 +3,12 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 var scriptSchema = map[string]*schema.Schema{
@@ -73,7 +71,7 @@ func resourceOpensearchScriptCreate(d *schema.ResourceData, m interface{}) error
 	if err == nil {
 		log.Printf("[INFO] script exists: %+v", err)
 		return fmt.Errorf("script already exists with ID: %v", scriptID)
-	} else if err != nil && !elastic6.IsNotFound(err) && !elastic7.IsNotFound(err) {
+	} else if err != nil && !elastic7.IsNotFound(err) {
 		return err
 	}
 
@@ -93,7 +91,7 @@ func resourceOpensearchScriptCreate(d *schema.ResourceData, m interface{}) error
 func resourceOpensearchScriptRead(d *schema.ResourceData, m interface{}) error {
 	scriptBody, err := resourceOpensearchGetScript(d.Id(), m)
 
-	if elastic6.IsNotFound(err) || elastic7.IsNotFound(err) {
+	if elastic7.IsNotFound(err) {
 		log.Printf("[WARN] Script (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -123,18 +121,11 @@ func resourceOpensearchScriptUpdate(d *schema.ResourceData, m interface{}) error
 
 func resourceOpensearchScriptDelete(d *schema.ResourceData, m interface{}) error {
 	var err error
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.DeleteScript().Id(d.Id()).Do(context.TODO())
-	case *elastic6.Client:
-		_, err = client.DeleteScript().Id(d.Id()).Do(context.TODO())
-	default:
-		err = errors.New("script resource not implemented prior to Elastic v6")
-	}
+	_, err = client.DeleteScript().Id(d.Id()).Do(context.TODO())
 
 	return err
 }
@@ -142,28 +133,16 @@ func resourceOpensearchScriptDelete(d *schema.ResourceData, m interface{}) error
 func resourceOpensearchGetScript(scriptID string, m interface{}) (ScriptBody, error) {
 	var scriptBody json.RawMessage
 	var err error
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return ScriptBody{}, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.GetScriptResponse
-		res, err = client.GetScript().Id(scriptID).Do(context.TODO())
-		if err != nil {
-			return ScriptBody{}, err
-		}
-		scriptBody = res.Script
-	case *elastic6.Client:
-		var res *elastic6.GetScriptResponse
-		res, err = client.GetScript().Id(scriptID).Do(context.TODO())
-		if err != nil {
-			return ScriptBody{}, err
-		}
-		scriptBody = res.Script
-	default:
-		err = errors.New("script resource not implemented prior to v6")
+	var res *elastic7.GetScriptResponse
+	res, err = client.GetScript().Id(scriptID).Do(context.TODO())
+	if err != nil {
+		return ScriptBody{}, err
 	}
+	scriptBody = res.Script
 
 	var script ScriptBody
 
@@ -183,24 +162,14 @@ func resourceOpensearchPutScript(d *schema.ResourceData, m interface{}) (string,
 		return "", err
 	}
 
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return "", err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.PutScript().
-			Id(scriptID).
-			BodyJson(scriptBody).
-			Do(context.TODO())
-	case *elastic6.Client:
-		_, err = client.PutScript().
-			Id(scriptID).
-			BodyJson(scriptBody).
-			Do(context.TODO())
-	default:
-		err = errors.New("script resource not implemented prior to v6")
-	}
+	_, err = client.PutScript().
+		Id(scriptID).
+		BodyJson(scriptBody).
+		Do(context.TODO())
 
 	if err != nil {
 		return "", err

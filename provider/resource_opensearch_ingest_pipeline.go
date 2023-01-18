@@ -3,12 +3,9 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 func resourceOpensearchIngestPipeline() *schema.Resource {
@@ -51,18 +48,12 @@ func resourceOpensearchIngestPipelineRead(d *schema.ResourceData, meta interface
 
 	var result string
 	var err error
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		result, err = elastic7IngestGetPipeline(client, id)
-	case *elastic6.Client:
-		result, err = elastic6IngestGetPipeline(client, id)
-	default:
-		return errors.New("opensearch version not supported")
-	}
+	result, err = elastic7IngestGetPipeline(client, id)
+
 	if err != nil {
 		return err
 	}
@@ -90,20 +81,6 @@ func elastic7IngestGetPipeline(client *elastic7.Client, id string) (string, erro
 	return string(tj), nil
 }
 
-func elastic6IngestGetPipeline(client *elastic6.Client, id string) (string, error) {
-	res, err := client.IngestGetPipeline(id).Do(context.TODO())
-	if err != nil {
-		return "", err
-	}
-
-	t := res[id]
-	tj, err := json.Marshal(t)
-	if err != nil {
-		return "", err
-	}
-	return string(tj), nil
-}
-
 func resourceOpensearchIngestPipelineUpdate(d *schema.ResourceData, meta interface{}) error {
 	return resourceOpensearchPutIngestPipeline(d, meta)
 }
@@ -112,18 +89,11 @@ func resourceOpensearchIngestPipelineDelete(d *schema.ResourceData, meta interfa
 	id := d.Id()
 
 	var err error
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.IngestDeletePipeline(id).Do(context.TODO())
-	case *elastic6.Client:
-		_, err = client.IngestDeletePipeline(id).Do(context.TODO())
-	default:
-		return errors.New("opensearch version not supported")
-	}
+	_, err = client.IngestDeletePipeline(id).Do(context.TODO())
 
 	if err != nil {
 		return err
@@ -137,18 +107,11 @@ func resourceOpensearchPutIngestPipeline(d *schema.ResourceData, meta interface{
 	body := d.Get("body").(string)
 
 	var err error
-	esClient, err := getClient(meta.(*ProviderConf))
+	client, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.IngestPutPipeline(name).BodyString(body).Do(context.TODO())
-	case *elastic6.Client:
-		_, err = client.IngestPutPipeline(name).BodyString(body).Do(context.TODO())
-	default:
-		return errors.New("opensearch version not supported")
-	}
+	_, err = client.IngestPutPipeline(name).BodyString(body).Do(context.TODO())
 
 	return err
 }

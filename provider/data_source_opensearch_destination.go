@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 
@@ -11,7 +10,6 @@ import (
 
 	"github.com/olivere/elastic/uritemplates"
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 const DESTINATION_NAME_FIELD = "destination.name.keyword"
@@ -43,25 +41,18 @@ func dataSourceOpensearchOpenDistroDestinationRead(d *schema.ResourceData, m int
 	var id string
 	var destination map[string]interface{}
 	var err error
-	esClient, err := getClient(m.(*ProviderConf))
+	client, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		// See https://github.com/opendistro-for-elasticsearch/alerting/issues/70,
-		// no tags or API endpoint for searching destination. In ODFE >= 1.11.0,
-		// the index has become a "system index", so it cannot be searched:
-		// https://opendistro.github.io/for-elasticsearch-docs/docs/alerting/settings/#alerting-indices
-		// instead we paginate through all destinations to find the first name match :|
-		id, destination, err = destinationOpenSearch7GetAll(client, destinationName)
-		if err != nil {
-			id, destination, err = destinationOpenSearch7Search(client, DESTINATION_INDEX, destinationName)
-		}
-	case *elastic6.Client:
-		id, destination, err = destinationOpenSearch6Search(client, DESTINATION_INDEX, destinationName)
-	default:
-		err = errors.New("destination resource not implemented prior to v6")
+	// See https://github.com/opendistro-for-elasticsearch/alerting/issues/70,
+	// no tags or API endpoint for searching destination. In ODFE >= 1.11.0,
+	// the index has become a "system index", so it cannot be searched:
+	// https://opendistro.github.io/for-elasticsearch-docs/docs/alerting/settings/#alerting-indices
+	// instead we paginate through all destinations to find the first name match :|
+	id, destination, err = destinationOpenSearch7GetAll(client, destinationName)
+	if err != nil {
+		id, destination, err = destinationOpenSearch7Search(client, DESTINATION_INDEX, destinationName)
 	}
 
 	if err != nil {
@@ -101,30 +92,6 @@ func destinationOpenSearch7Search(client *elastic7.Client, index string, name st
 	}
 	if result.TotalHits() == 1 {
 		if err := json.Unmarshal(result.Hits.Hits[0].Source, &destination); err != nil {
-			return "", destination, fmt.Errorf("error unmarshalling destination body: %+v", err)
-		}
-
-		return result.Hits.Hits[0].Id, destination["destination"].(map[string]interface{}), nil
-	} else if result.TotalHits() < 1 {
-		return "", destination, err
-	} else {
-		return "", destination, fmt.Errorf("1 result expected, found %d.", result.TotalHits())
-	}
-}
-
-func destinationOpenSearch6Search(client *elastic6.Client, index string, name string) (string, map[string]interface{}, error) {
-	termQuery := elastic6.NewTermQuery(DESTINATION_NAME_FIELD, name)
-	result, err := client.Search().
-		Index(index).
-		Query(termQuery).
-		Do(context.TODO())
-
-	destination := make(map[string]interface{})
-	if err != nil {
-		return "", destination, err
-	}
-	if result.TotalHits() == 1 {
-		if err := json.Unmarshal(*result.Hits.Hits[0].Source, &destination); err != nil {
 			return "", destination, fmt.Errorf("error unmarshalling destination body: %+v", err)
 		}
 
