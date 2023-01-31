@@ -122,7 +122,7 @@ func resourceOpensearchOpenDistroDestinationDelete(d *schema.ResourceData, m int
 			Path:   path,
 		})
 	default:
-		err = errors.New("destination resource not implemented prior to Elastic v6")
+		err = errors.New("destination resource not implemented prior to v6")
 	}
 
 	return err
@@ -199,7 +199,7 @@ func resourceOpensearchOpenDistroQueryOrGetDestination(destinationID string, m i
 		}
 		return dr.Destination, nil
 	default:
-		return Destination{}, errors.New("destination resource not implemented prior to Elastic v6")
+		return Destination{}, errors.New("destination resource not implemented prior to v6")
 	}
 }
 
@@ -240,7 +240,7 @@ func resourceOpensearchOpenDistroPostDestination(d *schema.ResourceData, m inter
 		}
 		body = res.Body
 	default:
-		return response, errors.New("destination resource not implemented prior to Elastic v6")
+		return response, errors.New("destination resource not implemented prior to v6")
 	}
 
 	if err := json.Unmarshal(body, response); err != nil {
@@ -292,7 +292,7 @@ func resourceOpensearchOpenDistroPutDestination(d *schema.ResourceData, m interf
 		}
 		body = res.Body
 	default:
-		return response, errors.New("destination resource not implemented prior to Elastic v6")
+		return response, errors.New("destination resource not implemented prior to v6")
 	}
 
 	if err := json.Unmarshal(body, response); err != nil {

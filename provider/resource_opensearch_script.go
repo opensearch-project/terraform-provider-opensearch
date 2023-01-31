@@ -162,7 +162,7 @@ func resourceOpensearchGetScript(scriptID string, m interface{}) (ScriptBody, er
 		}
 		scriptBody = res.Script
 	default:
-		err = errors.New("script resource not implemented prior to Elastic v6")
+		err = errors.New("script resource not implemented prior to v6")
 	}
 
 	var script ScriptBody
@@ -199,7 +199,7 @@ func resourceOpensearchPutScript(d *schema.ResourceData, m interface{}) (string,
 			BodyJson(scriptBody).
 			Do(context.TODO())
 	default:
-		err = errors.New("script resource not implemented prior to Elastic v6")
+		err = errors.New("script resource not implemented prior to v6")
 	}
 
 	if err != nil {

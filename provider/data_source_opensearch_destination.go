@@ -54,14 +54,14 @@ func dataSourceOpensearchOpenDistroDestinationRead(d *schema.ResourceData, m int
 		// the index has become a "system index", so it cannot be searched:
 		// https://opendistro.github.io/for-elasticsearch-docs/docs/alerting/settings/#alerting-indices
 		// instead we paginate through all destinations to find the first name match :|
-		id, destination, err = destinationElasticsearch7GetAll(client, destinationName)
+		id, destination, err = destinationOpenSearch7GetAll(client, destinationName)
 		if err != nil {
-			id, destination, err = destinationElasticsearch7Search(client, DESTINATION_INDEX, destinationName)
+			id, destination, err = destinationOpenSearch7Search(client, DESTINATION_INDEX, destinationName)
 		}
 	case *elastic6.Client:
-		id, destination, err = destinationElasticsearch6Search(client, DESTINATION_INDEX, destinationName)
+		id, destination, err = destinationOpenSearch6Search(client, DESTINATION_INDEX, destinationName)
 	default:
-		err = errors.New("destination resource not implemented prior to Elastic v6")
+		err = errors.New("destination resource not implemented prior to v6")
 	}
 
 	if err != nil {
@@ -88,7 +88,7 @@ func dataSourceOpensearchOpenDistroDestinationRead(d *schema.ResourceData, m int
 	return err
 }
 
-func destinationElasticsearch7Search(client *elastic7.Client, index string, name string) (string, map[string]interface{}, error) {
+func destinationOpenSearch7Search(client *elastic7.Client, index string, name string) (string, map[string]interface{}, error) {
 	termQuery := elastic7.NewTermQuery(DESTINATION_NAME_FIELD, name)
 	result, err := client.Search().
 		Index(index).
@@ -112,7 +112,7 @@ func destinationElasticsearch7Search(client *elastic7.Client, index string, name
 	}
 }
 
-func destinationElasticsearch6Search(client *elastic6.Client, index string, name string) (string, map[string]interface{}, error) {
+func destinationOpenSearch6Search(client *elastic6.Client, index string, name string) (string, map[string]interface{}, error) {
 	termQuery := elastic6.NewTermQuery(DESTINATION_NAME_FIELD, name)
 	result, err := client.Search().
 		Index(index).
@@ -136,7 +136,7 @@ func destinationElasticsearch6Search(client *elastic6.Client, index string, name
 	}
 }
 
-func destinationElasticsearch7GetAll(client *elastic7.Client, name string) (string, map[string]interface{}, error) {
+func destinationOpenSearch7GetAll(client *elastic7.Client, name string) (string, map[string]interface{}, error) {
 	offset := 0
 	pageSize := 1000
 	destination := make(map[string]interface{})

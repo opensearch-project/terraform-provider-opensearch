@@ -1,22 +1,22 @@
 version: '3'
 
 services:
-  elasticsearch:
+  opensearch:
     image: ${OSS_IMAGE}
-    hostname: elasticsearch
-    container_name: elasticsearch
+    hostname: opensearch
+    container_name: opensearch
     networks: 
-      - elasticsearch # used by ESv6 kibana
+      - opensearch # used by OpenSearch Dashboard
     environment:
-      - cluster.name=elasticsearch
+      - cluster.name=opensearch
       - bootstrap.memory_lock=true
       - discovery.type=single-node
       - path.repo=/tmp
       - network.publish_host=127.0.0.1
-      - logger.org.elasticsearch=warn
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - logger.org.opensearch=warn
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
       - ${OSS_ENV_VAR:-FOO=bar}
-    command: ${ES_COMMAND}
+    command: ${OS_COMMAND}
     ulimits:
       nproc: 65536
       nofile:
@@ -28,9 +28,9 @@ services:
     ports:
       - 9200:9200
   opendistro:
-    image: ${ES_OPENDISTRO_IMAGE:-rwgrim/docker-noop}
-    hostname: elasticsearch-opendistro
-    container_name: elasticsearch-opendistro
+    image: ${OS_OPENDISTRO_IMAGE:-rwgrim/docker-noop}
+    hostname: opensearch-opendistro
+    container_name: opensearch-opendistro
     environment:
       - cluster.name=opendistro
       - bootstrap.memory_lock=true
@@ -39,8 +39,8 @@ services:
       - ${OPENSEARCH_PREFIX:-opendistro_security}.ssl.http.enabled=false
       - http.port=9220
       - network.publish_host=127.0.0.1
-      - logger.org.elasticsearch=warn
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - logger.org.opensearch=warn
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
     ulimits:
       nproc: 65536
       nofile:
@@ -52,5 +52,5 @@ services:
     ports:
       - 9220:9220
 networks:
-  elasticsearch:
+  opensearch:
     driver: bridge

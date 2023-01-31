@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
-func TestAccOpensearchOpenDistroKibanaTenant(t *testing.T) {
+func TestAccOpensearchOpenDistroDashboardTenant(t *testing.T) {
 	provider := Provider()
 	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
 	if diags.HasError() {
@@ -42,30 +42,30 @@ func TestAccOpensearchOpenDistroKibanaTenant(t *testing.T) {
 			}
 		},
 		Providers:    testAccOpendistroProviders,
-		CheckDestroy: testAccCheckOpensearchKibanaTenantDestroy,
+		CheckDestroy: testAccCheckOpensearchDashboardTenantDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccOpenDistroKibanaTenantResource(randomName),
+				Config: testAccOpenDistroDashboardTenantResource(randomName),
 				Check: resource.ComposeTestCheckFunc(
-					testCheckOpensearchKibanaTenantExists("opensearch_kibana_tenant.test"),
+					testCheckOpensearchDashboardTenantExists("opensearch_dashboard_tenant.test"),
 					resource.TestCheckResourceAttr(
-						"opensearch_kibana_tenant.test",
+						"opensearch_dashboard_tenant.test",
 						"id",
 						randomName,
 					),
 					resource.TestCheckResourceAttr(
-						"opensearch_kibana_tenant.test",
+						"opensearch_dashboard_tenant.test",
 						"description",
 						"test",
 					),
 				),
 			},
 			{
-				Config: testAccOpenDistroKibanaTenantResourceUpdated(randomName),
+				Config: testAccOpenDistroDashboardTenantResourceUpdated(randomName),
 				Check: resource.ComposeTestCheckFunc(
-					testCheckOpensearchKibanaTenantExists("opensearch_kibana_tenant.test"),
+					testCheckOpensearchDashboardTenantExists("opensearch_dashboard_tenant.test"),
 					resource.TestCheckResourceAttr(
-						"opensearch_kibana_tenant.test",
+						"opensearch_dashboard_tenant.test",
 						"description",
 						"test2",
 					),
@@ -75,9 +75,9 @@ func TestAccOpensearchOpenDistroKibanaTenant(t *testing.T) {
 	})
 }
 
-func testAccCheckOpensearchKibanaTenantDestroy(s *terraform.State) error {
+func testAccCheckOpensearchDashboardTenantDestroy(s *terraform.State) error {
 	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "opensearch_kibana_tenant" {
+		if rs.Type != "opensearch_dashboard_tenant" {
 			continue
 		}
 
@@ -90,7 +90,7 @@ func testAccCheckOpensearchKibanaTenantDestroy(s *terraform.State) error {
 		}
 		switch esClient.(type) {
 		case *elastic7.Client:
-			_, err = resourceOpensearchGetOpenDistroKibanaTenant(rs.Primary.ID, meta.(*ProviderConf))
+			_, err = resourceOpensearchGetOpenDistroDashboardTenant(rs.Primary.ID, meta.(*ProviderConf))
 		default:
 		}
 
@@ -98,15 +98,15 @@ func testAccCheckOpensearchKibanaTenantDestroy(s *terraform.State) error {
 			return nil // should be not found error
 		}
 
-		return fmt.Errorf("KibanaTenant %q still exists", rs.Primary.ID)
+		return fmt.Errorf("DashboardTenant %q still exists", rs.Primary.ID)
 	}
 
 	return nil
 }
-func testCheckOpensearchKibanaTenantExists(name string) resource.TestCheckFunc {
+func testCheckOpensearchDashboardTenantExists(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		for _, rs := range s.RootModule().Resources {
-			if rs.Type != "opensearch_kibana_tenant" {
+			if rs.Type != "opensearch_dashboard_tenant" {
 				continue
 			}
 
@@ -119,7 +119,7 @@ func testCheckOpensearchKibanaTenantExists(name string) resource.TestCheckFunc {
 			}
 			switch esClient.(type) {
 			case *elastic7.Client:
-				_, err = resourceOpensearchGetOpenDistroKibanaTenant(rs.Primary.ID, meta.(*ProviderConf))
+				_, err = resourceOpensearchGetOpenDistroDashboardTenant(rs.Primary.ID, meta.(*ProviderConf))
 			default:
 			}
 
@@ -134,18 +134,18 @@ func testCheckOpensearchKibanaTenantExists(name string) resource.TestCheckFunc {
 	}
 }
 
-func testAccOpenDistroKibanaTenantResource(resourceName string) string {
+func testAccOpenDistroDashboardTenantResource(resourceName string) string {
 	return fmt.Sprintf(`
-resource "opensearch_kibana_tenant" "test" {
+resource "opensearch_dashboard_tenant" "test" {
   tenant_name = "%s"
   description = "test"
 }
 	`, resourceName)
 }
 
-func testAccOpenDistroKibanaTenantResourceUpdated(resourceName string) string {
+func testAccOpenDistroDashboardTenantResourceUpdated(resourceName string) string {
 	return fmt.Sprintf(`
-resource "opensearch_kibana_tenant" "test" {
+resource "opensearch_dashboard_tenant" "test" {
   tenant_name = "%s"
   description = "test2"
 }

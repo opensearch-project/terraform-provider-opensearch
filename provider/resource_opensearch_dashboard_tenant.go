@@ -17,7 +17,7 @@ import (
 	elastic7 "github.com/olivere/elastic/v7"
 )
 
-var openDistroKibanaTenantSchema = map[string]*schema.Schema{
+var openSearchDashboardTenantSchema = map[string]*schema.Schema{
 	"tenant_name": {
 		Type:     schema.TypeString,
 		Required: true,
@@ -33,36 +33,36 @@ var openDistroKibanaTenantSchema = map[string]*schema.Schema{
 	},
 }
 
-func resourceOpenSearchKibanaTenant() *schema.Resource {
+func resourceOpenSearchDashboardTenant() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchOpenDistroKibanaTenantCreate,
-		Read:   resourceOpensearchOpenDistroKibanaTenantRead,
-		Update: resourceOpensearchOpenDistroKibanaTenantUpdate,
-		Delete: resourceOpensearchOpenDistroKibanaTenantDelete,
-		Schema: openDistroKibanaTenantSchema,
+		Create: resourceOpensearchOpenDistroDashboardTenantCreate,
+		Read:   resourceOpensearchOpenDistroDashboardTenantRead,
+		Update: resourceOpensearchOpenDistroDashboardTenantUpdate,
+		Delete: resourceOpensearchOpenDistroDashboardTenantDelete,
+		Schema: openSearchDashboardTenantSchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 	}
 }
 
-func resourceOpensearchOpenDistroKibanaTenantCreate(d *schema.ResourceData, m interface{}) error {
-	if _, err := resourceOpensearchPutOpenDistroKibanaTenant(d, m); err != nil {
-		log.Printf("[INFO] Failed to create OpenDistroKibanaTenant: %+v", err)
+func resourceOpensearchOpenDistroDashboardTenantCreate(d *schema.ResourceData, m interface{}) error {
+	if _, err := resourceOpensearchPutOpenDistroDashboardTenant(d, m); err != nil {
+		log.Printf("[INFO] Failed to create OpenDistroDashboardTenant: %+v", err)
 		return err
 	}
 
 	name := d.Get("tenant_name").(string)
 	d.SetId(name)
-	return resourceOpensearchOpenDistroKibanaTenantRead(d, m)
+	return resourceOpensearchOpenDistroDashboardTenantRead(d, m)
 }
 
-func resourceOpensearchOpenDistroKibanaTenantRead(d *schema.ResourceData, m interface{}) error {
-	res, err := resourceOpensearchGetOpenDistroKibanaTenant(d.Id(), m)
+func resourceOpensearchOpenDistroDashboardTenantRead(d *schema.ResourceData, m interface{}) error {
+	res, err := resourceOpensearchGetOpenDistroDashboardTenant(d.Id(), m)
 
 	if err != nil {
 		if elastic7.IsNotFound(err) {
-			log.Printf("[WARN] OpenDistroKibanaTenant (%s) not found, removing from state", d.Id())
+			log.Printf("[WARN] OpenDistroDashboardTenant (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
 		}
@@ -76,7 +76,7 @@ func resourceOpensearchOpenDistroKibanaTenantRead(d *schema.ResourceData, m inte
 		return fmt.Errorf("error setting description: %s", err)
 	}
 
-	index, err := resourceOpensearchOpenDistroKibanaComputeIndex(d.Id())
+	index, err := resourceOpensearchOpenDistroDashboardComputeIndex(d.Id())
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func resourceOpensearchOpenDistroKibanaTenantRead(d *schema.ResourceData, m inte
 	return nil
 }
 
-func resourceOpensearchOpenDistroKibanaComputeIndex(tenant string) (string, error) {
+func resourceOpensearchOpenDistroDashboardComputeIndex(tenant string) (string, error) {
 	// Calc Hash
 	hashSum := int32(0)
 	for _, char := range tenant {
@@ -101,19 +101,19 @@ func resourceOpensearchOpenDistroKibanaComputeIndex(tenant string) (string, erro
 	}
 	cleanedTenant := alphanumeric.ReplaceAllString(tenant, "")
 
-	// originalKibanaIndex+"_"+tenant.hashCode()+"_"+tenant.toLowerCase().replaceAll("[^a-z0-9]+", "")
-	return fmt.Sprintf(".kibana_%v_%v", hashSum, strings.ToLower(cleanedTenant)), nil
+	// originalDashboardIndex+"_"+tenant.hashCode()+"_"+tenant.toLowerCase().replaceAll("[^a-z0-9]+", "")
+	return fmt.Sprintf(".dashboard_%v_%v", hashSum, strings.ToLower(cleanedTenant)), nil
 }
 
-func resourceOpensearchOpenDistroKibanaTenantUpdate(d *schema.ResourceData, m interface{}) error {
-	if _, err := resourceOpensearchPutOpenDistroKibanaTenant(d, m); err != nil {
+func resourceOpensearchOpenDistroDashboardTenantUpdate(d *schema.ResourceData, m interface{}) error {
+	if _, err := resourceOpensearchPutOpenDistroDashboardTenant(d, m); err != nil {
 		return err
 	}
 
-	return resourceOpensearchOpenDistroKibanaTenantRead(d, m)
+	return resourceOpensearchOpenDistroDashboardTenantRead(d, m)
 }
 
-func resourceOpensearchOpenDistroKibanaTenantDelete(d *schema.ResourceData, m interface{}) error {
+func resourceOpensearchOpenDistroDashboardTenantDelete(d *schema.ResourceData, m interface{}) error {
 	path, err := uritemplates.Expand("/_opendistro/_security/api/tenants/{name}", map[string]string{
 		"name": d.Get("tenant_name").(string),
 	})
@@ -136,13 +136,13 @@ func resourceOpensearchOpenDistroKibanaTenantDelete(d *schema.ResourceData, m in
 			),
 		})
 	default:
-		err = errors.New("Creating tenants requires elastic v7 client")
+		err = errors.New("Creating tenants requires v7 client")
 	}
 
 	return err
 }
 
-func resourceOpensearchGetOpenDistroKibanaTenant(tenantID string, m interface{}) (TenantBody, error) {
+func resourceOpensearchGetOpenDistroDashboardTenant(tenantID string, m interface{}) (TenantBody, error) {
 	var err error
 	tenant := new(TenantBody)
 
@@ -185,7 +185,7 @@ func resourceOpensearchGetOpenDistroKibanaTenant(tenantID string, m interface{})
 	return *tenant, err
 }
 
-func resourceOpensearchPutOpenDistroKibanaTenant(d *schema.ResourceData, m interface{}) (*TenantResponse, error) {
+func resourceOpensearchPutOpenDistroDashboardTenant(d *schema.ResourceData, m interface{}) (*TenantResponse, error) {
 	response := new(TenantResponse)
 
 	tenantsDefinition := TenantBody{
@@ -226,7 +226,7 @@ func resourceOpensearchPutOpenDistroKibanaTenant(d *schema.ResourceData, m inter
 		}
 		body = res.Body
 	default:
-		return response, errors.New("Creating tenants requires elastic v7 client")
+		return response, errors.New("Creating tenants requires v7 client")
 	}
 
 	if err := json.Unmarshal(body, response); err != nil {

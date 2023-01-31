@@ -136,7 +136,7 @@ func resourceOpensearchOpenDistroRolesMappingDelete(d *schema.ResourceData, m in
 			),
 		})
 	default:
-		err = errors.New("role mapping resource not implemented prior to Elastic v7")
+		err = errors.New("role mapping resource not implemented prior to v7")
 	}
 
 	return err
@@ -170,7 +170,7 @@ func resourceOpensearchGetOpenDistroRolesMapping(roleID string, m interface{}) (
 		}
 		body = res.Body
 	default:
-		err = errors.New("role mapping resource not implemented prior to Elastic v7")
+		err = errors.New("role mapping resource not implemented prior to v7")
 	}
 
 	if err != nil {
@@ -227,7 +227,7 @@ func resourceOpensearchPutOpenDistroRolesMapping(d *schema.ResourceData, m inter
 			// see https://github.com/opendistro-for-
 			// elasticsearch/security/issues/1095, this should return a 409, but
 			// retry on the 500 as well. We can't parse the message to only retry on
-			// the conlict exception becaues the elastic client doesn't directly
+			// the conlict exception becaues the client doesn't directly
 			// expose the error response body
 			RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
 			Retrier: elastic7.NewBackoffRetrier(
@@ -239,7 +239,7 @@ func resourceOpensearchPutOpenDistroRolesMapping(d *schema.ResourceData, m inter
 		}
 		body = res.Body
 	default:
-		return response, errors.New("role mapping resource not implemented prior to Elastic v7")
+		return response, errors.New("role mapping resource not implemented prior to v7")
 	}
 
 	if err := json.Unmarshal(body, response); err != nil {

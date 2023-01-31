@@ -195,13 +195,13 @@ func resourceOpensearchAuditConfigCheckVersion(meta interface{}) error {
 		return err
 	}
 
-	elasticVersion, err := version.NewVersion(providerConf.esVersion)
+	openSearchVersion, err := version.NewVersion(providerConf.osVersion)
 	if err != nil {
 		return err
 	}
 
-	if providerConf.flavor != Unknown && elasticVersion.Segments()[0] != 1 {
-		return fmt.Errorf("audit config only available from OpenSearch >= 1.0, got version %s", elasticVersion.String())
+	if providerConf.flavor != Unknown && openSearchVersion.Segments()[0] != 1 {
+		return fmt.Errorf("audit config only available from OpenSearch >= 1.0, got version %s", openSearchVersion.String())
 	}
 
 	return nil

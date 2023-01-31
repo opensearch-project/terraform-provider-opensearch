@@ -32,7 +32,7 @@ func dataSourceOpensearchHost() *schema.Resource {
 
 func dataSourceOpensearchHostRead(d *schema.ResourceData, m interface{}) error {
 
-	// The upstream elastic client does not export the property for the urls
+	// The upstream client does not export the property for the urls
 	// it's using. Presumably the URLS would be available where the client is
 	// intantiated, but in terraform, that's not always practicable.
 	var err error
@@ -54,7 +54,7 @@ func dataSourceOpensearchHostRead(d *schema.ResourceData, m interface{}) error {
 			url = urls.Index(0).String()
 		}
 	default:
-		return errors.New("this version of Elasticsearch is not supported")
+		return errors.New("this version of OpenSearch is not supported")
 	}
 	d.SetId(url)
 	err = d.Set("url", url)

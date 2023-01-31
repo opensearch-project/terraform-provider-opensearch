@@ -119,7 +119,7 @@ resource "opensearch_snapshot_repository" "test" {
   type = "fs"
 
   settings = {
-    location = "/tmp/elasticsearch"
+    location = "/tmp/opensearch"
   }
 }
 `

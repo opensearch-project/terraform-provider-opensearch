@@ -54,7 +54,7 @@ var openDistroISMPolicyMappingSchema = map[string]*schema.Schema{
 
 func resourceOpenSearchISMPolicyMapping() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an Elasticsearch Open Distro Index State Management (ISM) policy. Please refer to the Open Distro [ISM documentation](https://opendistro.github.io/for-elasticsearch-docs/docs/ism/) for details.",
+		Description: "Provides an OpenSearch Index State Management (ISM) policy. Please refer to the Open Distro [ISM documentation](https://opendistro.github.io/for-elasticsearch-docs/docs/ism/) for details.",
 		Create:      resourceOpensearchOpenDistroISMPolicyMappingCreate,
 		Read:        resourceOpensearchOpenDistroISMPolicyMappingRead,
 		Update:      resourceOpensearchOpenDistroISMPolicyMappingUpdate,
@@ -247,7 +247,7 @@ func resourceOpensearchPostOpendistroPolicyMapping(d *schema.ResourceData, m int
 		}
 		body = &res.Body
 	default:
-		err = errors.New("policy resource not implemented prior to Elastic v7")
+		err = errors.New("policy resource not implemented prior to v7")
 	}
 
 	if err != nil {
@@ -287,7 +287,7 @@ func resourceOpensearchGetOpendistroPolicyMapping(indexPattern string, m interfa
 		}
 		body = &res.Body
 	default:
-		err = errors.New("policy mapping resource not implemented prior to Elastic v7")
+		err = errors.New("policy mapping resource not implemented prior to v7")
 	}
 
 	if err != nil {

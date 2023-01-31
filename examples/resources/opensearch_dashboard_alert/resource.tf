@@ -1,4 +1,4 @@
-resource "opensearch_kibana_alert" "test" {
+resource "opensearch_dashboard_alert" "test" {
   name = "terraform-alert"
   schedule {
     interval = "1m"

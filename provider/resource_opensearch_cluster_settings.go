@@ -115,7 +115,7 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 			"cluster_info_update_interval": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "A time string controlling how often Elasticsearch should check on disk usage for each node in the cluster",
+				Description: "A time string controlling how often Opensearch should check on disk usage for each node in the cluster",
 			},
 			"cluster_routing_allocation_allow_rebalance": {
 				Type:        schema.TypeString,
@@ -306,7 +306,7 @@ func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface
 
 	switch client := esClient.(type) {
 	case *elastic7.Client:
-		// elastic doesn't support PUTing settings: https://github.com/olivere/elastic/issues/1274
+		// client doesn't support PUTing settings: https://github.com/olivere/elastic/issues/1274
 		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
 			Method: "PUT",
 			Path:   "/_cluster/settings",

@@ -15,7 +15,7 @@ resource "opensearch_audit_config" "test" {
     # Note: if set false, AWS OpenSearch will return HTTP 409 (Conflict)
     exclude_sensitive_headers = true
 
-    ignore_users    = ["kibanaserver"]
+    ignore_users    = ["dashboardserver"]
     ignore_requests = ["SearchRequest", "indices:data/read/*", "/_cluster/health"]
   }
 
