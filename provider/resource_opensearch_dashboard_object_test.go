@@ -15,7 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
-func TestAccOpensearchKibanaObject(t *testing.T) {
+func TestAccOpensearchDashboardObject(t *testing.T) {
 	provider := Provider()
 	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
 	if diags.HasError() {
@@ -31,37 +31,37 @@ func TestAccOpensearchKibanaObject(t *testing.T) {
 	}
 	switch esClient.(type) {
 	case *elastic7.Client:
-		visualizationConfig = testAccOpensearch7KibanaVisualization
-		indexPatternConfig = testAccOpensearch7KibanaIndexPattern
+		visualizationConfig = testAccOpensearch7DashboardVisualization
+		indexPatternConfig = testAccOpensearch7DashboardIndexPattern
 	case *elastic6.Client:
-		visualizationConfig = testAccOpensearch6KibanaVisualization
-		indexPatternConfig = testAccOpensearch6KibanaIndexPattern
+		visualizationConfig = testAccOpensearch6DashboardVisualization
+		indexPatternConfig = testAccOpensearch6DashboardIndexPattern
 	default:
-		visualizationConfig = testAccOpensearchKibanaVisualization
-		indexPatternConfig = testAccOpensearchKibanaIndexPattern
+		visualizationConfig = testAccOpensearchDashboardVisualization
+		indexPatternConfig = testAccOpensearchDashboardIndexPattern
 	}
 
 	resource.Test(t, resource.TestCase{
 		Providers:    testAccProviders,
-		CheckDestroy: testCheckOpensearchKibanaObjectDestroy,
+		CheckDestroy: testCheckOpensearchDashboardObjectDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: visualizationConfig,
 				Check: resource.ComposeTestCheckFunc(
-					testCheckOpensearchKibanaObjectExists("opensearch_kibana_object.test_visualization", "visualization", "response-time-percentile"),
+					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_visualization", "visualization", "response-time-percentile"),
 				),
 			},
 			{
 				Config: indexPatternConfig,
 				Check: resource.ComposeTestCheckFunc(
-					testCheckOpensearchKibanaObjectExists("opensearch_kibana_object.test_pattern", "index-pattern", "index-pattern:cloudwatch"),
+					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_pattern", "index-pattern", "index-pattern:cloudwatch"),
 				),
 			},
 		},
 	})
 }
 
-func TestAccOpensearchKibanaObject_ProviderFormatInvalid(t *testing.T) {
+func TestAccOpensearchDashboardObject_ProviderFormatInvalid(t *testing.T) {
 	provider := Provider()
 	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
 	if diags.HasError() {
@@ -70,7 +70,7 @@ func TestAccOpensearchKibanaObject_ProviderFormatInvalid(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		Providers:    testAccProviders,
-		CheckDestroy: testCheckOpensearchKibanaObjectDestroy,
+		CheckDestroy: testCheckOpensearchDashboardObjectDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccOpensearchFormatInvalid,
@@ -80,7 +80,7 @@ func TestAccOpensearchKibanaObject_ProviderFormatInvalid(t *testing.T) {
 	})
 }
 
-func TestAccOpensearchKibanaObject_Rejected(t *testing.T) {
+func TestAccOpensearchDashboardObject_Rejected(t *testing.T) {
 	provider := Provider()
 	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
 	if diags.HasError() {
@@ -108,24 +108,24 @@ func TestAccOpensearchKibanaObject_Rejected(t *testing.T) {
 			}
 		},
 		Providers:    testAccProviders,
-		CheckDestroy: testCheckOpensearchKibanaObjectDestroy,
+		CheckDestroy: testCheckOpensearchDashboardObjectDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccOpensearchKibanaIndexPattern,
+				Config:      testAccOpensearchDashboardIndexPattern,
 				ExpectError: regexp.MustCompile("Error 400"),
 			},
 		},
 	})
 }
 
-func testCheckOpensearchKibanaObjectExists(name string, objectType string, id string) resource.TestCheckFunc {
+func testCheckOpensearchDashboardObjectExists(name string, objectType string, id string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[name]
 		if !ok {
 			return fmt.Errorf("Not found: %s", name)
 		}
 		if rs.Primary.ID == "" {
-			return fmt.Errorf("No kibana object ID is set")
+			return fmt.Errorf("No Dashboard object ID is set")
 		}
 
 		meta := testAccProvider.Meta()
@@ -137,15 +137,15 @@ func testCheckOpensearchKibanaObjectExists(name string, objectType string, id st
 		}
 		switch client := esClient.(type) {
 		case *elastic7.Client:
-			_, err = client.Get().Index(".kibana").Id(id).Do(context.TODO())
+			_, err = client.Get().Index(".dashboard").Id(id).Do(context.TODO())
 		case *elastic6.Client:
-			_, err = client.Get().Index(".kibana").Type(deprecatedDocType).Id(id).Do(context.TODO())
+			_, err = client.Get().Index(".dashboard").Type(deprecatedDocType).Id(id).Do(context.TODO())
 		default:
 			return errors.New("opensearch version not supported")
 		}
 
 		if err != nil {
-			log.Printf("[INFO] testCheckOpensearchKibanaObjectExists: %+v", err)
+			log.Printf("[INFO] testCheckOpensearchDashboardObjectExists: %+v", err)
 			return err
 		}
 
@@ -153,9 +153,9 @@ func testCheckOpensearchKibanaObjectExists(name string, objectType string, id st
 	}
 }
 
-func testCheckOpensearchKibanaObjectDestroy(s *terraform.State) error {
+func testCheckOpensearchDashboardObjectDestroy(s *terraform.State) error {
 	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "opensearch_kibana_object" {
+		if rs.Type != "opensearch_dashboard_object" {
 			continue
 		}
 
@@ -168,9 +168,9 @@ func testCheckOpensearchKibanaObjectDestroy(s *terraform.State) error {
 		}
 		switch client := esClient.(type) {
 		case *elastic7.Client:
-			_, err = client.Get().Index(".kibana").Id("response-time-percentile").Do(context.TODO())
+			_, err = client.Get().Index(".dashboard").Id("response-time-percentile").Do(context.TODO())
 		case *elastic6.Client:
-			_, err = client.Get().Index(".kibana").Type("visualization").Id("response-time-percentile").Do(context.TODO())
+			_, err = client.Get().Index(".dashboard").Type("visualization").Id("response-time-percentile").Do(context.TODO())
 		default:
 			return errors.New("opensearch version not supported")
 		}
@@ -184,14 +184,14 @@ func testCheckOpensearchKibanaObjectDestroy(s *terraform.State) error {
 			return fmt.Errorf("Unexpected error %s", err)
 		}
 
-		return fmt.Errorf("Kibana object %q still exists", rs.Primary.ID)
+		return fmt.Errorf("Dashboard object %q still exists", rs.Primary.ID)
 	}
 
 	return nil
 }
 
-var testAccOpensearchKibanaVisualization = `
-resource "opensearch_kibana_object" "test_visualization" {
+var testAccOpensearchDashboardVisualization = `
+resource "opensearch_dashboard_object" "test_visualization" {
   body = <<EOF
 [
   {
@@ -203,7 +203,7 @@ resource "opensearch_kibana_object" "test_visualization" {
       "uiStateJSON": "{}",
       "description": "",
       "version": 1,
-      "kibanaSavedObjectMeta": {
+      "dashboardSavedObjectMeta": {
         "searchSourceJSON": "{\"index\":\"filebeat-*\",\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}},\"filter\":[]}"
       }
     }
@@ -213,8 +213,8 @@ EOF
 }
 `
 
-var testAccOpensearch6KibanaVisualization = `
-resource "opensearch_kibana_object" "test_visualization" {
+var testAccOpensearch6DashboardVisualization = `
+resource "opensearch_dashboard_object" "test_visualization" {
   body = <<EOF
 [
   {
@@ -227,7 +227,7 @@ resource "opensearch_kibana_object" "test_visualization" {
 	      "uiStateJSON": "{}",
 	      "description": "",
 	      "version": 1,
-	      "kibanaSavedObjectMeta": {
+	      "dashboardSavedObjectMeta": {
 	        "searchSourceJSON": "{\"index\":\"filebeat-*\",\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}},\"filter\":[]}"
 	      }
 	    },
@@ -239,8 +239,8 @@ EOF
 }
 `
 
-var testAccOpensearch7KibanaVisualization = `
-resource "opensearch_kibana_object" "test_visualization" {
+var testAccOpensearch7DashboardVisualization = `
+resource "opensearch_dashboard_object" "test_visualization" {
   body = <<EOF
 [
   {
@@ -252,7 +252,7 @@ resource "opensearch_kibana_object" "test_visualization" {
 	      "uiStateJSON": "{}",
 	      "description": "",
 	      "version": 1,
-	      "kibanaSavedObjectMeta": {
+	      "dashboardSavedObjectMeta": {
 	        "searchSourceJSON": "{\"index\":\"filebeat-*\",\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}},\"filter\":[]}"
 	      }
 	    },
@@ -264,8 +264,8 @@ EOF
 }
 `
 
-var testAccOpensearchKibanaIndexPattern = `
-resource "opensearch_kibana_object" "test_pattern" {
+var testAccOpensearchDashboardIndexPattern = `
+resource "opensearch_dashboard_object" "test_pattern" {
   body = <<EOF
 [
   {
@@ -281,8 +281,8 @@ EOF
 }
 `
 
-var testAccOpensearch6KibanaIndexPattern = `
-resource "opensearch_kibana_object" "test_pattern" {
+var testAccOpensearch6DashboardIndexPattern = `
+resource "opensearch_dashboard_object" "test_pattern" {
   body = <<EOF
 [
   {
@@ -301,8 +301,8 @@ EOF
 }
 `
 
-var testAccOpensearch7KibanaIndexPattern = `
-resource "opensearch_kibana_object" "test_pattern" {
+var testAccOpensearch7DashboardIndexPattern = `
+resource "opensearch_dashboard_object" "test_pattern" {
   body = <<EOF
 [
   {
@@ -322,7 +322,7 @@ EOF
 `
 
 var testAccOpensearchFormatInvalid = `
-resource "opensearch_kibana_object" "test_invalid" {
+resource "opensearch_dashboard_object" "test_invalid" {
   body = <<EOF
 {
   "test": "yes"

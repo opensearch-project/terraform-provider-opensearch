@@ -231,7 +231,7 @@ func testCheckOpensearchUserConnects(name string) resource.TestCheckFunc {
 			case *elastic7.Client:
 				var client *elastic7.Client
 				client, err = elastic7.NewClient(
-					elastic7.SetURL(os.Getenv("ELASTICSEARCH_URL")),
+					elastic7.SetURL(os.Getenv("OPENSEARCH_URL")),
 					elastic7.SetBasicAuth(username, password))
 
 				if err == nil {

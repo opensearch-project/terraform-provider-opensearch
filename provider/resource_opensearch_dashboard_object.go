@@ -14,12 +14,12 @@ import (
 	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
-func resourceOpensearchKibanaObject() *schema.Resource {
+func resourceOpensearchDashboardObject() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchKibanaObjectCreate,
-		Read:   resourceOpensearchKibanaObjectRead,
-		Update: resourceOpensearchKibanaObjectUpdate,
-		Delete: resourceOpensearchKibanaObjectDelete,
+		Create: resourceOpensearchDashboardObjectCreate,
+		Read:   resourceOpensearchDashboardObjectRead,
+		Update: resourceOpensearchDashboardObjectUpdate,
+		Delete: resourceOpensearchDashboardObjectDelete,
 		Schema: map[string]*schema.Schema{
 			"body": {
 				Type:     schema.TypeString,
@@ -43,15 +43,15 @@ func resourceOpensearchKibanaObject() *schema.Resource {
 					}
 
 					for _, o := range body {
-						kibanaObject, ok := o.(map[string]interface{})
+						dashboardObject, ok := o.(map[string]interface{})
 
 						if !ok {
 							errors = append(errors, fmt.Errorf("entries must be objects"))
 							continue
 						}
 
-						for _, k := range requiredKibanaObjectKeys() {
-							if kibanaObject[k] == nil {
+						for _, k := range requiredDashboardObjectKeys() {
+							if dashboardObject[k] == nil {
 								errors = append(errors, fmt.Errorf("object must have the %q key", k))
 							}
 						}
@@ -59,7 +59,7 @@ func resourceOpensearchKibanaObject() *schema.Resource {
 
 					return warnings, errors
 				},
-				// DiffSuppressFunc: diffSuppressKibanaObject,
+				// DiffSuppressFunc: diffSuppressDashboardObject,
 				StateFunc: func(v interface{}) string {
 					json, _ := structure.NormalizeJsonString(v)
 					return json
@@ -68,7 +68,7 @@ func resourceOpensearchKibanaObject() *schema.Resource {
 			"index": {
 				Type:     schema.TypeString,
 				Optional: true,
-				Default:  ".kibana",
+				Default:  ".dashboard",
 			},
 		},
 	}
@@ -82,7 +82,7 @@ const (
 
 const deprecatedDocType = "doc"
 
-func resourceOpensearchKibanaObjectCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceOpensearchDashboardObjectCreate(d *schema.ResourceData, meta interface{}) error {
 	index := d.Get("index").(string)
 	mapping_index := d.Get("index").(string)
 
@@ -102,20 +102,20 @@ func resourceOpensearchKibanaObjectCreate(d *schema.ResourceData, meta interface
 	}
 
 	if err != nil {
-		log.Printf("[INFO] Failed to create new kibana index: %+v", err)
+		log.Printf("[INFO] Failed to create new Dashboard index: %+v", err)
 		return err
 	}
 
 	if success == INDEX_CREATED {
-		log.Printf("[INFO] Created new kibana index")
+		log.Printf("[INFO] Created new Dashboard index")
 	} else if success == INDEX_CREATION_FAILED {
-		return fmt.Errorf("fail to create the Elasticsearch index")
+		return fmt.Errorf("fail to create OpenSearchsearch index")
 	}
 
-	id, err := resourceOpensearchPutKibanaObject(d, meta)
+	id, err := resourceOpensearchPutDashboardObject(d, meta)
 
 	if err != nil {
-		log.Printf("[INFO] Failed to put kibana object: %+v", err)
+		log.Printf("[INFO] Failed to put Dashboard object: %+v", err)
 		return err
 	}
 
@@ -164,19 +164,19 @@ func elastic6CreateIndexIfNotExists(client *elastic6.Client, index string, mappi
 	return INDEX_EXISTS, nil
 }
 
-func resourceOpensearchKibanaObjectRead(d *schema.ResourceData, meta interface{}) error {
+func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interface{}) error {
 	bodyString := d.Get("body").(string)
 	var body []interface{}
 	if err := json.Unmarshal([]byte(bodyString), &body); err != nil {
 		log.Printf("[WARN] Failed to unmarshal on read: %+v", bodyString)
 		return err
 	}
-	kibanaObject, ok := body[0].(map[string]interface{})
+	dashboardObject, ok := body[0].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("expected %v to be an object", body[0])
 	}
-	id := kibanaObject["_id"].(string)
-	objectType := objectTypeOrDefault(kibanaObject)
+	id := dashboardObject["_id"].(string)
+	objectType := objectTypeOrDefault(dashboardObject)
 	index := d.Get("index").(string)
 
 	var resultJSON []byte
@@ -204,7 +204,7 @@ func resourceOpensearchKibanaObjectRead(d *schema.ResourceData, meta interface{}
 
 	if err != nil {
 		if elastic7.IsNotFound(err) || elastic6.IsNotFound(err) {
-			log.Printf("[WARN] Kibana Object (%s) not found, removing from state", id)
+			log.Printf("[WARN] Dashboard Object (%s) not found, removing from state", id)
 			d.SetId("")
 			return nil
 		}
@@ -216,13 +216,13 @@ func resourceOpensearchKibanaObjectRead(d *schema.ResourceData, meta interface{}
 	ds := &resourceDataSetter{d: d}
 	ds.set("index", index)
 
-	// The Kibana object interface was originally built with the notion that
-	// multiple kibana objects would be specified in the same resource, however,
-	// that's not practical given that the Elasticsearch API is for a single
+	// The Dashboard object interface was originally built with the notion that
+	// multiple Dashboard objects would be specified in the same resource, however,
+	// that's not practical given that the OpenSearch API is for a single
 	// object. We account for that here: use the _source attribute and build a
 	// single entry array
 	var originalKeys []string
-	for k := range kibanaObject {
+	for k := range dashboardObject {
 		originalKeys = append(originalKeys, k)
 	}
 
@@ -245,12 +245,12 @@ func resourceOpensearchKibanaObjectRead(d *schema.ResourceData, meta interface{}
 	return ds.err
 }
 
-func resourceOpensearchKibanaObjectUpdate(d *schema.ResourceData, meta interface{}) error {
-	_, err := resourceOpensearchPutKibanaObject(d, meta)
+func resourceOpensearchDashboardObjectUpdate(d *schema.ResourceData, meta interface{}) error {
+	_, err := resourceOpensearchPutDashboardObject(d, meta)
 	return err
 }
 
-func resourceOpensearchKibanaObjectDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interface{}) error {
 	bodyString := d.Get("body").(string)
 	var body []interface{}
 	if err := json.Unmarshal([]byte(bodyString), &body); err != nil {
@@ -307,7 +307,7 @@ func elastic6DeleteIndex(client *elastic6.Client, objectType string, index strin
 	return err
 }
 
-func resourceOpensearchPutKibanaObject(d *schema.ResourceData, meta interface{}) (string, error) {
+func resourceOpensearchPutDashboardObject(d *schema.ResourceData, meta interface{}) (string, error) {
 	bodyString := d.Get("body").(string)
 	var body []interface{}
 	if err := json.Unmarshal([]byte(bodyString), &body); err != nil {
@@ -374,6 +374,6 @@ func objectTypeOrDefault(document map[string]interface{}) string {
 	return deprecatedDocType
 }
 
-func requiredKibanaObjectKeys() []string {
+func requiredDashboardObjectKeys() []string {
 	return []string{"_source", "_id"}
 }

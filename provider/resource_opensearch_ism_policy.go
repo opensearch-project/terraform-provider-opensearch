@@ -150,7 +150,7 @@ func resourceOpensearchOpenDistroISMPolicyDelete(d *schema.ResourceData, m inter
 			return fmt.Errorf("error deleting policy: %+v : %+v", path, err)
 		}
 	default:
-		err = errors.New("policy resource not implemented prior to Elastic v6")
+		err = errors.New("policy resource not implemented prior to v6")
 	}
 
 	return err
@@ -197,7 +197,7 @@ func resourceOpensearchGetOpenDistroISMPolicy(policyID string, m interface{}) (G
 		}
 		body = &res.Body
 	default:
-		err = errors.New("policy resource not implemented prior to Elastic v6")
+		err = errors.New("policy resource not implemented prior to v6")
 	}
 
 	if err != nil {

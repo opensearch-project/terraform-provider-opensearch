@@ -127,7 +127,7 @@ func resourceOpensearchOpenDistroUserDelete(d *schema.ResourceData, m interface{
 			),
 		})
 	default:
-		err = errors.New("Role resource not implemented prior to Elastic v7")
+		err = errors.New("Role resource not implemented prior to v7")
 	}
 
 	return err
@@ -162,7 +162,7 @@ func resourceOpensearchGetOpenDistroUser(userID string, m interface{}) (UserBody
 		}
 		body = res.Body
 	default:
-		return *user, errors.New("Role resource not implemented prior to Elastic v7")
+		return *user, errors.New("Role resource not implemented prior to v7")
 	}
 
 	var userDefinition map[string]UserBody
@@ -220,7 +220,7 @@ func resourceOpensearchPutOpenDistroUser(d *schema.ResourceData, m interface{}) 
 			// see https://github.com/opendistro-for-
 			// elasticsearch/security/issues/1095, this should return a 409, but
 			// retry on the 500 as well. We can't parse the message to only retry on
-			// the conlict exception becaues the elastic client doesn't directly
+			// the conlict exception becaues the client doesn't directly
 			// expose the error response body
 			RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
 			Retrier: elastic7.NewBackoffRetrier(
@@ -239,7 +239,7 @@ func resourceOpensearchPutOpenDistroUser(d *schema.ResourceData, m interface{}) 
 
 		body = res.Body
 	default:
-		return response, errors.New("User resource not implemented prior to Elastic v7")
+		return response, errors.New("User resource not implemented prior to v7")
 	}
 
 	if err := json.Unmarshal(body, response); err != nil {

@@ -28,29 +28,29 @@ jobs:
       matrix:
         go-version: [1.18.x]
         os: [ubuntu-latest]
-        es-major-version:
+        os-major-version:
           - "7-opendistro"
           - "1-opensearch"
         include:
-        - es-major-version: "7-opendistro"
+        - os-major-version: "7-opendistro"
           version: 7.10.1
           # oss-image: "docker.elastic.co/elasticsearch/elasticsearch-oss"
           oss-image: "elasticsearch"
-          ES_OPENDISTRO_IMAGE: "amazon/opendistro-for-elasticsearch:1.13.3"
-          ES_KIBANA_IMAGE: "docker.elastic.co/kibana/kibana:7.10.1"
-        - es-major-version: "1-opensearch"
+          OS_OPENDISTRO_IMAGE: "amazon/opendistro-for-elasticsearch:1.13.3"
+          OS_DASHBOARD_IMAGE: "docker.elastic.co/kibana/kibana:7.10.1"
+        - os-major-version: "1-opensearch"
           version: 1.0.0
           oss-image: "opensearchproject/opensearch"
-          ES_OPENDISTRO_IMAGE: "opensearchproject/opensearch:1.0.0"
-          ES_KIBANA_IMAGE: "" # opensearchproject/opensearch-dashboards:1.0.0"
+          OS_OPENDISTRO_IMAGE: "opensearchproject/opensearch:1.0.0"
+          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:1.0.0"
           OPENSEARCH_PREFIX: "plugins.security"
           OSS_ENV_VAR: "plugins.security.disabled=true"
     needs: [lint]
-    name: Test against ES ${{ matrix.es-major-version }} on ${{ matrix.go-version }}/${{ matrix.os }}
+    name: Test against OS ${{ matrix.os-major-version }} on ${{ matrix.go-version }}/${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
-      ES_OPENDISTRO_IMAGE: "${{matrix.ES_OPENDISTRO_IMAGE}}"
-      ES_KIBANA_IMAGE: "${{matrix.ES_KIBANA_IMAGE}}"
+      OS_OPENDISTRO_IMAGE: "${{matrix.OS_OPENDISTRO_IMAGE}}"
+      OS_DASHBOARD_IMAGE: "${{matrix.OS_DASHBOARD_IMAGE}}"
       OPENSEARCH_PREFIX: "${{matrix.OPENSEARCH_PREFIX}}"
       OSS_ENV_VAR: "${{matrix.OSS_ENV_VAR}}"
     steps:
@@ -80,10 +80,10 @@ jobs:
       run: docker-compose up --detach
       env:
         OSS_IMAGE: "${{ matrix.oss-image }}:${{ matrix.version }}"
-        ES_COMMAND: "${{matrix.ES_COMMAND}}"
+        OS_COMMAND: "${{matrix.OS_COMMAND}}"
     - name: Check Docker containers
       run: docker ps -a
-    # While docker/ES is booting up, run the linters
+    # While docker/OS is booting up, run the linters
     - name: Get tools
       run: |
         ./script/install-tools
@@ -96,15 +96,15 @@ jobs:
       run: |
         ./script/test-mod-tidy
         ./script/test-terraform-fmt
-    - name: Wait for Elasticsearch
-      # ensure that ES has come up and is available
+    - name: Wait for Opensearch
+      # ensure that OS has come up and is available
       run: |
         ./script/wait-for-endpoint --timeout=20 http://localhost:9200
     - name: Warm up OpenDistro/Opensearch
       # - OpenDistro lazily initializes its indexes, see
       #   https://github.com/opendistro-for-elasticsearch/alerting/issues/60
       run: |
-        if [ -n "$ES_OPENDISTRO_IMAGE" ]; then
+        if [ -n "$OS_OPENDISTRO_IMAGE" ]; then
           ./script/wait-for-endpoint --timeout=120 http://admin:admin@localhost:9220
           curl -s -v -X POST -H 'Content-type: application/json' -d '{"name":"_warmup","type":"slack","slack":{"url": "http://www.example.com"}}' http://admin:admin@localhost:9220/_opendistro/_alerting/destinations
         fi
@@ -113,7 +113,7 @@ jobs:
       uses: jwalton/gh-docker-logs@v2
     - name: Run the tests
       run: |
-        export ELASTICSEARCH_URL=http://localhost:9200
+        export OPENSEARCH_URL=http://localhost:9200
         export TF_LOG=INFO
         TF_ACC=1 go test ./... -v -parallel 20 -cover -short
         # check goreleaser config for deprecations

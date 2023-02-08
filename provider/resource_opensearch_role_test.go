@@ -242,7 +242,7 @@ resource "opensearch_role" "test" {
     ]
 
     allowed_actions = [
-      "kibana_all_write",
+      "dashboard_all_write",
     ]
   }
 
@@ -268,7 +268,7 @@ resource "opensearch_role" "test" {
 
   index_permissions {
     index_patterns = [
-      "?kibana",
+      "?dashboard",
     ]
 
     allowed_actions = [
@@ -282,7 +282,7 @@ resource "opensearch_role" "test" {
     ]
 
     allowed_actions = [
-      "kibana_all_write",
+      "dashboard_all_write",
     ]
   }
 
@@ -292,7 +292,7 @@ resource "opensearch_role" "test" {
     ]
 
     allowed_actions = [
-      "kibana_all_write",
+      "dashboard_all_write",
     ]
   }
 
@@ -316,7 +316,7 @@ resource "opensearch_role" "test" {
   }
   index_permissions {
     index_patterns = [
-      "?kibana",
+      "?dashboard",
     ]
     allowed_actions = [
       "indices_all",

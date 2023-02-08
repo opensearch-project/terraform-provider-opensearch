@@ -13,11 +13,11 @@ import (
 	elastic7 "github.com/olivere/elastic/v7"
 )
 
-var minimalESDataStreamVersion, _ = version.NewVersion("7.9.0")
+var minimalOSDataStreamVersion, _ = version.NewVersion("7.9.0")
 
 func resourceOpensearchDataStream() *schema.Resource {
 	return &schema.Resource{
-		Description: "A data stream lets you store append-only time series data across multiple (hidden, auto-generated) indices while giving you a single named resource for requests. See the [guide](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/data-streams.html) and [API docs](https://www.elastic.co/guide/en/elasticsearch/reference/7.17/data-stream-apis.html).",
+		Description: "A data stream lets you store append-only time series data across multiple (hidden, auto-generated) indices while giving you a single named resource for requests",
 		Create:      resourceOpensearchDataStreamCreate,
 		Read:        resourceOpensearchDataStreamRead,
 		Delete:      resourceOpensearchDataStreamDelete,
@@ -45,13 +45,13 @@ func resourceOpensearchDataStreamCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceOpensearchDataStreamAvailable(v *version.Version, c *ProviderConf) bool {
-	return v.GreaterThanOrEqual(minimalESDataStreamVersion) || c.flavor == Unknown
+	return v.GreaterThanOrEqual(minimalOSDataStreamVersion) || c.flavor == Unknown
 }
 
 func resourceOpensearchDataStreamRead(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 
-	var elasticVersion *version.Version
+	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
 	esClient, err := getClient(providerConf)
@@ -61,12 +61,12 @@ func resourceOpensearchDataStreamRead(d *schema.ResourceData, meta interface{}) 
 
 	switch client := esClient.(type) {
 	case *elastic7.Client:
-		elasticVersion, err = version.NewVersion(providerConf.esVersion)
+		openSearchVersion, err = version.NewVersion(providerConf.osVersion)
 		if err == nil {
-			if resourceOpensearchDataStreamAvailable(elasticVersion, providerConf) {
+			if resourceOpensearchDataStreamAvailable(openSearchVersion, providerConf) {
 				err = elastic7GetDataStream(client, id)
 			} else {
-				err = fmt.Errorf("_data_stream endpoint only available from server version >= 7.9, got version %s", elasticVersion.String())
+				err = fmt.Errorf("_data_stream endpoint only available from server version >= 7.9, got version %s", openSearchVersion.String())
 			}
 		}
 	default:
@@ -90,7 +90,7 @@ func resourceOpensearchDataStreamRead(d *schema.ResourceData, meta interface{}) 
 func resourceOpensearchDataStreamDelete(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 
-	var elasticVersion *version.Version
+	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
 	esClient, err := getClient(providerConf)
@@ -100,12 +100,12 @@ func resourceOpensearchDataStreamDelete(d *schema.ResourceData, meta interface{}
 
 	switch client := esClient.(type) {
 	case *elastic7.Client:
-		elasticVersion, err = version.NewVersion(providerConf.esVersion)
+		openSearchVersion, err = version.NewVersion(providerConf.osVersion)
 		if err == nil {
-			if resourceOpensearchDataStreamAvailable(elasticVersion, providerConf) {
+			if resourceOpensearchDataStreamAvailable(openSearchVersion, providerConf) {
 				err = elastic7DeleteDataStream(client, id)
 			} else {
-				err = fmt.Errorf("_data_stream endpoint only available from server version >= 7.9, got version %s", elasticVersion.String())
+				err = fmt.Errorf("_data_stream endpoint only available from server version >= 7.9, got version %s", openSearchVersion.String())
 			}
 		}
 	default:
@@ -122,7 +122,7 @@ func resourceOpensearchDataStreamDelete(d *schema.ResourceData, meta interface{}
 func resourceOpensearchPutDataStream(d *schema.ResourceData, meta interface{}) error {
 	name := d.Get("name").(string)
 
-	var elasticVersion *version.Version
+	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
 	esClient, err := getClient(providerConf)
@@ -132,12 +132,12 @@ func resourceOpensearchPutDataStream(d *schema.ResourceData, meta interface{}) e
 
 	switch client := esClient.(type) {
 	case *elastic7.Client:
-		elasticVersion, err = version.NewVersion(providerConf.esVersion)
+		openSearchVersion, err = version.NewVersion(providerConf.osVersion)
 		if err == nil {
-			if resourceOpensearchDataStreamAvailable(elasticVersion, providerConf) {
+			if resourceOpensearchDataStreamAvailable(openSearchVersion, providerConf) {
 				err = elastic7PutDataStream(client, name)
 			} else {
-				err = fmt.Errorf("_data_stream endpoint only available from server version >= 7.9, got version %s", elasticVersion.String())
+				err = fmt.Errorf("_data_stream endpoint only available from server version >= 7.9, got version %s", openSearchVersion.String())
 			}
 		}
 	default:

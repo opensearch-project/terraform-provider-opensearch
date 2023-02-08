@@ -353,7 +353,7 @@ var (
 		// Other attributes
 		"mappings": {
 			Type:         schema.TypeString,
-			Description:  "A JSON string defining how documents in the index, and the fields they contain, are stored and indexed. To avoid the complexities of field mapping updates, updates of this field are not allowed via this provider. See the upstream [Elasticsearch docs](https://www.elastic.co/guide/en/elasticsearch/reference/6.8/indices-put-mapping.html#updating-field-mappings) for more details.",
+			Description:  "A JSON string defining how documents in the index, and the fields they contain, are stored and indexed. To avoid the complexities of field mapping updates, updates of this field are not allowed via this provider.",
 			Optional:     true,
 			ForceNew:     true,
 			ValidateFunc: validation.StringIsJSON,
@@ -413,7 +413,7 @@ var (
 
 func resourceOpensearchIndex() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an Elasticsearch index resource.",
+		Description: "Provides an OpenSearch index resource.",
 		Create:      resourceOpensearchIndexCreate,
 		Read:        resourceOpensearchIndexRead,
 		Update:      resourceOpensearchIndexUpdate,

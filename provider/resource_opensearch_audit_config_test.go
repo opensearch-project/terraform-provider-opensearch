@@ -31,7 +31,7 @@ func TestAccOpensearchOpenSearchSecurityAuditConfig(t *testing.T) {
 	case *elastic6.Client:
 		allowed = false
 	default:
-		version, err := version.NewVersion(providerConf.esVersion)
+		version, err := version.NewVersion(providerConf.osVersion)
 		if err != nil {
 			t.Skipf("err: %s", err)
 		}
@@ -87,7 +87,7 @@ resource "opensearch_audit_config" "test" {
     log_request_body              = true
     resolve_indices               = true
     exclude_sensitive_headers     = true
-    ignore_users                  = ["kibanaserver"]
+    ignore_users                  = ["dashboardserver"]
     ignore_requests               = ["SearchRequest", "indices:data/read/*", "/_cluster/health"]
   }
   compliance {
@@ -125,7 +125,7 @@ resource "opensearch_audit_config" "test" {
     log_request_body              = true
     resolve_indices               = true
     exclude_sensitive_headers     = true
-    ignore_users                  = ["kibanaserver"]
+    ignore_users                  = ["dashboardserver"]
     ignore_requests               = ["SearchRequest", "indices:data/read/*", "/_cluster/health"]
   }
   compliance {
@@ -201,7 +201,7 @@ func testCheckOpensearchSecurityAuditConfigConnects(name string) resource.TestCh
 			case *elastic7.Client:
 				var client *elastic7.Client
 				client, err = elastic7.NewClient(
-					elastic7.SetURL(os.Getenv("ELASTICSEARCH_URL")),
+					elastic7.SetURL(os.Getenv("OPENSEARCH_URL")),
 					elastic7.SetBasicAuth(username, password))
 
 				if err == nil {
