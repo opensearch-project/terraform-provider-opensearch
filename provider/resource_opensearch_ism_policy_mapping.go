@@ -54,7 +54,7 @@ var openDistroISMPolicyMappingSchema = map[string]*schema.Schema{
 
 func resourceOpenSearchISMPolicyMapping() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch Index State Management (ISM) policy. Please refer to the Open Distro [ISM documentation](https://opendistro.github.io/for-elasticsearch-docs/docs/ism/) for details.",
+		Description: "Provides an OpenSearch Index State Management (ISM) policy. Please refer to the OpenSearch ISM documentation for details.",
 		Create:      resourceOpensearchOpenDistroISMPolicyMappingCreate,
 		Read:        resourceOpensearchOpenDistroISMPolicyMappingRead,
 		Update:      resourceOpensearchOpenDistroISMPolicyMappingUpdate,
