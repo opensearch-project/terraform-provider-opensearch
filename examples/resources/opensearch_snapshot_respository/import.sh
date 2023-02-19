@@ -1,0 +1,1 @@
+terraform import opensearch_snapshot_repository.repo es-index-backups

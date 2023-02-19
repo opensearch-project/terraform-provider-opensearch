@@ -11,23 +11,27 @@ import (
 
 func resourceOpensearchSnapshotRepository() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchSnapshotRepositoryCreate,
-		Read:   resourceOpensearchSnapshotRepositoryRead,
-		Update: resourceOpensearchSnapshotRepositoryUpdate,
-		Delete: resourceOpensearchSnapshotRepositoryDelete,
+		Description: "",
+		Create:      resourceOpensearchSnapshotRepositoryCreate,
+		Read:        resourceOpensearchSnapshotRepositoryRead,
+		Update:      resourceOpensearchSnapshotRepositoryUpdate,
+		Delete:      resourceOpensearchSnapshotRepositoryDelete,
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				ForceNew: true,
-				Required: true,
+				Description: "",
+				Type:        schema.TypeString,
+				ForceNew:    true,
+				Required:    true,
 			},
 			"type": {
-				Type:     schema.TypeString,
-				Required: true,
+				Description: "",
+				Type:        schema.TypeString,
+				Required:    true,
 			},
 			"settings": {
-				Type:     schema.TypeMap,
-				Optional: true,
+				Description: "",
+				Type:        schema.TypeMap,
+				Optional:    true,
 			},
 		},
 		Importer: &schema.ResourceImporter{
