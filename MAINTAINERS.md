@@ -4,9 +4,9 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 
 ## Current Maintainers
 
-| Maintainer      | GitHub ID                                             | Affiliation            |
-| --------------- | ----------------------------------------------------- | ---------------------- |
-| Peter Zhu       | [peterzhuamazon](https://github.com/peterzhuamazon)   | Amazon                 |
-| Prudhvi Godithi | [prudhvigodithi](https://github.com/prudhvigodithi)   | Amazon                 |
-| jackson Theisen | [jackson-theisen](https://github.com/jackson-theisen) | Theisen Consulting     |
-| Phillip Baker   | [phillbaker](https://github.com/phillbaker)           | https://phillbaker.com |
+| Maintainer      | GitHub ID                                             | Affiliation          |
+| --------------- | ----------------------------------------------------- |----------------------|
+| Peter Zhu       | [peterzhuamazon](https://github.com/peterzhuamazon)   | Amazon               |
+| Prudhvi Godithi | [prudhvigodithi](https://github.com/prudhvigodithi)   | Amazon               |
+| jackson Theisen | [jackson-theisen](https://github.com/jackson-theisen) | External contributor  |
+| Phillip Baker   | [phillbaker](https://github.com/phillbaker)           | External contributor |
