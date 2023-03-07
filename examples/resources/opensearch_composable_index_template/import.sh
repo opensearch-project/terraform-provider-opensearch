@@ -1,0 +1,1 @@
+terraform import opensearch_composable_index_template.template_1 template_1

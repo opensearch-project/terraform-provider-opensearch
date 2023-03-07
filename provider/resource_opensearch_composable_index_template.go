@@ -22,20 +22,23 @@ func resourceOpensearchComposableIndexTemplate() *schema.Resource {
 		Delete: resourceOpensearchComposableIndexTemplateDelete,
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				ForceNew: true,
-				Required: true,
+				Type:        schema.TypeString,
+				ForceNew:    true,
+				Required:    true,
+				Description: "The name of the index template.",
 			},
 			"body": {
 				Type:             schema.TypeString,
 				Required:         true,
 				DiffSuppressFunc: diffSuppressComposableIndexTemplate,
 				ValidateFunc:     validation.StringIsJSON,
+				Description:      "The JSON body of the index template.",
 			},
 		},
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		Description: "Provides an Composable index template resource. This resource uses the `/_index_template` endpoint of the API that is available since version 7.8. Use `opensearch_index_template` if you are using older versions or if you want to keep using legacy Index Templates in versions 7.8+.",
 	}
 }
 
