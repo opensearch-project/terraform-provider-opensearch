@@ -16,10 +16,11 @@ import (
 
 func resourceOpensearchDashboardObject() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchDashboardObjectCreate,
-		Read:   resourceOpensearchDashboardObjectRead,
-		Update: resourceOpensearchDashboardObjectUpdate,
-		Delete: resourceOpensearchDashboardObjectDelete,
+		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards v5 and v6 will export all objects in Dashboards v5 format, so the exported objects cannot be used as a source for `body` in this resource - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.\n\nWith the removal of mapping types in OpenSearch, the Dashboards index changed from v5 to >= v6, previously the document mapping type had the Dashboards object type, however, the `_type` going forward is `doc` and the type is within the document, see below. Using v5 doc types in v6 and above will result in errors from OpenSearch after one or more document types are used.",
+		Create:      resourceOpensearchDashboardObjectCreate,
+		Read:        resourceOpensearchDashboardObjectRead,
+		Update:      resourceOpensearchDashboardObjectUpdate,
+		Delete:      resourceOpensearchDashboardObjectDelete,
 		Schema: map[string]*schema.Schema{
 			"body": {
 				Type:     schema.TypeString,
@@ -64,11 +65,13 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 					json, _ := structure.NormalizeJsonString(v)
 					return json
 				},
+				Description: "The JSON body of the dashboard object.",
 			},
 			"index": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Default:  ".dashboard",
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     ".dashboard",
+				Description: "The name of the index where dashboard data is stored.",
 			},
 		},
 	}
