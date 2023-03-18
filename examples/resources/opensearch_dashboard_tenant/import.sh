@@ -1,0 +1,1 @@
+terraform import opensearch_dashboard_tenant.writer test
