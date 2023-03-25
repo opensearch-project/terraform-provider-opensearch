@@ -1,0 +1,1 @@
+terraform import opensearch_roles_mapping.mapper logs_writer
