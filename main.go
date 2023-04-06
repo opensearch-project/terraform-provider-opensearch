@@ -20,6 +20,7 @@ func main() {
 	flag.Parse()
 
 	if debugMode {
+		//nolint:staticcheck // SA1019 ignore this!
 		err := plugin.Debug(context.Background(), "registry.terraform.io/opensearch-project/terraform-provider-opensearch",
 			&plugin.ServeOpts{
 				ProviderFunc: provider.Provider,
