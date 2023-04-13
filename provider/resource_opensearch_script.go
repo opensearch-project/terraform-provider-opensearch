@@ -35,11 +35,12 @@ var scriptSchema = map[string]*schema.Schema{
 
 func resourceOpensearchScript() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchScriptCreate,
-		Read:   resourceOpensearchScriptRead,
-		Update: resourceOpensearchScriptUpdate,
-		Delete: resourceOpensearchScriptDelete,
-		Schema: scriptSchema,
+		Description: "Provides an Opensearch script resource.",
+		Create:      resourceOpensearchScriptCreate,
+		Read:        resourceOpensearchScriptRead,
+		Update:      resourceOpensearchScriptUpdate,
+		Delete:      resourceOpensearchScriptDelete,
+		Schema:      scriptSchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},

@@ -18,6 +18,7 @@ import (
 
 var openDistroMonitorSchema = map[string]*schema.Schema{
 	"body": {
+		Description:      "The monitor document",
 		Type:             schema.TypeString,
 		Required:         true,
 		DiffSuppressFunc: diffSuppressMonitor,
@@ -31,11 +32,12 @@ var openDistroMonitorSchema = map[string]*schema.Schema{
 
 func resourceOpenSearchMonitor() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchOpenDistroMonitorCreate,
-		Read:   resourceOpensearchOpenDistroMonitorRead,
-		Update: resourceOpensearchOpenDistroMonitorUpdate,
-		Delete: resourceOpensearchOpenDistroMonitorDelete,
-		Schema: openDistroMonitorSchema,
+		Description: "Provides an OpenSearch monitor. Please refer to the OpenSearch monitor documentation for details.",
+		Create:      resourceOpensearchOpenDistroMonitorCreate,
+		Read:        resourceOpensearchOpenDistroMonitorRead,
+		Update:      resourceOpensearchOpenDistroMonitorUpdate,
+		Delete:      resourceOpensearchOpenDistroMonitorDelete,
+		Schema:      openDistroMonitorSchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},

@@ -21,11 +21,13 @@ import (
 
 var openDistroISMPolicySchema = map[string]*schema.Schema{
 	"policy_id": {
-		Type:     schema.TypeString,
-		Required: true,
-		ForceNew: true,
+		Description: "The id of the ISM policy.",
+		Type:        schema.TypeString,
+		Required:    true,
+		ForceNew:    true,
 	},
 	"body": {
+		Description:      "The policy document.",
 		Type:             schema.TypeString,
 		Required:         true,
 		DiffSuppressFunc: diffSuppressPolicy,
@@ -35,24 +37,27 @@ var openDistroISMPolicySchema = map[string]*schema.Schema{
 		},
 	},
 	"primary_term": {
-		Type:     schema.TypeInt,
-		Optional: true,
-		Computed: true,
+		Description: "The primary term of the ISM policy version.",
+		Type:        schema.TypeInt,
+		Optional:    true,
+		Computed:    true,
 	},
 	"seq_no": {
-		Type:     schema.TypeInt,
-		Optional: true,
-		Computed: true,
+		Description: "The sequence number of the ISM policy version.",
+		Type:        schema.TypeInt,
+		Optional:    true,
+		Computed:    true,
 	},
 }
 
 func resourceOpenSearchISMPolicy() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchOpenDistroISMPolicyCreate,
-		Read:   resourceOpensearchOpenDistroISMPolicyRead,
-		Update: resourceOpensearchOpenDistroISMPolicyUpdate,
-		Delete: resourceOpensearchOpenDistroISMPolicyDelete,
-		Schema: openDistroISMPolicySchema,
+		Description: "Provides an OpenSearch Index State Management (ISM) policy. Please refer to the OpenSearch ISM documentation for details.",
+		Create:      resourceOpensearchOpenDistroISMPolicyCreate,
+		Read:        resourceOpensearchOpenDistroISMPolicyRead,
+		Update:      resourceOpensearchOpenDistroISMPolicyUpdate,
+		Delete:      resourceOpensearchOpenDistroISMPolicyDelete,
+		Schema:      openDistroISMPolicySchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},

@@ -1,0 +1,1 @@
+terraform import opensearch_ingest_pipeline.test terraform-test

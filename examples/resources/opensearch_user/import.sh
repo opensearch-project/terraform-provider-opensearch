@@ -1,0 +1,1 @@
+terraform import opensearch_user.reader app_reader

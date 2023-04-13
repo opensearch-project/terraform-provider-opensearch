@@ -17,10 +17,12 @@ import (
 
 var openDistroUserSchema = map[string]*schema.Schema{
 	"username": {
-		Type:     schema.TypeString,
-		Required: true,
+		Description: "The name of the security user.",
+		Type:        schema.TypeString,
+		Required:    true,
 	},
 	"password": {
+		Description:   "The plain text password for the user, cannot be specified with `password_hash`. Some implementations may enforce a password policy. Invalid passwords may cause a non-descriptive HTTP 400 Bad Request error. For AWS Opensearch domains \"password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character\".",
 		Type:          schema.TypeString,
 		Optional:      true,
 		Sensitive:     true,
@@ -28,6 +30,7 @@ var openDistroUserSchema = map[string]*schema.Schema{
 		ConflictsWith: []string{"password_hash"},
 	},
 	"password_hash": {
+		Description:   "The pre-hashed password for the user, cannot be specified with `password`.",
 		Type:          schema.TypeString,
 		Optional:      true,
 		Sensitive:     true,
@@ -35,28 +38,32 @@ var openDistroUserSchema = map[string]*schema.Schema{
 		ConflictsWith: []string{"password"},
 	},
 	"backend_roles": {
-		Type:     schema.TypeSet,
-		Optional: true,
-		Elem:     &schema.Schema{Type: schema.TypeString},
+		Description: "A list of backend roles.",
+		Type:        schema.TypeSet,
+		Optional:    true,
+		Elem:        &schema.Schema{Type: schema.TypeString},
 	},
 	"attributes": {
-		Type:     schema.TypeMap,
-		Optional: true,
-		Elem:     &schema.Schema{Type: schema.TypeString},
+		Description: "A map of arbitrary key value string pairs stored alongside of users.",
+		Type:        schema.TypeMap,
+		Optional:    true,
+		Elem:        &schema.Schema{Type: schema.TypeString},
 	},
 	"description": {
-		Type:     schema.TypeString,
-		Optional: true,
+		Description: "Description of the user.",
+		Type:        schema.TypeString,
+		Optional:    true,
 	},
 }
 
 func resourceOpenSearchUser() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchOpenDistroUserCreate,
-		Read:   resourceOpensearchOpenDistroUserRead,
-		Update: resourceOpensearchOpenDistroUserUpdate,
-		Delete: resourceOpensearchOpenDistroUserDelete,
-		Schema: openDistroUserSchema,
+		Description: "Provides an OpenSearch security user. Please refer to the OpenSearch Access Control documentation for details.",
+		Create:      resourceOpensearchOpenDistroUserCreate,
+		Read:        resourceOpensearchOpenDistroUserRead,
+		Update:      resourceOpensearchOpenDistroUserUpdate,
+		Delete:      resourceOpensearchOpenDistroUserDelete,
+		Schema:      openDistroUserSchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},

@@ -13,17 +13,20 @@ import (
 
 func resourceOpensearchIngestPipeline() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchIngestPipelineCreate,
-		Read:   resourceOpensearchIngestPipelineRead,
-		Update: resourceOpensearchIngestPipelineUpdate,
-		Delete: resourceOpensearchIngestPipelineDelete,
+		Description: "Provides an Opensearch ingest pipeline resource.",
+		Create:      resourceOpensearchIngestPipelineCreate,
+		Read:        resourceOpensearchIngestPipelineRead,
+		Update:      resourceOpensearchIngestPipelineUpdate,
+		Delete:      resourceOpensearchIngestPipelineDelete,
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				ForceNew: true,
-				Required: true,
+				Description: "The name of the ingest pipeline",
+				Type:        schema.TypeString,
+				ForceNew:    true,
+				Required:    true,
 			},
 			"body": {
+				Description:      "The JSON body of the ingest pipeline",
 				Type:             schema.TypeString,
 				DiffSuppressFunc: diffSuppressIngestPipeline,
 				Required:         true,

@@ -11,23 +11,27 @@ import (
 
 func resourceOpensearchSnapshotRepository() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchSnapshotRepositoryCreate,
-		Read:   resourceOpensearchSnapshotRepositoryRead,
-		Update: resourceOpensearchSnapshotRepositoryUpdate,
-		Delete: resourceOpensearchSnapshotRepositoryDelete,
+		Description: "Provides an Opensearch snapshot repository resource.",
+		Create:      resourceOpensearchSnapshotRepositoryCreate,
+		Read:        resourceOpensearchSnapshotRepositoryRead,
+		Update:      resourceOpensearchSnapshotRepositoryUpdate,
+		Delete:      resourceOpensearchSnapshotRepositoryDelete,
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				ForceNew: true,
-				Required: true,
+				Description: "The name of the repository.",
+				Type:        schema.TypeString,
+				ForceNew:    true,
+				Required:    true,
 			},
 			"type": {
-				Type:     schema.TypeString,
-				Required: true,
+				Description: "The name of the repository backend (required plugins must be installed).",
+				Type:        schema.TypeString,
+				Required:    true,
 			},
 			"settings": {
-				Type:     schema.TypeMap,
-				Optional: true,
+				Description: "The settings map applicable for the backend, see official documentation for plugins.",
+				Type:        schema.TypeMap,
+				Optional:    true,
 			},
 		},
 		Importer: &schema.ResourceImporter{

@@ -14,17 +14,20 @@ import (
 
 func resourceOpensearchIndexTemplate() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchIndexTemplateCreate,
-		Read:   resourceOpensearchIndexTemplateRead,
-		Update: resourceOpensearchIndexTemplateUpdate,
-		Delete: resourceOpensearchIndexTemplateDelete,
+		Description: "Provides an Opensearch index template resource.",
+		Create:      resourceOpensearchIndexTemplateCreate,
+		Read:        resourceOpensearchIndexTemplateRead,
+		Update:      resourceOpensearchIndexTemplateUpdate,
+		Delete:      resourceOpensearchIndexTemplateDelete,
 		Schema: map[string]*schema.Schema{
 			"name": {
-				Type:     schema.TypeString,
-				ForceNew: true,
-				Required: true,
+				Description: "The name of the index template.",
+				Type:        schema.TypeString,
+				ForceNew:    true,
+				Required:    true,
 			},
 			"body": {
+				Description:      "The JSON body of the index template.",
 				Type:             schema.TypeString,
 				Required:         true,
 				DiffSuppressFunc: diffSuppressIndexTemplate,
