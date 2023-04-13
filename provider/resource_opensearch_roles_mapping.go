@@ -17,33 +17,39 @@ import (
 
 var openDistroRolesMappingSchema = map[string]*schema.Schema{
 	"role_name": {
-		Type:     schema.TypeString,
-		Required: true,
-		ForceNew: true,
+		Description: "The name of the security role.",
+		Type:        schema.TypeString,
+		Required:    true,
+		ForceNew:    true,
 	},
 	"backend_roles": {
-		Type:     schema.TypeSet,
-		Optional: true,
-		Elem:     &schema.Schema{Type: schema.TypeString},
+		Description: "A list of backend roles.",
+		Type:        schema.TypeSet,
+		Optional:    true,
+		Elem:        &schema.Schema{Type: schema.TypeString},
 	},
 	"hosts": {
-		Type:     schema.TypeSet,
-		Optional: true,
-		Elem:     &schema.Schema{Type: schema.TypeString},
+		Description: "A list of host names.",
+		Type:        schema.TypeSet,
+		Optional:    true,
+		Elem:        &schema.Schema{Type: schema.TypeString},
 	},
 	"users": {
-		Type:     schema.TypeSet,
-		Optional: true,
-		Elem:     &schema.Schema{Type: schema.TypeString},
+		Description: "A list of users.",
+		Type:        schema.TypeSet,
+		Optional:    true,
+		Elem:        &schema.Schema{Type: schema.TypeString},
 	},
 	"description": {
-		Type:     schema.TypeString,
-		Optional: true,
+		Description: "Description of the role mapping.",
+		Type:        schema.TypeString,
+		Optional:    true,
 	},
 	"and_backend_roles": {
-		Type:     schema.TypeSet,
-		Optional: true,
-		Elem:     &schema.Schema{Type: schema.TypeString},
+		Description: "A list of backend roles.",
+		Type:        schema.TypeSet,
+		Optional:    true,
+		Elem:        &schema.Schema{Type: schema.TypeString},
 	},
 }
 
@@ -57,6 +63,7 @@ func resourceOpenSearchRolesMapping() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		Description: "Provides an OpenSearch security role mapping. Please refer to the OpenSearch Access Control documentation for details.",
 	}
 }
 

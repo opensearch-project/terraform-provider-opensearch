@@ -35,7 +35,7 @@ var openDistroDestinationSchema = map[string]*schema.Schema{
 
 func resourceOpenSearchDestination() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch destination, a reusable communication channel for an action, such as email, Slack, or a webhook URL. Please refer to the OpenDistro [destination documentation](https://opendistro.github.io/for-elasticsearch-docs/docs/alerting/monitors/#create-destinations) for details.",
+		Description: "Provides an OpenSearch destination, a reusable communication channel for an action, such as email, Slack, or a webhook URL. Please refer to the OpenSearch destination documentation for details.",
 		Create:      resourceOpensearchOpenDistroDestinationCreate,
 		Read:        resourceOpensearchOpenDistroDestinationRead,
 		Update:      resourceOpensearchOpenDistroDestinationUpdate,

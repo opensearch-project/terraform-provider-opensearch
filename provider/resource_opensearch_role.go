@@ -17,51 +17,59 @@ import (
 
 var openDistroRoleSchema = map[string]*schema.Schema{
 	"role_name": {
-		Type:     schema.TypeString,
-		Required: true,
-		ForceNew: true,
+		Description: "The name of the security role.",
+		Type:        schema.TypeString,
+		Required:    true,
+		ForceNew:    true,
 	},
 	"cluster_permissions": {
-		Type:     schema.TypeSet,
-		Optional: true,
-		Elem:     &schema.Schema{Type: schema.TypeString},
+		Description: "A list of cluster permissions.",
+		Type:        schema.TypeSet,
+		Optional:    true,
+		Elem:        &schema.Schema{Type: schema.TypeString},
 	},
 	"index_permissions": {
-		Type:     schema.TypeSet,
-		Optional: true,
+		Description: "A configuration of index permissions",
+		Type:        schema.TypeSet,
+		Optional:    true,
 		Elem: &schema.Resource{
 			Schema: map[string]*schema.Schema{
 				"index_patterns": {
-					Type:     schema.TypeSet,
-					Optional: true,
+					Description: "A list of glob patterns for the index names.",
+					Type:        schema.TypeSet,
+					Optional:    true,
 					Elem: &schema.Schema{
 						Type: schema.TypeString,
 					},
 					Set: schema.HashString,
 				},
 				"document_level_security": {
-					Type:     schema.TypeString,
-					Optional: true,
+					Description: "A selector for document-level security (json formatted using jsonencode).",
+					Type:        schema.TypeString,
+					Optional:    true,
 				},
 				"field_level_security": {
-					Type:     schema.TypeSet,
-					Optional: true,
+					Description: "A list of selectors for field-level security.",
+					Type:        schema.TypeSet,
+					Optional:    true,
 					Elem: &schema.Schema{
 						Type: schema.TypeString,
 					},
 					Set: schema.HashString,
 				},
 				"masked_fields": {
-					Type:     schema.TypeSet,
-					Optional: true,
+					Description: "A list of masked fields",
+					Type:        schema.TypeSet,
+					Optional:    true,
 					Elem: &schema.Schema{
 						Type: schema.TypeString,
 					},
 					Set: schema.HashString,
 				},
 				"allowed_actions": {
-					Type:     schema.TypeSet,
-					Optional: true,
+					Description: "A list of allowed actions.",
+					Type:        schema.TypeSet,
+					Optional:    true,
 					Elem: &schema.Schema{
 						Type: schema.TypeString,
 					},
@@ -72,21 +80,24 @@ var openDistroRoleSchema = map[string]*schema.Schema{
 		Set: indexPermissionsHash,
 	},
 	"tenant_permissions": {
-		Type:     schema.TypeSet,
-		Optional: true,
+		Description: "A configuration of tenant permissions",
+		Type:        schema.TypeSet,
+		Optional:    true,
 		Elem: &schema.Resource{
 			Schema: map[string]*schema.Schema{
 				"tenant_patterns": {
-					Type:     schema.TypeSet,
-					Optional: true,
+					Description: "A list of glob patterns for the tenant names",
+					Type:        schema.TypeSet,
+					Optional:    true,
 					Elem: &schema.Schema{
 						Type: schema.TypeString,
 					},
 					Set: schema.HashString,
 				},
 				"allowed_actions": {
-					Type:     schema.TypeSet,
-					Optional: true,
+					Description: "A list of allowed actions.",
+					Type:        schema.TypeSet,
+					Optional:    true,
 					Elem: &schema.Schema{
 						Type: schema.TypeString,
 					},
@@ -97,18 +108,20 @@ var openDistroRoleSchema = map[string]*schema.Schema{
 		Set: tenantPermissionsHash,
 	},
 	"description": {
-		Type:     schema.TypeString,
-		Optional: true,
+		Description: "Description of the role.",
+		Type:        schema.TypeString,
+		Optional:    true,
 	},
 }
 
 func resourceOpenSearchRole() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceOpensearchOpenDistroRoleCreate,
-		Read:   resourceOpensearchOpenDistroRoleRead,
-		Update: resourceOpensearchOpenDistroRoleUpdate,
-		Delete: resourceOpensearchOpenDistroRoleDelete,
-		Schema: openDistroRoleSchema,
+		Description: "Provides an OpenSearch security role resource. Please refer to the OpenSearch Access Control documentation for details.",
+		Create:      resourceOpensearchOpenDistroRoleCreate,
+		Read:        resourceOpensearchOpenDistroRoleRead,
+		Update:      resourceOpensearchOpenDistroRoleUpdate,
+		Delete:      resourceOpensearchOpenDistroRoleDelete,
+		Schema:      openDistroRoleSchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},

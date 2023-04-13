@@ -19,13 +19,15 @@ import (
 
 var openSearchDashboardTenantSchema = map[string]*schema.Schema{
 	"tenant_name": {
-		Type:     schema.TypeString,
-		Required: true,
-		ForceNew: true,
+		Type:        schema.TypeString,
+		Required:    true,
+		ForceNew:    true,
+		Description: "The name of the tenant.",
 	},
 	"description": {
-		Type:     schema.TypeString,
-		Optional: true,
+		Type:        schema.TypeString,
+		Optional:    true,
+		Description: "Description of the tenant.",
 	},
 	"index": {
 		Type:     schema.TypeString,
@@ -43,6 +45,7 @@ func resourceOpenSearchDashboardTenant() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		Description: "Provides an OpenSearch dashboard tenant resource. Please refer to the OpenSearch documentation for details.",
 	}
 }
 
