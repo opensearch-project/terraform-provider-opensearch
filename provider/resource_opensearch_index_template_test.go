@@ -109,7 +109,7 @@ func testCheckOpensearchIndexTemplateExists(name string) resource.TestCheckFunc 
 		}
 		switch client := esClient.(type) {
 		case *elastic7.Client:
-			_, err = client.IndexGetTemplate(rs.Primary.ID).Do(context.TODO())
+			_, err = client.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
 		case *elastic6.Client:
 			_, err = client.IndexGetTemplate(rs.Primary.ID).Do(context.TODO())
 		default:
@@ -139,7 +139,7 @@ func testCheckOpensearchIndexTemplateDestroy(s *terraform.State) error {
 		}
 		switch client := esClient.(type) {
 		case *elastic7.Client:
-			_, err = client.IndexGetTemplate(rs.Primary.ID).Do(context.TODO())
+			_, err = client.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
 		case *elastic6.Client:
 			_, err = client.IndexGetTemplate(rs.Primary.ID).Do(context.TODO())
 		default:

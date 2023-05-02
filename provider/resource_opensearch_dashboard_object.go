@@ -70,8 +70,8 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 			"index": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     ".dashboard",
-				Description: "The name of the index where dashboard data is stored.",
+				Default:     ".kibana",
+				Description: "The index to which the dashboard object belongs. ",
 			},
 		},
 	}

@@ -153,6 +153,7 @@ var (
 		"number_of_replicas": {
 			Type:        schema.TypeString,
 			Description: "Number of shard replicas. A stringified number.",
+			Default:     1,
 			Optional:    true,
 		},
 		"auto_expand_replicas": {
@@ -163,6 +164,7 @@ var (
 		"refresh_interval": {
 			Type:        schema.TypeString,
 			Description: "How often to perform a refresh operation, which makes recent changes to the index visible to search. Can be set to `-1` to disable refresh.",
+			Default:     "30s",
 			Optional:    true,
 		},
 		"search_idle_after": {

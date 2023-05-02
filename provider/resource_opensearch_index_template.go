@@ -61,8 +61,6 @@ func resourceOpensearchIndexTemplateRead(d *schema.ResourceData, meta interface{
 	switch client := esClient.(type) {
 	case *elastic7.Client:
 		result, err = elastic7IndexGetTemplate(client, id)
-	case *elastic6.Client:
-		result, err = elastic6IndexGetTemplate(client, id)
 	default:
 		return errors.New("opensearch version not supported")
 	}
@@ -83,30 +81,18 @@ func resourceOpensearchIndexTemplateRead(d *schema.ResourceData, meta interface{
 }
 
 func elastic7IndexGetTemplate(client *elastic7.Client, id string) (string, error) {
-	res, err := client.IndexGetTemplate(id).Do(context.TODO())
+
+	res, err := client.IndexGetIndexTemplate(id).Do(context.TODO())
 	if err != nil {
 		return "", err
 	}
 
-	t := res[id]
+	t := res.IndexTemplates[0].IndexTemplate
 	tj, err := json.Marshal(t)
 	if err != nil {
 		return "", err
 	}
-	return string(tj), nil
-}
 
-func elastic6IndexGetTemplate(client *elastic6.Client, id string) (string, error) {
-	res, err := client.IndexGetTemplate(id).Do(context.TODO())
-	if err != nil {
-		return "", err
-	}
-
-	t := res[id]
-	tj, err := json.Marshal(t)
-	if err != nil {
-		return "", err
-	}
 	return string(tj), nil
 }
 
@@ -117,6 +103,8 @@ func resourceOpensearchIndexTemplateUpdate(d *schema.ResourceData, meta interfac
 func resourceOpensearchIndexTemplateDelete(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 
+	log.Printf("[WARN] Index template (%s) will be deleted", id)
+
 	var err error
 	esClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
@@ -125,8 +113,6 @@ func resourceOpensearchIndexTemplateDelete(d *schema.ResourceData, meta interfac
 	switch client := esClient.(type) {
 	case *elastic7.Client:
 		err = elastic7IndexDeleteTemplate(client, id)
-	case *elastic6.Client:
-		err = elastic6IndexDeleteTemplate(client, id)
 	default:
 		return errors.New("opensearch version not supported")
 	}
@@ -139,12 +125,7 @@ func resourceOpensearchIndexTemplateDelete(d *schema.ResourceData, meta interfac
 }
 
 func elastic7IndexDeleteTemplate(client *elastic7.Client, id string) error {
-	_, err := client.IndexDeleteTemplate(id).Do(context.TODO())
-	return err
-}
-
-func elastic6IndexDeleteTemplate(client *elastic6.Client, id string) error {
-	_, err := client.IndexDeleteTemplate(id).Do(context.TODO())
+	_, err := client.IndexDeleteIndexTemplate(id).Do(context.TODO())
 	return err
 }
 
@@ -160,8 +141,6 @@ func resourceOpensearchPutIndexTemplate(d *schema.ResourceData, meta interface{}
 	switch client := esClient.(type) {
 	case *elastic7.Client:
 		err = elastic7IndexPutTemplate(client, name, body, create)
-	case *elastic6.Client:
-		err = elastic6IndexPutTemplate(client, name, body, create)
 	default:
 		return errors.New("opensearch version not supported")
 	}
@@ -170,11 +149,6 @@ func resourceOpensearchPutIndexTemplate(d *schema.ResourceData, meta interface{}
 }
 
 func elastic7IndexPutTemplate(client *elastic7.Client, name string, body string, create bool) error {
-	_, err := client.IndexPutTemplate(name).BodyString(body).Create(create).Do(context.TODO())
-	return err
-}
-
-func elastic6IndexPutTemplate(client *elastic6.Client, name string, body string, create bool) error {
-	_, err := client.IndexPutTemplate(name).BodyString(body).Create(create).Do(context.TODO())
+	_, err := client.IndexPutIndexTemplate(name).BodyString(body).Create(create).Do(context.TODO())
 	return err
 }
