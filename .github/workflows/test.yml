@@ -29,20 +29,13 @@ jobs:
         go-version: [1.18.x]
         os: [ubuntu-latest]
         os-major-version:
-          - "7-opendistro"
           - "1-opensearch"
         include:
-        - os-major-version: "7-opendistro"
-          version: 7.10.1
-          # oss-image: "docker.elastic.co/elasticsearch/elasticsearch-oss"
-          oss-image: "elasticsearch"
-          OS_OPENDISTRO_IMAGE: "amazon/opendistro-for-elasticsearch:1.13.3"
-          OS_DASHBOARD_IMAGE: "docker.elastic.co/kibana/kibana:7.10.1"
         - os-major-version: "1-opensearch"
-          version: 1.0.0
+          version: 1.1.0
           oss-image: "opensearchproject/opensearch"
-          OS_OPENDISTRO_IMAGE: "opensearchproject/opensearch:1.0.0"
-          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:1.0.0"
+          OS_OPENDISTRO_IMAGE: "opensearchproject/opensearch:1.1.0"
+          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:1.1.0"
           OPENSEARCH_PREFIX: "plugins.security"
           OSS_ENV_VAR: "plugins.security.disabled=true"
     needs: [lint]

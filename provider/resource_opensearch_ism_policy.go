@@ -120,7 +120,7 @@ func resourceOpensearchOpenDistroISMPolicyUpdate(d *schema.ResourceData, m inter
 }
 
 func resourceOpensearchOpenDistroISMPolicyDelete(d *schema.ResourceData, m interface{}) error {
-	path, err := uritemplates.Expand("/_opendistro/_ism/policies/{policy_id}", map[string]string{
+	path, err := uritemplates.Expand("/_plugins/_ism/policies/{policy_id}", map[string]string{
 		"policy_id": d.Id(),
 	})
 	if err != nil {
@@ -165,7 +165,7 @@ func resourceOpensearchGetOpenDistroISMPolicy(policyID string, m interface{}) (G
 	var err error
 	response := new(GetPolicyResponse)
 
-	path, err := uritemplates.Expand("/_opendistro/_ism/policies/{policy_id}", map[string]string{
+	path, err := uritemplates.Expand("/_plugins/_ism/policies/{policy_id}", map[string]string{
 		"policy_id": policyID,
 	})
 
@@ -230,7 +230,7 @@ func resourceOpensearchPutOpenDistroISMPolicy(d *schema.ResourceData, m interfac
 		params.Set("if_primary_term", strconv.Itoa(primTerm))
 	}
 
-	path, err := uritemplates.Expand("/_opendistro/_ism/policies/{policy_id}", map[string]string{
+	path, err := uritemplates.Expand("/_plugins/_ism/policies/{policy_id}", map[string]string{
 		"policy_id": d.Get("policy_id").(string),
 	})
 	if err != nil {
