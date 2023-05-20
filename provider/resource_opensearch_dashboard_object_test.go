@@ -137,9 +137,9 @@ func testCheckOpensearchDashboardObjectExists(name string, objectType string, id
 		}
 		switch client := esClient.(type) {
 		case *elastic7.Client:
-			_, err = client.Get().Index(".dashboard").Id(id).Do(context.TODO())
+			_, err = client.Get().Index(".kibana").Id(id).Do(context.TODO())
 		case *elastic6.Client:
-			_, err = client.Get().Index(".dashboard").Type(deprecatedDocType).Id(id).Do(context.TODO())
+			_, err = client.Get().Index(".kibana").Type(deprecatedDocType).Id(id).Do(context.TODO())
 		default:
 			return errors.New("opensearch version not supported")
 		}
@@ -168,9 +168,9 @@ func testCheckOpensearchDashboardObjectDestroy(s *terraform.State) error {
 		}
 		switch client := esClient.(type) {
 		case *elastic7.Client:
-			_, err = client.Get().Index(".dashboard").Id("response-time-percentile").Do(context.TODO())
+			_, err = client.Get().Index(".kibana").Id("response-time-percentile").Do(context.TODO())
 		case *elastic6.Client:
-			_, err = client.Get().Index(".dashboard").Type("visualization").Id("response-time-percentile").Do(context.TODO())
+			_, err = client.Get().Index(".kibana").Type("visualization").Id("response-time-percentile").Do(context.TODO())
 		default:
 			return errors.New("opensearch version not supported")
 		}

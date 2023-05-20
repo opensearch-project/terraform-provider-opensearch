@@ -105,7 +105,7 @@ func resourceOpensearchOpenDistroDashboardComputeIndex(tenant string) (string, e
 	cleanedTenant := alphanumeric.ReplaceAllString(tenant, "")
 
 	// originalDashboardIndex+"_"+tenant.hashCode()+"_"+tenant.toLowerCase().replaceAll("[^a-z0-9]+", "")
-	return fmt.Sprintf(".dashboard_%v_%v", hashSum, strings.ToLower(cleanedTenant)), nil
+	return fmt.Sprintf(".kibana_%v_%v", hashSum, strings.ToLower(cleanedTenant)), nil
 }
 
 func resourceOpensearchOpenDistroDashboardTenantUpdate(d *schema.ResourceData, m interface{}) error {
