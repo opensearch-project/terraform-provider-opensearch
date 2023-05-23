@@ -1,6 +1,8 @@
 <img src="https://opensearch.org/assets/brand/SVG/Logo/opensearch_logo_default.svg" height="64px"/>
 
 - [Terraform Provider OpenSearch](#Terraform-Provider-OpenSearch)
+- [Compatibility](#compatibility)
+- [Version and Branching](#version-and-branching)
 - [Contributing](#contributing)
 - [Maintainer Responsibilities](MAINTAINERS.md)
 - [Getting Help](#getting-help)
@@ -21,6 +23,15 @@ This provider will target compatibility with major versions of Opensearch, each 
 | 1.x                | :white_check_mark: |
 | 2.x                | :x:                |
 
+
+## Version and Branching
+As of now, this terraform-provider-opensearch repository maintains 2 branches:
+* _main_ (2.x.x OpenSearch development)
+* _1.x_ (1.x.x OpenSearch development)
+
+Contributors should choose the corresponding branch(es) when commiting their change(s):
+* If you have a change for a specific version, only open PR to specific branch
+* If you have a change for all available versions, first open a PR on `main`, then open a backport PR with `[x]` in the title, with label `backport 1.x`, etc.
 
 ## Contributing
 
