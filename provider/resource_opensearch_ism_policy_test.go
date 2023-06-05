@@ -187,10 +187,10 @@ resource "opensearch_ism_policy" "test_policy" {
 		"policy": {
 		  "description": "ingesting logs",
 		  "default_state": "ingest",
-      "ism_template": {
+      "ism_template": [{
         "index_patterns": ["foo-*"],
         "priority": 0
-			},
+			}],
 		  "error_notification": {
         "destination": {
           "slack": {

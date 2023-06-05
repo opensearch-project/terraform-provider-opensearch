@@ -100,6 +100,7 @@ resource "opensearch_monitor" "test_monitor" {
 {
   "name": "test-monitor",
   "type": "monitor",
+  "monitor_type": "query_level_monitor",
   "enabled": true,
   "schedule": {
     "period": {
