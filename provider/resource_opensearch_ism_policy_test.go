@@ -207,8 +207,13 @@ resource "opensearch_ism_policy" "test_policy" {
 				  "name": "ingest",
 				  "actions": [{
 					  "rollover": {
-						"min_doc_count": 5
-					  }
+						  "min_doc_count": 5
+					  },
+	          "retry": {
+	            "backoff": "exponential",
+	            "count": 3,
+	            "delay": "1m"
+	          }
 					}],
 				  "transitions": [{
 					  "state_name": "search"
@@ -227,7 +232,12 @@ resource "opensearch_ism_policy" "test_policy" {
 				{
 				  "name": "delete",
 				  "actions": [{
-					  "delete": {}
+					  "delete": {},
+	          "retry": {
+	            "backoff": "exponential",
+	            "count": 3,
+	            "delay": "1m"
+	          }
 					}],
 				  "transitions": []
 				}

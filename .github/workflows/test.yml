@@ -32,10 +32,10 @@ jobs:
           - "1-opensearch"
         include:
         - os-major-version: "1-opensearch"
-          version: 1.2.0
+          version: 1.3.0
           oss-image: "opensearchproject/opensearch"
-          OS_OPENDISTRO_IMAGE: "opensearchproject/opensearch:1.2.0"
-          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:1.2.0"
+          OS_OPENDISTRO_IMAGE: "opensearchproject/opensearch:1.3.0"
+          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:1.3.0"
           OPENSEARCH_PREFIX: "plugins.security"
           OSS_ENV_VAR: "plugins.security.disabled=true"
     needs: [lint]

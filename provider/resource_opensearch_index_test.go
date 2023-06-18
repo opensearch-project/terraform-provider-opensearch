@@ -176,13 +176,16 @@ resource opensearch_ism_policy "test" {
     "states": [
       {
         "name": "hot",
-        "actions": [
-          {
-            "rollover": {
-              "min_size": "50gb"
-            }
+        "actions": [{
+          "rollover": {
+            "min_size": "50gb"
+          },
+          "retry": {
+            "backoff": "exponential",
+            "count": 3,
+            "delay": "1m"
           }
-        ],
+	       }],
         "transitions": []
       }
     ]
