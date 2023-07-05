@@ -60,7 +60,7 @@ func normalizeMonitorTriggers(triggers []interface{}) {
 	for _, t := range triggers {
 		if trigger, ok := t.(map[string]interface{}); ok {
 			delete(trigger, "id")
-			for _,trigger_type := range trigger_types {
+			for _, trigger_type := range trigger_types {
 				if qlt, ok := trigger[trigger_type].(map[string]interface{}); ok {
 					normalizeMonitorLevelTriggers(qlt)
 				}
