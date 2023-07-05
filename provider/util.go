@@ -47,6 +47,7 @@ func normalizeMonitor(tpl map[string]interface{}) {
 		normalizeMonitorTriggers(triggers)
 	}
 
+	delete(tpl, "data_sources")
 	delete(tpl, "id")
 	delete(tpl, "last_update_time")
 	delete(tpl, "enabled_time")
@@ -55,14 +56,23 @@ func normalizeMonitor(tpl map[string]interface{}) {
 }
 
 func normalizeMonitorTriggers(triggers []interface{}) {
+	trigger_types := []string{"alerting_trigger", "anomaly_detector_trigger", "bucket_level_trigger", "document_level_trigger", "query_level_trigger"}
 	for _, t := range triggers {
 		if trigger, ok := t.(map[string]interface{}); ok {
 			delete(trigger, "id")
-
-			if actions, ok := trigger["actions"].([]interface{}); ok {
-				normalizeMonitorTriggerActions(actions)
+			for _,trigger_type := range trigger_types {
+				if qlt, ok := trigger[trigger_type].(map[string]interface{}); ok {
+					normalizeMonitorLevelTriggers(qlt)
+				}
 			}
 		}
+	}
+}
+
+func normalizeMonitorLevelTriggers(query_level_trigger map[string]interface{}) {
+	delete(query_level_trigger, "id")
+	if a, ok := query_level_trigger["actions"].([]interface{}); ok {
+		normalizeMonitorTriggerActions(a)
 	}
 }
 
