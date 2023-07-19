@@ -64,6 +64,7 @@ EOF
 
 - `aws_access_key` (String) The access key for use with AWS opensearch Service domains
 - `aws_assume_role_arn` (String) Amazon Resource Name of an IAM Role to assume prior to making AWS API calls.
+- `aws_assume_role_external_id` (Optional) - External ID configured in the role to assume prior to making AWS API calls.
 - `aws_profile` (String) The AWS profile for use with AWS opensearch Service domains
 - `aws_region` (String) The AWS region for use in signing of AWS opensearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.
 - `aws_secret_key` (String) The secret key for use with AWS opensearch Service domains
@@ -115,13 +116,15 @@ provider "opensearch" {
 #### Assume role configuration
 
 You can instruct the provider to assume a role in AWS before interacting with the cluster by setting the `aws_assume_role_arn` variable.
+When necessary, use the aws_assume_role_external_id to pass the extenral ID configured in the policy of the role for the provider to assume the role. 
 
 Example usage:
 
 ```tf
 provider "opensearch" {
-    url                 = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
-    aws_assume_role_arn = "arn:aws:iam::012345678901:role/rolename"
+    url                         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+    aws_assume_role_arn         = "arn:aws:iam::012345678901:role/rolename"
+    aws_assume_role_external_id = "SecretID"
 }
 ```
 

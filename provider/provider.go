@@ -40,29 +40,30 @@ const (
 var awsUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).es.amazonaws.com$`)
 
 type ProviderConf struct {
-	rawUrl             string
-	insecure           bool
-	sniffing           bool
-	healthchecking     bool
-	cacertFile         string
-	username           string
-	password           string
-	token              string
-	tokenName          string
-	parsedUrl          *url.URL
-	signAWSRequests    bool
-	osVersion          string
-	pingTimeoutSeconds int
-	awsRegion          string
-	awsAssumeRoleArn   string
-	awsAccessKeyId     string
-	awsSecretAccessKey string
-	awsSessionToken    string
-	awsSig4Service     string
-	awsProfile         string
-	certPemPath        string
-	keyPemPath         string
-	hostOverride       string
+	rawUrl                  string
+	insecure                bool
+	sniffing                bool
+	healthchecking          bool
+	cacertFile              string
+	username                string
+	password                string
+	token                   string
+	tokenName               string
+	parsedUrl               *url.URL
+	signAWSRequests         bool
+	osVersion               string
+	pingTimeoutSeconds      int
+	awsRegion               string
+	awsAssumeRoleArn        string
+	awsAssumeRoleExternalID string
+	awsAccessKeyId          string
+	awsSecretAccessKey      string
+	awsSessionToken         string
+	awsSig4Service          string
+	awsProfile              string
+	certPemPath             string
+	keyPemPath              string
+	hostOverride            string
 	// determined after connecting to the server
 	flavor ServerFlavor
 }
@@ -117,6 +118,12 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Default:     "",
 				Description: "Amazon Resource Name of an IAM Role to assume prior to making AWS API calls.",
+			},
+			"aws_assume_role_external_id": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				Description: "External ID configured in the IAM policy of the IAM Role to assume prior to making AWS API calls.",
 			},
 			"aws_access_key": {
 				Type:        schema.TypeString,
@@ -264,14 +271,15 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 		pingTimeoutSeconds: d.Get("version_ping_timeout").(int),
 		awsRegion:          d.Get("aws_region").(string),
 
-		awsAssumeRoleArn:   d.Get("aws_assume_role_arn").(string),
-		awsAccessKeyId:     d.Get("aws_access_key").(string),
-		awsSecretAccessKey: d.Get("aws_secret_key").(string),
-		awsSessionToken:    d.Get("aws_token").(string),
-		awsProfile:         d.Get("aws_profile").(string),
-		certPemPath:        d.Get("client_cert_path").(string),
-		keyPemPath:         d.Get("client_key_path").(string),
-		hostOverride:       d.Get("host_override").(string),
+		awsAssumeRoleArn:        d.Get("aws_assume_role_arn").(string),
+		awsAssumeRoleExternalID: d.Get("aws_assume_role_external_id").(string),
+		awsAccessKeyId:          d.Get("aws_access_key").(string),
+		awsSecretAccessKey:      d.Get("aws_secret_key").(string),
+		awsSessionToken:         d.Get("aws_token").(string),
+		awsProfile:              d.Get("aws_profile").(string),
+		certPemPath:             d.Get("client_cert_path").(string),
+		keyPemPath:              d.Get("client_key_path").(string),
+		hostOverride:            d.Get("host_override").(string),
 	}, nil
 }
 
@@ -457,15 +465,16 @@ func getClient(conf *ProviderConf) (interface{}, error) {
 	return relevantClient, nil
 }
 
-func assumeRoleCredentials(region, roleARN, profile string) *awscredentials.Credentials {
+func assumeRoleCredentials(region, roleARN, roleExternalID, profile string) *awscredentials.Credentials {
 	sessOpts := awsSessionOptions(region)
 	sessOpts.Profile = profile
 
 	sess := awssession.Must(awssession.NewSessionWithOptions(sessOpts))
 	stsClient := awssts.New(sess)
 	assumeRoleProvider := &awsstscreds.AssumeRoleProvider{
-		Client:  stsClient,
-		RoleARN: roleARN,
+		Client:     stsClient,
+		RoleARN:    roleARN,
+		ExternalID: aws.String(roleExternalID),
 	}
 
 	return awscredentials.NewChainCredentials([]awscredentials.Provider{assumeRoleProvider})
@@ -503,7 +512,10 @@ func awsSession(region string, conf *ProviderConf) *awssession.Session {
 	if conf.awsAccessKeyId != "" {
 		sessOpts.Config.Credentials = awscredentials.NewStaticCredentials(conf.awsAccessKeyId, conf.awsSecretAccessKey, conf.awsSessionToken)
 	} else if conf.awsAssumeRoleArn != "" {
-		sessOpts.Config.Credentials = assumeRoleCredentials(region, conf.awsAssumeRoleArn, conf.awsProfile)
+		if conf.awsAssumeRoleExternalID == "" {
+			conf.awsAssumeRoleExternalID = ""
+		}
+		sessOpts.Config.Credentials = assumeRoleCredentials(region, conf.awsAssumeRoleArn, conf.awsAssumeRoleExternalID, conf.awsProfile)
 	} else if conf.awsProfile != "" {
 		sessOpts.Profile = conf.awsProfile
 	}
