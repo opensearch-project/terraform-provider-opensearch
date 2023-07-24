@@ -52,13 +52,15 @@ provider "opensearch" {
 #### Assume role configuration
 
 You can instruct the provider to assume a role in AWS before interacting with the cluster by setting the `aws_assume_role_arn` variable.
+When necessary, use the aws_assume_role_external_id to pass the extenral ID configured in the policy of the role for the provider to assume the role. 
 
 Example usage:
 
 ```tf
 provider "opensearch" {
-    url                 = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
-    aws_assume_role_arn = "arn:aws:iam::012345678901:role/rolename"
+    url                         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+    aws_assume_role_arn         = "arn:aws:iam::012345678901:role/rolename"
+    aws_assume_role_external_id = "SecretID"
 }
 ```
 
