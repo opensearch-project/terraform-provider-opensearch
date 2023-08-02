@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -221,7 +220,7 @@ func resourceOpensearchPostOpendistroPolicyMapping(d *schema.ResourceData, m int
 
 	}
 
-	path, err := uritemplates.Expand("/_opendistro/_ism/{action}/{indexes}", map[string]string{
+	path, err := uritemplates.Expand("/_plugins/_ism/{action}/{indexes}", map[string]string{
 		"indexes": d.Get("indexes").(string),
 		"action":  action,
 	})
@@ -230,25 +229,20 @@ func resourceOpensearchPostOpendistroPolicyMapping(d *schema.ResourceData, m int
 	}
 
 	var body *json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	osClient, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "POST",
-			Path:   path,
-			Body:   requestBody,
-		})
-		if err != nil {
-			return response, fmt.Errorf("error posting policy attachment: %+v : %+v : %+v", path, requestBody, err)
-		}
-		body = &res.Body
-	default:
-		err = errors.New("policy resource not implemented prior to v7")
+	var res *elastic7.Response
+	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "POST",
+		Path:   path,
+		Body:   requestBody,
+	})
+	if err != nil {
+		return response, fmt.Errorf("error posting policy attachment: %+v : %+v : %+v", path, requestBody, err)
 	}
+	body = &res.Body
 
 	if err != nil {
 		return response, fmt.Errorf("error creating policy mapping: %+v", err)
@@ -263,7 +257,7 @@ func resourceOpensearchPostOpendistroPolicyMapping(d *schema.ResourceData, m int
 
 func resourceOpensearchGetOpendistroPolicyMapping(indexPattern string, m interface{}) (map[string]interface{}, error) {
 	response := new(map[string]interface{})
-	path, err := uritemplates.Expand("/_opendistro/_ism/explain/{index_pattern}", map[string]string{
+	path, err := uritemplates.Expand("/_plugins/_ism/explain/{index_pattern}", map[string]string{
 		"index_pattern": indexPattern,
 	})
 	if err != nil {
@@ -271,24 +265,19 @@ func resourceOpensearchGetOpendistroPolicyMapping(indexPattern string, m interfa
 	}
 
 	var body *json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	osClient, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-		if err != nil {
-			return *response, fmt.Errorf("error getting policy attachment: %+v, %w", path, err)
-		}
-		body = &res.Body
-	default:
-		err = errors.New("policy mapping resource not implemented prior to v7")
+	var res *elastic7.Response
+	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return *response, fmt.Errorf("error getting policy attachment: %+v, %w", path, err)
 	}
+	body = &res.Body
 
 	if err != nil {
 		return *response, fmt.Errorf("error creating policy mapping: %+v", err)

@@ -2,7 +2,7 @@ version: '3'
 
 services:
   opensearch:
-    image: ${OSS_IMAGE}
+    image:  ${OSS_IMAGE}
     hostname: opensearch
     container_name: opensearch
     networks: 
@@ -15,6 +15,7 @@ services:
       - network.publish_host=127.0.0.1
       - logger.org.opensearch=warn
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "plugins.security.ssl.http.enabled=false"
       - ${OSS_ENV_VAR:-FOO=bar}
     command: ${OS_COMMAND}
     ulimits:
@@ -27,30 +28,6 @@ services:
         hard: -1
     ports:
       - 9200:9200
-  opendistro:
-    image: ${OS_OPENDISTRO_IMAGE:-rwgrim/docker-noop}
-    hostname: opensearch-opendistro
-    container_name: opensearch-opendistro
-    environment:
-      - cluster.name=opendistro
-      - bootstrap.memory_lock=true
-      - discovery.type=single-node
-      - path.repo=/tmp
-      - ${OPENSEARCH_PREFIX:-opendistro_security}.ssl.http.enabled=false
-      - http.port=9220
-      - network.publish_host=127.0.0.1
-      - logger.org.opensearch=warn
-      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
-    ulimits:
-      nproc: 65536
-      nofile:
-        soft: 65536
-        hard: 65536
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      - 9220:9220
 networks:
   opensearch:
     driver: bridge

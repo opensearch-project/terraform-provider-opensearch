@@ -12,7 +12,7 @@ import (
 	elastic7 "github.com/olivere/elastic/v7"
 )
 
-var esComponentTemplateMinimalVersion, _ = version.NewVersion("7.8.0")
+var osComponentTemplateMinimalVersion, _ = version.NewVersion("2.0.0")
 
 func resourceOpensearchComponentTemplate() *schema.Resource {
 	return &schema.Resource{
@@ -58,23 +58,18 @@ func resourceOpensearchComponentTemplateRead(d *schema.ResourceData, meta interf
 	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
-	esClient, err := getClient(providerConf)
+	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-		if err == nil {
-			if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
-				result, err = elastic7GetComponentTemplate(client, id)
-			} else {
-				err = fmt.Errorf("component_template endpoint only available from server version >= 7.8, got version %s", openSearchVersion.String())
-			}
+	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
+	if err == nil {
+		if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
+			result, err = elastic7GetComponentTemplate(osClient, id)
+		} else {
+			err = fmt.Errorf("component_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
 		}
-	default:
-		err = fmt.Errorf("component_template endpoint only available from server version >= 7.8, got version < 7.0.0")
 	}
 	if err != nil {
 		if elastic7.IsNotFound(err) {
@@ -118,23 +113,18 @@ func resourceOpensearchComponentTemplateDelete(d *schema.ResourceData, meta inte
 	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
-	esClient, err := getClient(providerConf)
+	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-		if err == nil {
-			if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
-				err = elastic7DeleteComponentTemplate(client, id)
-			} else {
-				err = fmt.Errorf("component_template endpoint only available from server version >= 7.8, got version %s", openSearchVersion.String())
-			}
+	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
+	if err == nil {
+		if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
+			err = elastic7DeleteComponentTemplate(osClient, id)
+		} else {
+			err = fmt.Errorf("component_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
 		}
-	default:
-		err = fmt.Errorf("component_template endpoint only available from server version >= 7.8, got version < 7.0.0")
 	}
 
 	if err != nil {
@@ -145,7 +135,7 @@ func resourceOpensearchComponentTemplateDelete(d *schema.ResourceData, meta inte
 }
 
 func resourceOpensearchComponentTemplateAvailable(v *version.Version, c *ProviderConf) bool {
-	return v.GreaterThanOrEqual(esComponentTemplateMinimalVersion) || c.flavor == Unknown
+	return v.GreaterThanOrEqual(osComponentTemplateMinimalVersion) || c.flavor == Unknown
 }
 
 func elastic7DeleteComponentTemplate(client *elastic7.Client, id string) error {
@@ -160,23 +150,18 @@ func resourceOpensearchPutComponentTemplate(d *schema.ResourceData, meta interfa
 	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
-	esClient, err := getClient(providerConf)
+	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-		if err == nil {
-			if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
-				err = elastic7PutComponentTemplate(client, name, body, create)
-			} else {
-				err = fmt.Errorf("component_template endpoint only available from server version >= 7.8, got version %s", openSearchVersion.String())
-			}
+	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
+	if err == nil {
+		if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
+			err = elastic7PutComponentTemplate(osClient, name, body, create)
+		} else {
+			err = fmt.Errorf("component_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
 		}
-	default:
-		err = fmt.Errorf("component_template endpoint only available from server version >= 7.8, got version < 7.0.0")
 	}
 
 	return err

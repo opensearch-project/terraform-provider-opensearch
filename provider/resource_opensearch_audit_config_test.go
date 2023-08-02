@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -22,21 +21,12 @@ func TestAccOpensearchOpenSearchSecurityAuditConfig(t *testing.T) {
 	}
 	meta := provider.Meta()
 	providerConf := meta.(*ProviderConf)
-	esClient, err := getClient(providerConf)
+	var allowed bool
+	version, err := version.NewVersion(providerConf.osVersion)
 	if err != nil {
 		t.Skipf("err: %s", err)
 	}
-	var allowed bool
-	switch esClient.(type) {
-	case *elastic6.Client:
-		allowed = false
-	default:
-		version, err := version.NewVersion(providerConf.osVersion)
-		if err != nil {
-			t.Skipf("err: %s", err)
-		}
-		allowed = version.Segments()[0] == 1
-	}
+	allowed = version.Segments()[0] == 1
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() {
@@ -160,15 +150,10 @@ func testCheckOpensearchSecurityAuditConfigExists(name string) resource.TestChec
 			meta := testAccOpendistroProvider.Meta()
 
 			var err error
-			esClient, err := getClient(meta.(*ProviderConf))
 			if err != nil {
 				return err
 			}
-			switch esClient.(type) {
-			case *elastic7.Client:
-				_, err = resourceOpensearchGetAuditConfig(meta.(*ProviderConf))
-			default:
-			}
+			_, err = resourceOpensearchGetAuditConfig(meta.(*ProviderConf))
 
 			if err != nil {
 				return err
@@ -190,23 +175,18 @@ func testCheckOpensearchSecurityAuditConfigConnects(name string) resource.TestCh
 
 			username := rs.Primary.Attributes["username"]
 			password := rs.Primary.Attributes["password"]
-			meta := testAccOpendistroProvider.Meta()
 
 			var err error
-			esClient, err := getClient(meta.(*ProviderConf))
 			if err != nil {
 				return err
 			}
-			switch esClient.(type) {
-			case *elastic7.Client:
-				var client *elastic7.Client
-				client, err = elastic7.NewClient(
-					elastic7.SetURL(os.Getenv("OPENSEARCH_URL")),
-					elastic7.SetBasicAuth(username, password))
+			var client *elastic7.Client
+			client, err = elastic7.NewClient(
+				elastic7.SetURL(os.Getenv("OPENSEARCH_URL")),
+				elastic7.SetBasicAuth(username, password))
 
-				if err == nil {
-					_, err = client.ClusterHealth().Do(context.TODO())
-				}
+			if err == nil {
+				_, err = client.ClusterHealth().Do(context.TODO())
 			}
 
 			if err != nil {

@@ -71,26 +71,6 @@ func diffSuppressComponentTemplate(k, old, new string, d *schema.ResourceData) b
 	return reflect.DeepEqual(oo, no)
 }
 
-func diffSuppressDestination(k, old, new string, d *schema.ResourceData) bool {
-	var oo, no interface{}
-	if err := json.Unmarshal([]byte(old), &oo); err != nil {
-		return false
-	}
-	if err := json.Unmarshal([]byte(new), &no); err != nil {
-		return false
-	}
-
-	if om, ok := oo.(map[string]interface{}); ok {
-		normalizeDestination(om)
-	}
-
-	if nm, ok := no.(map[string]interface{}); ok {
-		normalizeDestination(nm)
-	}
-
-	return reflect.DeepEqual(oo, no)
-}
-
 func diffSuppressMonitor(k, old, new string, d *schema.ResourceData) bool {
 	var oo, no interface{}
 	if err := json.Unmarshal([]byte(old), &oo); err != nil {

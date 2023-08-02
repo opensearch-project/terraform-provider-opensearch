@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 
@@ -11,12 +10,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 func resourceOpensearchDashboardObject() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards v5 and v6 will export all objects in Dashboards v5 format, so the exported objects cannot be used as a source for `body` in this resource - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.\n\nWith the removal of mapping types in OpenSearch, the Dashboards index changed from v5 to >= v6, previously the document mapping type had the Dashboards object type, however, the `_type` going forward is `doc` and the type is within the document, see below. Using v5 doc types in v6 and above will result in errors from OpenSearch after one or more document types are used.",
+		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.",
 		Create:      resourceOpensearchDashboardObjectCreate,
 		Read:        resourceOpensearchDashboardObjectRead,
 		Update:      resourceOpensearchDashboardObjectUpdate,
@@ -83,26 +81,17 @@ const (
 	INDEX_CREATION_FAILED
 )
 
-const deprecatedDocType = "doc"
-
 func resourceOpensearchDashboardObjectCreate(d *schema.ResourceData, meta interface{}) error {
 	index := d.Get("index").(string)
 	mapping_index := d.Get("index").(string)
 
 	var success int
 	var err error
-	esClient, err := getClient(meta.(*ProviderConf))
+	osClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		success, err = elastic7CreateIndexIfNotExists(client, index, mapping_index)
-	case *elastic6.Client:
-		success, err = elastic6CreateIndexIfNotExists(client, index, mapping_index)
-	default:
-		return errors.New("opensearch version not supported")
-	}
+	success, err = elastic7CreateIndexIfNotExists(osClient, index, mapping_index)
 
 	if err != nil {
 		log.Printf("[INFO] Failed to create new Dashboard index: %+v", err)
@@ -147,26 +136,6 @@ func elastic7CreateIndexIfNotExists(client *elastic7.Client, index string, mappi
 	return INDEX_EXISTS, nil
 }
 
-func elastic6CreateIndexIfNotExists(client *elastic6.Client, index string, mapping_index string) (int, error) {
-	log.Printf("[INFO] elastic6CreateIndexIfNotExists")
-
-	// Use the IndexExists service to check if a specified index exists.
-	exists, err := client.IndexExists(index).Do(context.TODO())
-	if err != nil {
-		return INDEX_CREATION_FAILED, err
-	}
-	if !exists {
-		createIndex, err := client.CreateIndex(mapping_index).Body(`{"mappings":{}}`).Do(context.TODO())
-		if createIndex.Acknowledged {
-			return INDEX_CREATED, err
-		} else {
-			return INDEX_CREATION_FAILED, err
-		}
-	}
-
-	return INDEX_EXISTS, nil
-}
-
 func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interface{}) error {
 	bodyString := d.Get("body").(string)
 	var body []interface{}
@@ -179,34 +148,22 @@ func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interfac
 		return fmt.Errorf("expected %v to be an object", body[0])
 	}
 	id := dashboardObject["_id"].(string)
-	objectType := objectTypeOrDefault(dashboardObject)
 	index := d.Get("index").(string)
 
 	var resultJSON []byte
 	var err error
-	esClient, err := getClient(meta.(*ProviderConf))
+	osClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var result *elastic7.GetResult
-		result, err = elastic7GetObject(client, index, id)
-		if err == nil {
-			resultJSON, err = json.Marshal(result)
-		}
-	case *elastic6.Client:
-		var result *elastic6.GetResult
-		result, err = elastic6GetObject(client, objectType, index, id)
-		if err == nil {
-			resultJSON, err = json.Marshal(result)
-		}
-	default:
-		return errors.New("opensearch version not supported")
+	var result *elastic7.GetResult
+	result, err = elastic7GetObject(osClient, index, id)
+	if err == nil {
+		resultJSON, err = json.Marshal(result)
 	}
 
 	if err != nil {
-		if elastic7.IsNotFound(err) || elastic6.IsNotFound(err) {
+		if elastic7.IsNotFound(err) {
 			log.Printf("[WARN] Dashboard Object (%s) not found, removing from state", id)
 			d.SetId("")
 			return nil
@@ -229,15 +186,15 @@ func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interfac
 		originalKeys = append(originalKeys, k)
 	}
 
-	result := make(map[string]interface{})
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
+	res := make(map[string]interface{})
+	if err := json.Unmarshal(resultJSON, &res); err != nil {
 		log.Printf("[WARN] Failed to unmarshal: %+v", resultJSON)
 		return err
 	}
 
 	stateObject := []map[string]interface{}{make(map[string]interface{})}
 	for _, k := range originalKeys {
-		stateObject[0][k] = result[k]
+		stateObject[0][k] = res[k]
 	}
 	state, err := json.Marshal(stateObject)
 	if err != nil {
@@ -265,22 +222,14 @@ func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interf
 		return fmt.Errorf("expected %v to be an object", body[0])
 	}
 	id := object["_id"].(string)
-	objectType := objectTypeOrDefault(object)
 	index := d.Get("index").(string)
 
 	var err error
-	esClient, err := getClient(meta.(*ProviderConf))
+	osClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		err = elastic7DeleteIndex(client, index, id)
-	case *elastic6.Client:
-		err = elastic6DeleteIndex(client, objectType, index, id)
-	default:
-		return errors.New("opensearch version not supported")
-	}
+	err = elastic7DeleteIndex(osClient, index, id)
 
 	if err != nil {
 		return err
@@ -299,17 +248,6 @@ func elastic7DeleteIndex(client *elastic7.Client, index string, id string) error
 	return err
 }
 
-func elastic6DeleteIndex(client *elastic6.Client, objectType string, index string, id string) error {
-	_, err := client.Delete().
-		Index(index).
-		Type(objectType).
-		Id(id).
-		Do(context.TODO())
-
-	// we'll get an error if it's not found: https://github.com/olivere/elastic/blob/v6.1.26/delete.go#L207-L210
-	return err
-}
-
 func resourceOpensearchPutDashboardObject(d *schema.ResourceData, meta interface{}) (string, error) {
 	bodyString := d.Get("body").(string)
 	var body []interface{}
@@ -322,23 +260,15 @@ func resourceOpensearchPutDashboardObject(d *schema.ResourceData, meta interface
 		return "", fmt.Errorf("expected %v to be an object", body[0])
 	}
 	id := object["_id"].(string)
-	objectType := objectTypeOrDefault(object)
 	data := object["_source"]
 	index := d.Get("index").(string)
 
 	var err error
-	esClient, err := getClient(meta.(*ProviderConf))
+	osClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return "", err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		err = elastic7PutIndex(client, index, id, data)
-	case *elastic6.Client:
-		err = elastic6PutIndex(client, objectType, index, id, data)
-	default:
-		err = errors.New("opensearch version not supported")
-	}
+	err = elastic7PutIndex(osClient, index, id, data)
 
 	if err != nil {
 		return "", err
@@ -355,26 +285,6 @@ func elastic7PutIndex(client *elastic7.Client, index string, id string, data int
 		Do(context.TODO())
 
 	return err
-}
-
-func elastic6PutIndex(client *elastic6.Client, objectType string, index string, id string, data interface{}) error {
-	_, err := client.Index().
-		Index(index).
-		Type(objectType).
-		Id(id).
-		BodyJson(&data).
-		Do(context.TODO())
-
-	return err
-}
-
-// objectType is deprecated
-func objectTypeOrDefault(document map[string]interface{}) string {
-	if document["_type"] != nil {
-		return document["_type"].(string)
-	}
-
-	return deprecatedDocType
 }
 
 func requiredDashboardObjectKeys() []string {

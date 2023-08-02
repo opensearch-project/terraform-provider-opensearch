@@ -64,7 +64,7 @@ EOF
 
 - `aws_access_key` (String) The access key for use with AWS opensearch Service domains
 - `aws_assume_role_arn` (String) Amazon Resource Name of an IAM Role to assume prior to making AWS API calls.
-- `aws_assume_role_external_id` (Optional) - External ID configured in the role to assume prior to making AWS API calls.
+- `aws_assume_role_external_id` (String) External ID configured in the IAM policy of the IAM Role to assume prior to making AWS API calls.
 - `aws_profile` (String) The AWS profile for use with AWS opensearch Service domains
 - `aws_region` (String) The AWS region for use in signing of AWS opensearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.
 - `aws_secret_key` (String) The secret key for use with AWS opensearch Service domains

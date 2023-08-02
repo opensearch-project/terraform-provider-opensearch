@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,7 +18,7 @@ import (
 	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
-var openDistroISMPolicySchema = map[string]*schema.Schema{
+var openSearchISMPolicySchema = map[string]*schema.Schema{
 	"policy_id": {
 		Description: "The id of the ISM policy.",
 		Type:        schema.TypeString,
@@ -53,34 +52,34 @@ var openDistroISMPolicySchema = map[string]*schema.Schema{
 func resourceOpenSearchISMPolicy() *schema.Resource {
 	return &schema.Resource{
 		Description: "Provides an OpenSearch Index State Management (ISM) policy. Please refer to the OpenSearch ISM documentation for details.",
-		Create:      resourceOpensearchOpenDistroISMPolicyCreate,
-		Read:        resourceOpensearchOpenDistroISMPolicyRead,
-		Update:      resourceOpensearchOpenDistroISMPolicyUpdate,
-		Delete:      resourceOpensearchOpenDistroISMPolicyDelete,
-		Schema:      openDistroISMPolicySchema,
+		Create:      resourceOpensearchISMPolicyCreate,
+		Read:        resourceOpensearchISMPolicyRead,
+		Update:      resourceOpensearchISMPolicyUpdate,
+		Delete:      resourceOpensearchISMPolicyDelete,
+		Schema:      openSearchISMPolicySchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 	}
 }
 
-func resourceOpensearchOpenDistroISMPolicyCreate(d *schema.ResourceData, m interface{}) error {
-	if _, err := resourceOpensearchPutOpenDistroISMPolicy(d, m); err != nil {
-		log.Printf("[INFO] Failed to create OpenDistroPolicy: %+v", err)
+func resourceOpensearchISMPolicyCreate(d *schema.ResourceData, m interface{}) error {
+	if _, err := resourceOpensearchPutISMPolicy(d, m); err != nil {
+		log.Printf("[INFO] Failed to create OpensearchPolicy: %+v", err)
 		return err
 	}
 
 	policyID := d.Get("policy_id").(string)
 	d.SetId(policyID)
-	return resourceOpensearchOpenDistroISMPolicyRead(d, m)
+	return resourceOpensearchISMPolicyRead(d, m)
 }
 
-func resourceOpensearchOpenDistroISMPolicyRead(d *schema.ResourceData, m interface{}) error {
-	policyResponse, err := resourceOpensearchGetOpenDistroISMPolicy(d.Id(), m)
+func resourceOpensearchISMPolicyRead(d *schema.ResourceData, m interface{}) error {
+	policyResponse, err := resourceOpensearchGetISMPolicy(d.Id(), m)
 
 	if err != nil {
 		if elastic6.IsNotFound(err) || elastic7.IsNotFound(err) {
-			log.Printf("[WARN] OpenDistroPolicy (%s) not found, removing from state", d.Id())
+			log.Printf("[WARN] Opensearch Policy (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
 		}
@@ -111,15 +110,15 @@ func resourceOpensearchOpenDistroISMPolicyRead(d *schema.ResourceData, m interfa
 	return nil
 }
 
-func resourceOpensearchOpenDistroISMPolicyUpdate(d *schema.ResourceData, m interface{}) error {
-	if _, err := resourceOpensearchPutOpenDistroISMPolicy(d, m); err != nil {
+func resourceOpensearchISMPolicyUpdate(d *schema.ResourceData, m interface{}) error {
+	if _, err := resourceOpensearchPutISMPolicy(d, m); err != nil {
 		return err
 	}
 
-	return resourceOpensearchOpenDistroISMPolicyRead(d, m)
+	return resourceOpensearchISMPolicyRead(d, m)
 }
 
-func resourceOpensearchOpenDistroISMPolicyDelete(d *schema.ResourceData, m interface{}) error {
+func resourceOpensearchISMPolicyDelete(d *schema.ResourceData, m interface{}) error {
 	path, err := uritemplates.Expand("/_plugins/_ism/policies/{policy_id}", map[string]string{
 		"policy_id": d.Id(),
 	})
@@ -127,41 +126,31 @@ func resourceOpensearchOpenDistroISMPolicyDelete(d *schema.ResourceData, m inter
 		return fmt.Errorf("error building URL path for policy: %+v", err)
 	}
 
-	esClient, err := getClient(m.(*ProviderConf))
+	osclient, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method:           "DELETE",
-			Path:             path,
-			RetryStatusCodes: []int{http.StatusConflict},
-			Retrier: elastic7.NewBackoffRetrier(
-				elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-			),
-		})
+	_, err = osclient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method:           "DELETE",
+		Path:             path,
+		RetryStatusCodes: []int{http.StatusConflict},
+		Retrier: elastic7.NewBackoffRetrier(
+			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+		),
+	})
 
-		if err != nil {
-			return fmt.Errorf("error deleting policy: %+v : %+v", path, err)
-		}
-	case *elastic6.Client:
-		_, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "DELETE",
-			Path:   path,
-		})
+	if err != nil {
+		return fmt.Errorf("error deleting policy: %+v : %+v", path, err)
+	}
 
-		if err != nil {
-			return fmt.Errorf("error deleting policy: %+v : %+v", path, err)
-		}
-	default:
-		err = errors.New("policy resource not implemented prior to v6")
+	if err != nil {
+		return fmt.Errorf("error deleting policy: %+v : %+v", path, err)
 	}
 
 	return err
 }
 
-func resourceOpensearchGetOpenDistroISMPolicy(policyID string, m interface{}) (GetPolicyResponse, error) {
+func resourceOpensearchGetISMPolicy(policyID string, m interface{}) (GetPolicyResponse, error) {
 	var err error
 	response := new(GetPolicyResponse)
 
@@ -174,36 +163,20 @@ func resourceOpensearchGetOpenDistroISMPolicy(policyID string, m interface{}) (G
 	}
 
 	var body *json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	osclient, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return *response, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
+	var res *elastic7.Response
+	res, err = osclient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
 
-		if err != nil {
-			return *response, fmt.Errorf("error getting policy: %+v : %+v", path, err)
-		}
-		body = &res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-		res, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "GET",
-			Path:   path,
-		})
-
-		if err != nil {
-			return *response, fmt.Errorf("error getting policy: %+v : %+v", path, err)
-		}
-		body = &res.Body
-	default:
-		err = errors.New("policy resource not implemented prior to v6")
+	if err != nil {
+		return *response, fmt.Errorf("error getting policy: %+v : %+v", path, err)
 	}
+	body = &res.Body
 
 	if err != nil {
 		return *response, err
@@ -218,7 +191,7 @@ func resourceOpensearchGetOpenDistroISMPolicy(policyID string, m interface{}) (G
 	return *response, err
 }
 
-func resourceOpensearchPutOpenDistroISMPolicy(d *schema.ResourceData, m interface{}) (*PutPolicyResponse, error) {
+func resourceOpensearchPutISMPolicy(d *schema.ResourceData, m interface{}) (*PutPolicyResponse, error) {
 	response := new(PutPolicyResponse)
 	policyJSON := d.Get("body").(string)
 	seq := d.Get("seq_no").(int)
@@ -238,42 +211,25 @@ func resourceOpensearchPutOpenDistroISMPolicy(d *schema.ResourceData, m interfac
 	}
 
 	var body *json.RawMessage
-	esClient, err := getClient(m.(*ProviderConf))
+	osclient, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	switch client := esClient.(type) {
-	case *elastic7.Client:
-		var res *elastic7.Response
-		res, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-			Method:           "PUT",
-			Path:             path,
-			Params:           params,
-			Body:             string(policyJSON),
-			RetryStatusCodes: []int{http.StatusConflict},
-			Retrier: elastic7.NewBackoffRetrier(
-				elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-			),
-		})
-		if err != nil {
-			return response, fmt.Errorf("error putting policy: %+v : %+v : %+v", path, policyJSON, err)
-		}
-		body = &res.Body
-	case *elastic6.Client:
-		var res *elastic6.Response
-		res, err = client.PerformRequest(context.TODO(), elastic6.PerformRequestOptions{
-			Method: "PUT",
-			Path:   path,
-			Params: params,
-			Body:   string(policyJSON),
-		})
-		if err != nil {
-			return response, fmt.Errorf("error putting policy: %+v : %+v : %+v", path, policyJSON, err)
-		}
-		body = &res.Body
-	default:
-		err = errors.New("policy resource not implemented prior to Elastic v6")
+	var res *elastic7.Response
+	res, err = osclient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method:           "PUT",
+		Path:             path,
+		Params:           params,
+		Body:             string(policyJSON),
+		RetryStatusCodes: []int{http.StatusConflict},
+		Retrier: elastic7.NewBackoffRetrier(
+			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+		),
+	})
+	if err != nil {
+		return response, fmt.Errorf("error putting policy: %+v : %+v : %+v", path, policyJSON, err)
 	}
+	body = &res.Body
 
 	if err != nil {
 		return response, fmt.Errorf("error creating policy mapping: %+v", err)

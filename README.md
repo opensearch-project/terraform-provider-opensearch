@@ -20,9 +20,76 @@ This provider will target compatibility with major versions of Opensearch, each 
 
 | Opensearch version | Supported          |
 | -----------        | ---------          |
-| 1.x                | :white_check_mark: |
-| 2.x                | :x:                |
+| 2.x                | :white_check_mark: |
 
+### Supported Functionalities 
+
+Examples of resources can be found in the examples directory.
+
+#### OpenSearch and OpenSearch Dashboards
+
+- [x] [Cluster Settings](https://opensearch.org/docs/latest/api-reference/cluster-api/cluster-settings/)
+- [x] [Audit Config](https://opensearch.org/docs/latest/security/audit-logs/index/)
+- [x] [Component templates](https://opensearch.org/docs/latest/dashboards/im-dashboards/component-templates/)
+- [x] [Index and Composable templates](https://opensearch.org/docs/latest/im-plugin/index-templates/)
+- [x] [Data Streams](https://opensearch.org/docs/2.9/dashboards/im-dashboards/datastream/)
+- [x] [Ingest Pipeline](https://opensearch.org/docs/2.9/api-reference/ingest-apis/create-update-ingest/)
+- [x] [Security](https://opensearch.org/docs/latest/security/index/)
+- [x] [Snapshot Repository](https://opensearch.org/docs/2.9/tuning-your-cluster/availability-and-recovery/snapshots/snapshot-restore/#register-repository)
+- [x] [Anomaly Detection](https://opensearch.org/docs/latest/observing-your-data/ad/index/)
+- [x] [Index State Management](https://opensearch.org/docs/latest/im-plugin/ism/index/)
+- [x] [Dashboards Visualization](https://opensearch.org/docs/latest/dashboards/visualize/viz-index/)
+- [x] [Dashboards Tenant](https://opensearch.org/docs/latest/security/multi-tenancy/tenant-index/)
+- [x] [Alerting Monitors](https://opensearch.org/docs/latest/observing-your-data/alerting/monitors/)
+
+
+### Running tests locally
+
+```sh
+./script/install-tools
+export OSS_IMAGE="opensearchproject/opensearch:2"
+docker-compose up -d
+docker-compose ps -a
+export OPENSEARCH_URL=http://admin:admin@localhost:9200
+export TF_LOG=INFO
+TF_ACC=1 go test ./... -v -parallel 20 -cover -short
+```
+
+#### To Run Specific Test
+```sh
+cd provider/
+TF_ACC=2 go test -run TestAccOpensearchOpenDistroDashboardTenant  -v -cover -short
+```
+
+#### Fix the go-lint errors
+
+```sh
+golangci-lint run --out-format=github-actions 
+```
+
+
+### Debugging this provider
+
+Build the executable, and start in debug mode:
+
+```console
+$ go build
+$ ./terraform-provider-opensearch -debuggable # or start in debug mode in your IDE
+{"@level":"debug","@message":"plugin address","@timestamp":"2022-05-17T10:10:04.331668+01:00","address":"/var/folders/32/3mbbgs9x0r5bf991ltrl3p280010fs/T/plugin1346340234","network":"unix"}
+Provider started, to attach Terraform set the TF_REATTACH_PROVIDERS env var:
+
+        TF_REATTACH_PROVIDERS='{"registry.terraform.io/opensearch-project/opensearch":{"Protocol":"grpc","ProtocolVersion":5,"Pid":79075,"Test":true,"Addr":{"Network":"unix","String":"/var/folders/32/3mbbgs9x0r5bf991ltrl3p280010fs/T/plugin1346340234"}}}'
+```
+
+In another terminal, you can test your terraform code:
+
+```console
+$ cd <my-project/terraform>
+$ export TF_REATTACH_PROVIDERS=<env var above>
+$ terraform apply
+```
+
+The local provider will be used instead, and you should see debug information printed to the terminal.
 
 ## Version and Branching
 As of now, this terraform-provider-opensearch repository maintains 2 branches:
