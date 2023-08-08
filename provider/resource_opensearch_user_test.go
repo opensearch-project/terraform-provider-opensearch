@@ -6,12 +6,10 @@ import (
 	"os"
 	"testing"
 
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	elastic7 "github.com/olivere/elastic/v7"
 )
 
 func TestAccOpensearchOpenDistroUser(t *testing.T) {
@@ -20,27 +18,12 @@ func TestAccOpensearchOpenDistroUser(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var allowed bool
-	switch esClient.(type) {
-	case *elastic6.Client:
-		allowed = false
-	default:
-		allowed = true
-	}
 
 	randomName := "test" + acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			if !allowed {
-				t.Skip("Users only supported on ES >= 7")
-			}
 		},
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: testAccCheckOpensearchUserDestroy,
@@ -116,27 +99,12 @@ func TestAccOpensearchOpenDistroUserMultiple(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var allowed bool
-	switch esClient.(type) {
-	case *elastic6.Client:
-		allowed = false
-	default:
-		allowed = true
-	}
 
 	randomName := "test" + acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			if !allowed {
-				t.Skip("Users only supported on ES >= 7")
-			}
 		},
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: testAccCheckOpensearchUserDestroy,
@@ -160,16 +128,7 @@ func testAccCheckOpensearchUserDestroy(s *terraform.State) error {
 		meta := testAccOpendistroProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
-		if err != nil {
-			return err
-		}
-		switch esClient.(type) {
-		case *elastic7.Client:
-			_, err = resourceOpensearchGetOpenDistroUser(rs.Primary.ID, meta.(*ProviderConf))
-		default:
-		}
-
+		_, err = resourceOpensearchGetOpenDistroUser(rs.Primary.ID, meta.(*ProviderConf))
 		if err != nil {
 			return nil // should be not found error
 		}
@@ -190,16 +149,7 @@ func testCheckOpensearchUserExists(name string) resource.TestCheckFunc {
 			meta := testAccOpendistroProvider.Meta()
 
 			var err error
-			esClient, err := getClient(meta.(*ProviderConf))
-			if err != nil {
-				return err
-			}
-			switch esClient.(type) {
-			case *elastic7.Client:
-				_, err = resourceOpensearchGetOpenDistroUser(rs.Primary.ID, meta.(*ProviderConf))
-			default:
-			}
-
+			_, err = resourceOpensearchGetOpenDistroUser(rs.Primary.ID, meta.(*ProviderConf))
 			if err != nil {
 				return err
 			}
@@ -218,25 +168,16 @@ func testCheckOpensearchUserConnects(name string) resource.TestCheckFunc {
 				continue
 			}
 
-			username := rs.Primary.Attributes["username"]
-			password := rs.Primary.Attributes["password"]
-			meta := testAccOpendistroProvider.Meta()
-
 			var err error
-			esClient, err := getClient(meta.(*ProviderConf))
 			if err != nil {
 				return err
 			}
-			switch esClient.(type) {
-			case *elastic7.Client:
-				var client *elastic7.Client
-				client, err = elastic7.NewClient(
-					elastic7.SetURL(os.Getenv("OPENSEARCH_URL")),
-					elastic7.SetBasicAuth(username, password))
+			var client *elastic7.Client
+			client, err = elastic7.NewClient(
+				elastic7.SetURL(os.Getenv("OPENSEARCH_URL")))
 
-				if err == nil {
-					_, err = client.ClusterHealth().Do(context.TODO())
-				}
+			if err == nil {
+				_, err = client.ClusterHealth().Do(context.TODO())
 			}
 
 			if err != nil {
@@ -254,7 +195,7 @@ func testAccOpenDistroUserResource(resourceName string) string {
 	return fmt.Sprintf(`
 resource "opensearch_user" "test" {
   username      = "%s"
-  password      = "passw0rd"
+  password      = "passw0rd@complexTest"
   description   = "test"
   backend_roles = ["some_role"]
 
@@ -278,7 +219,7 @@ func testAccOpenDistroUserResourceUpdated(resourceName string) string {
 	return fmt.Sprintf(`
 resource "opensearch_user" "test" {
   username      = "%s"
-  password      = "passw0rd"
+  password      = "passw0rd@complexTest"
   description   = "test"
   backend_roles = ["some_role", "monitor_role"]
 
@@ -304,7 +245,7 @@ func testAccOpenDistroUserResourceMinimal(resourceName string) string {
 	return fmt.Sprintf(`
 resource "opensearch_user" "test" {
   username = "%s"
-  password = "passw0rd"
+  password = "passw0rd@complexTest"
 }
 	`, resourceName)
 }
@@ -313,19 +254,19 @@ func testAccOpenDistroUserMultiple(resourceName string) string {
 	return fmt.Sprintf(`
 resource "opensearch_user" "testuser1" {
   username    = "%s-testuser1"
-  password    = "testuser1"
+  password    = "testuser1@complexTest"
   description = "testuser1"
 }
 
 resource "opensearch_user" "testuser2" {
   username    = "%s-testuser2"
-  password    = "testuser2"
+  password    = "testuser2@complexTest"
   description = "testuser2"
 }
 
 resource "opensearch_user" "testuser3" {
   username    = "%s-testuser3"
-  password    = "testuser3"
+  password    = "testuser3@complexTest"
   description = "testuser3"
 }
 	`, resourceName, resourceName, resourceName)

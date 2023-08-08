@@ -29,20 +29,19 @@ jobs:
         go-version: [1.18.x]
         os: [ubuntu-latest]
         os-major-version:
-          - "1-opensearch"
+          - "2-opensearch"
         include:
-        - os-major-version: "1-opensearch"
-          version: 1.1.0
+        - os-major-version: "2-opensearch"
+          version: 2
           oss-image: "opensearchproject/opensearch"
-          OS_OPENDISTRO_IMAGE: "opensearchproject/opensearch:1.1.0"
-          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:1.1.0"
+          OS_IMAGE: "opensearchproject/opensearch:2"
+          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:2"
           OPENSEARCH_PREFIX: "plugins.security"
-          OSS_ENV_VAR: "plugins.security.disabled=true"
     needs: [lint]
     name: Test against OS ${{ matrix.os-major-version }} on ${{ matrix.go-version }}/${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
-      OS_OPENDISTRO_IMAGE: "${{matrix.OS_OPENDISTRO_IMAGE}}"
+      OS_IMAGE: "${{matrix.OS_IMAGE}}"
       OS_DASHBOARD_IMAGE: "${{matrix.OS_DASHBOARD_IMAGE}}"
       OPENSEARCH_PREFIX: "${{matrix.OPENSEARCH_PREFIX}}"
       OSS_ENV_VAR: "${{matrix.OSS_ENV_VAR}}"
@@ -92,21 +91,13 @@ jobs:
     - name: Wait for Opensearch
       # ensure that OS has come up and is available
       run: |
-        ./script/wait-for-endpoint --timeout=20 http://localhost:9200
-    - name: Warm up OpenDistro/Opensearch
-      # - OpenDistro lazily initializes its indexes, see
-      #   https://github.com/opendistro-for-elasticsearch/alerting/issues/60
-      run: |
-        if [ -n "$OS_OPENDISTRO_IMAGE" ]; then
-          ./script/wait-for-endpoint --timeout=120 http://admin:admin@localhost:9220
-          curl -s -v -X POST -H 'Content-type: application/json' -d '{"name":"_warmup","type":"slack","slack":{"url": "http://www.example.com"}}' http://admin:admin@localhost:9220/_opendistro/_alerting/destinations
-        fi
+        ./script/wait-for-endpoint --timeout=20 http://admin:admin@localhost:9200
     - name: Dump docker logs on failure
       if: failure()
       uses: jwalton/gh-docker-logs@v2
     - name: Run the tests
       run: |
-        export OPENSEARCH_URL=http://localhost:9200
+        export OPENSEARCH_URL=http://admin:admin@localhost:9200
         export TF_LOG=INFO
         TF_ACC=1 go test ./... -v -parallel 20 -cover -short
         # check goreleaser config for deprecations

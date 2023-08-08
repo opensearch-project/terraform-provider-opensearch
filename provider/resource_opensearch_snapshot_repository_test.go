@@ -2,12 +2,8 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
-
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -60,18 +56,11 @@ func testCheckOpensearchSnapshotRepositoryExists(name string) resource.TestCheck
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
 
 		if err != nil {
 			return err
@@ -90,18 +79,11 @@ func testCheckOpensearchSnapshotRepositoryDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		client, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
 
 		if err != nil {
 			return nil // should be not found error

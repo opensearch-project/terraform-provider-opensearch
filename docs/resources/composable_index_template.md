@@ -3,12 +3,12 @@
 page_title: "opensearch_composable_index_template Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an Composable index template resource. This resource uses the /_index_template endpoint of the API that is available since version 7.8. Use opensearch_index_template if you are using older versions or if you want to keep using legacy Index Templates in versions 7.8+.
+  Provides an Composable index template resource. This resource uses the /_index_template endpoint of the API that is available since version 2.0.0. Use opensearch_index_template if you are using older versions or if you want to keep using legacy Index Templates.
 ---
 
 # opensearch_composable_index_template (Resource)
 
-Provides an Composable index template resource. This resource uses the `/_index_template` endpoint of the API that is available since version 7.8. Use `opensearch_index_template` if you are using older versions or if you want to keep using legacy Index Templates in versions 7.8+.
+Provides an Composable index template resource. This resource uses the `/_index_template` endpoint of the API that is available since version 2.0.0. Use `opensearch_index_template` if you are using older versions or if you want to keep using legacy Index Templates.
 
 ## Example Usage
 

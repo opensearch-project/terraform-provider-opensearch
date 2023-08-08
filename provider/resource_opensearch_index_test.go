@@ -10,9 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 const (
@@ -119,34 +116,15 @@ EOF
 resource "opensearch_index" "test_doctype" {
   name               = "terraform-test"
   number_of_replicas = "1"
-  include_type_name  = true
   mappings           = <<EOF
-{
-  "_doc": {
-    "properties": {
-      "name": {
-        "type": "text"
-      }
-    }
-  }
-}
-EOF
-}
-`
-	testAccOpensearchMappingWithoutDocType = `
-resource "opensearch_index" "test_doctype" {
-  name               = "terraform-test"
-  number_of_replicas = "1"
-  include_type_name  = false
-  mappings           = <<EOF
-{
-  "properties": {
-    "name": {
-      "type": "text"
-    }
-  }
-}
-EOF
+	  {
+		"properties": {
+		  "name": {
+			"type": "text"
+		  }
+		}
+	  }
+	  EOF
 }
 `
 	testAccOpensearchIndexUpdateForceDestroy = `
@@ -165,6 +143,19 @@ resource "opensearch_index" "test_date_math" {
   number_of_replicas = 1
 }
 `
+
+	testAccOpensearchIndexWithSimilarityConfig = `
+resource "opensearch_index" "test_similarity_config" {
+  name               = "terraform-test-update-similarity-module"
+  number_of_shards   = 1
+  number_of_replicas = 1
+  index_similarity_default = jsonencode({
+    "type" : "BM25",
+    "b" : 0.25,
+    "k1" : 1.2
+  })
+}
+`
 	testAccOpensearchIndexRolloverAliasOpendistro = `
 resource opensearch_ism_policy "test" {
   policy_id = "test"
@@ -178,8 +169,14 @@ resource opensearch_ism_policy "test" {
         "name": "hot",
         "actions": [
           {
+            "retry": {
+              "count": 3,
+              "backoff": "exponential",
+              "delay": "1m"
+            },
             "rollover": {
-              "min_size": "50gb"
+              "min_index_age": "30d",
+              "min_primary_shard_size": "50gb"
             }
           }
         ],
@@ -194,20 +191,20 @@ resource opensearch_ism_policy "test" {
 resource "opensearch_index_template" "test" {
   name = "terraform-test"
   body = <<EOF
-{
-  "index_patterns": ["terraform-test-*"],
-  "settings": {
-    "index": {
-      "opendistro": {
-        "index_state_management": {
-          "policy_id": "${opensearch_ism_policy.test.policy_id}",
-          "rollover_alias": "terraform-test"
-        }
-      }
-    }
+  {
+	"index_patterns": ["terraform-test-*"],
+	"template": {
+	"settings": {
+		"plugins": {
+		  "index_state_management": {
+			"policy_id": "${opensearch_ism_policy.test.policy_id}",
+			"rollover_alias": "terraform-test"
+		  }
+	  }
+	}
   }
-}
-EOF
+  }
+  EOF
 }
 
 resource "opensearch_index" "test" {
@@ -221,19 +218,6 @@ resource "opensearch_index" "test" {
   })
 
   depends_on = [opensearch_index_template.test]
-}
-`
-
-	testAccOpensearchIndexWithSimilarityConfig = `
-resource "opensearch_index" "test_similarity_config" {
-  name               = "terraform-test-update-similarity-module"
-  number_of_shards   = 1
-  number_of_replicas = 1
-  index_similarity_default = jsonencode({
-    "type" : "BM25",
-    "b" : 0.25,
-    "k1" : 1.2
-  })
 }
 `
 )
@@ -264,6 +248,106 @@ func TestAccOpensearchIndex(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAccOpensearchIndex_rolloverAliasOpendistro(t *testing.T) {
+	provider := Provider()
+	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
+	if diags.HasError() {
+		t.Skipf("err: %#v", diags)
+	}
+	var allowed bool = true
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			if !allowed {
+				t.Skip("Opendistro index policies only supported on ES 7")
+			}
+		},
+		Providers:    testAccOpendistroProviders,
+		CheckDestroy: checkOpensearchIndexRolloverAliasDestroy(testAccOpendistroProvider, "terraform-test"),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexRolloverAliasOpendistro,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexRolloverAliasExists(testAccOpendistroProvider, "terraform-test"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				ResourceName:      "opensearch_index.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"aliases",       // not handled by this provider
+					"force_destroy", // not returned from the API
+				},
+				ImportStateCheck:   checkOpensearchIndexRolloverAliasState("terraform-test"),
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+func checkOpensearchIndexRolloverAliasExists(provider *schema.Provider, alias string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		meta := provider.Meta()
+
+		var count int
+		osClient, err := getClient(meta.(*ProviderConf))
+		if err != nil {
+			return err
+		}
+		r, err := osClient.CatAliases().Alias(alias).Do(context.TODO())
+		if err != nil {
+			return err
+		}
+		count = len(r)
+
+		if count == 0 {
+			return fmt.Errorf("rollover alias %q not found", alias)
+		}
+
+		return nil
+	}
+}
+
+func checkOpensearchIndexRolloverAliasState(alias string) resource.ImportStateCheckFunc {
+	return func(s []*terraform.InstanceState) error {
+		if len(s) != 1 {
+			return fmt.Errorf("expected 1 state: %+v", s)
+		}
+		rs := s[0]
+		if rs.Attributes["rollover_alias"] != alias {
+			return fmt.Errorf("expected rollover alias %q got %q", alias, rs.Attributes["rollover_alias"])
+		}
+
+		return nil
+	}
+}
+
+func checkOpensearchIndexRolloverAliasDestroy(provider *schema.Provider, alias string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		meta := provider.Meta()
+
+		var count int
+		osClient, err := getClient(meta.(*ProviderConf))
+		if err != nil {
+			return err
+		}
+		r, err := osClient.CatAliases().Alias(alias).Do(context.TODO())
+		if err != nil {
+			return err
+		}
+		count = len(r)
+
+		if count > 0 {
+			return fmt.Errorf("rollover alias %q still exists", alias)
+		}
+
+		return nil
+	}
 }
 
 func TestAccOpensearchIndexAnalysis(t *testing.T) {
@@ -358,21 +442,7 @@ func TestAccOpensearchIndex_doctype(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var config string
-
-	switch esClient.(type) {
-	case *elastic7.Client:
-		config = testAccOpensearchMappingWithDocType
-	case *elastic6.Client:
-		config = testAccOpensearchMappingWithoutDocType
-	default:
-		t.Skipf("doctypes removed after v6/v7")
-	}
+	var config string = testAccOpensearchMappingWithDocType
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -384,56 +454,6 @@ func TestAccOpensearchIndex_doctype(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					checkOpensearchIndexExists("opensearch_index.test_doctype"),
 				),
-			},
-		},
-	})
-}
-
-func TestAccOpensearchIndex_rolloverAliasOpendistro(t *testing.T) {
-	provider := Provider()
-	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
-	if diags.HasError() {
-		t.Skipf("err: %#v", diags)
-	}
-	meta := provider.Meta()
-	esClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	var allowed bool
-
-	switch esClient.(type) {
-	case *elastic6.Client:
-		allowed = false
-	default:
-		allowed = true
-	}
-
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() {
-			testAccPreCheck(t)
-			if !allowed {
-				t.Skip("Opendistro index policies only supported on ES 7")
-			}
-		},
-		Providers:    testAccOpendistroProviders,
-		CheckDestroy: checkOpensearchIndexRolloverAliasDestroy(testAccOpendistroProvider, "terraform-test"),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccOpensearchIndexRolloverAliasOpendistro,
-				Check: resource.ComposeTestCheckFunc(
-					checkOpensearchIndexRolloverAliasExists(testAccOpendistroProvider, "terraform-test"),
-				),
-			},
-			{
-				ResourceName:      "opensearch_index.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				ImportStateVerifyIgnore: []string{
-					"aliases",       // not handled by this provider
-					"force_destroy", // not returned from the API
-				},
-				ImportStateCheck: checkOpensearchIndexRolloverAliasState("terraform-test"),
 			},
 		},
 	})
@@ -452,18 +472,11 @@ func checkOpensearchIndexExists(name string) resource.TestCheckFunc {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		osClient, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = osClient.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
 
 		return err
 	}
@@ -483,28 +496,15 @@ func checkOpensearchIndexUpdated(name string) resource.TestCheckFunc {
 		var settings map[string]interface{}
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		osClient, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			resp, err := client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			settings = resp[rs.Primary.ID].Settings["index"].(map[string]interface{})
-
-		case *elastic6.Client:
-			resp, err := client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			settings = resp[rs.Primary.ID].Settings["index"].(map[string]interface{})
-
-		default:
-			return errors.New("opensearch version not supported")
+		resp, err := osClient.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
+		if err != nil {
+			return err
 		}
+		settings = resp[rs.Primary.ID].Settings["index"].(map[string]interface{})
 
 		r, ok := settings["number_of_replicas"]
 		if ok {
@@ -527,18 +527,11 @@ func checkOpensearchIndexDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		esClient, err := getClient(meta.(*ProviderConf))
+		osClient, err := getClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		case *elastic6.Client:
-			_, err = client.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		default:
-			return errors.New("opensearch version not supported")
-		}
+		_, err = osClient.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
 
 		if err != nil {
 			return nil // should be not found error
@@ -548,86 +541,4 @@ func checkOpensearchIndexDestroy(s *terraform.State) error {
 	}
 
 	return nil
-}
-
-func checkOpensearchIndexRolloverAliasExists(provider *schema.Provider, alias string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		meta := provider.Meta()
-
-		var count int
-		esClient, err := getClient(meta.(*ProviderConf))
-		if err != nil {
-			return err
-		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		case *elastic6.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		default:
-			return errors.New("opensearch version not supported")
-		}
-
-		if count == 0 {
-			return fmt.Errorf("rollover alias %q not found", alias)
-		}
-
-		return nil
-	}
-}
-
-func checkOpensearchIndexRolloverAliasState(alias string) resource.ImportStateCheckFunc {
-	return func(s []*terraform.InstanceState) error {
-		if len(s) != 1 {
-			return fmt.Errorf("expected 1 state: %+v", s)
-		}
-		rs := s[0]
-		if rs.Attributes["rollover_alias"] != alias {
-			return fmt.Errorf("expected rollover alias %q got %q", alias, rs.Attributes["rollover_alias"])
-		}
-
-		return nil
-	}
-}
-
-func checkOpensearchIndexRolloverAliasDestroy(provider *schema.Provider, alias string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		meta := provider.Meta()
-
-		var count int
-		esClient, err := getClient(meta.(*ProviderConf))
-		if err != nil {
-			return err
-		}
-		switch client := esClient.(type) {
-		case *elastic7.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		case *elastic6.Client:
-			r, err := client.CatAliases().Alias(alias).Do(context.TODO())
-			if err != nil {
-				return err
-			}
-			count = len(r)
-		default:
-			return errors.New("opensearch version not supported")
-		}
-
-		if count > 0 {
-			return fmt.Errorf("rollover alias %q still exists", alias)
-		}
-
-		return nil
-	}
 }

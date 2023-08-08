@@ -3,15 +3,12 @@
 page_title: "opensearch_dashboard_object Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards v5 and v6 will export all objects in Dashboards v5 format, so the exported objects cannot be used as a source for body in this resource - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.
-  With the removal of mapping types in OpenSearch, the Dashboards index changed from v5 to >= v6, previously the document mapping type had the Dashboards object type, however, the _type going forward is doc and the type is within the document, see below. Using v5 doc types in v6 and above will result in errors from OpenSearch after one or more document types are used.
+  Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.
 ---
 
 # opensearch_dashboard_object (Resource)
 
-Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards v5 and v6 will export all objects in Dashboards v5 format, so the exported objects cannot be used as a source for `body` in this resource - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.
-
-With the removal of mapping types in OpenSearch, the Dashboards index changed from v5 to >= v6, previously the document mapping type had the Dashboards object type, however, the `_type` going forward is `doc` and the type is within the document, see below. Using v5 doc types in v6 and above will result in errors from OpenSearch after one or more document types are used.
+Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.
 
 ## Example Usage
 
