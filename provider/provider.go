@@ -235,6 +235,7 @@ func Provider() *schema.Provider {
 			"opensearch_user":                      resourceOpenSearchUser(),
 			"opensearch_script":                    resourceOpensearchScript(),
 			"opensearch_snapshot_repository":       resourceOpensearchSnapshotRepository(),
+			"opensearch_channel_configuration":     resourceOpenSearchChannelConfiguration(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
