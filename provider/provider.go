@@ -396,14 +396,21 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 
 func assumeRoleCredentials(region, roleARN, roleExternalID, profile string) *awscredentials.Credentials {
 	sessOpts := awsSessionOptions(region)
-	sessOpts.Profile = profile
+	if profile == "" {
+		sessOpts.Profile = "default"
+	} else {
+		sessOpts.Profile = profile
+	}
 
 	sess := awssession.Must(awssession.NewSessionWithOptions(sessOpts))
 	stsClient := awssts.New(sess)
 	assumeRoleProvider := &awsstscreds.AssumeRoleProvider{
-		Client:     stsClient,
-		RoleARN:    roleARN,
-		ExternalID: aws.String(roleExternalID),
+		Client:  stsClient,
+		RoleARN: roleARN,
+	}
+
+	if roleExternalID != "" {
+		assumeRoleProvider.ExternalID = aws.String(roleExternalID)
 	}
 
 	return awscredentials.NewChainCredentials([]awscredentials.Provider{assumeRoleProvider})
