@@ -147,7 +147,9 @@ func resourceOpensearchOpenDistroGetMonitor(monitorID string, m interface{}) (*m
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling monitor body: %+v: %+v", err, body)
 	}
+	log.Printf("[INFO] Response: %+v", response)
 	normalizeMonitor(response.Monitor)
+	log.Printf("[INFO] Response: %+v", response)
 	log.Printf("The version %v", response.Version)
 	return response, err
 }

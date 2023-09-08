@@ -37,6 +37,11 @@ func elastic7GetObject(client *elastic7.Client, index string, id string) (*elast
 	return result, nil
 }
 
+func normalizeChannelConfiguration(tpl map[string]interface{}) {
+	delete(tpl, "last_updated_time_ms")
+	delete(tpl, "created_time_ms")
+}
+
 func normalizeMonitor(tpl map[string]interface{}) {
 	if triggers, ok := tpl["triggers"].([]interface{}); ok {
 		normalizeMonitorTriggers(triggers)
