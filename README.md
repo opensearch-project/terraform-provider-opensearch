@@ -41,6 +41,7 @@ Examples of resources can be found in the examples directory.
 - [x] [Dashboards Visualization](https://opensearch.org/docs/latest/dashboards/visualize/viz-index/)
 - [x] [Dashboards Tenant](https://opensearch.org/docs/latest/security/multi-tenancy/tenant-index/)
 - [x] [Alerting Monitors](https://opensearch.org/docs/latest/observing-your-data/alerting/monitors/)
+- [x] [Notification Channels](https://opensearch.org/docs/latest/observing-your-data/notifications/index/)
 
 
 ### Running tests locally
