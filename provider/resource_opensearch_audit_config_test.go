@@ -8,7 +8,6 @@ import (
 
 	elastic7 "github.com/olivere/elastic/v7"
 
-	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
@@ -19,21 +18,10 @@ func TestAccOpensearchOpenSearchSecurityAuditConfig(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	meta := provider.Meta()
-	providerConf := meta.(*ProviderConf)
-	var allowed bool
-	version, err := version.NewVersion(providerConf.osVersion)
-	if err != nil {
-		t.Skipf("err: %s", err)
-	}
-	allowed = version.Segments()[0] == 1
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			if !allowed {
-				t.Skip("Audit config only supported on OpenSearch 1.X.Y")
-			}
 		},
 		Providers: testAccOpendistroProviders,
 		Steps: []resource.TestStep{
