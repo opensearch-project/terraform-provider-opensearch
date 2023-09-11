@@ -263,7 +263,7 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 			"action_auto_create_index": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validation.StringMatch(regexp.MustCompile(`^(true|false|([-+]?[a-z0-9][a-z0-9_-]*\*?,?)+)$`), "expected value to be one of: true, false or comma-separated list"),
+				ValidateFunc: validation.StringMatch(regexp.MustCompile(`^(true|false|([-+]?[a-z0-9_*.,]+)+)$`), "expected value to be one of: true, false or comma-separated list"),
 				Description:  "Whether to automatically create an index if it doesn’t already exist and apply any configured index template",
 			},
 			"action_destructive_requires_name": {
