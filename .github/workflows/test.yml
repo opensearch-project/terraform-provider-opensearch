@@ -21,7 +21,7 @@ jobs:
         # Required: the version of golangci-lint is required and must be
         # specified without patch version: we always use the latest patch
         # version.
-        version: v1.29
+        version: v1.54
         args: --verbose --timeout=10m
   test:
     strategy:
