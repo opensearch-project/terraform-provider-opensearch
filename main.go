@@ -21,7 +21,7 @@ func main() {
 
 	if debugMode {
 		//nolint:staticcheck // SA1019 ignore this!
-		err := plugin.Debug(context.Background(), "registry.terraform.io/opensearch-project/terraform-provider-opensearch",
+		err := plugin.Debug(context.Background(), "registry.terraform.io/opensearch-project/opensearch",
 			&plugin.ServeOpts{
 				ProviderFunc: provider.Provider,
 			},
