@@ -397,9 +397,7 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 
 func assumeRoleCredentials(region, roleARN, roleExternalID, profile string) *awscredentials.Credentials {
 	sessOpts := awsSessionOptions(region)
-	if profile == "" {
-		sessOpts.Profile = "default"
-	} else {
+	if profile != "" {
 		sessOpts.Profile = profile
 	}
 
