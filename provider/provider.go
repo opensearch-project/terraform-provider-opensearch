@@ -38,6 +38,8 @@ const (
 )
 
 var awsUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).es.amazonaws.com$`)
+var awsOpensearchServerlessUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).aoss.amazonaws.com$`)
+var minimalOpensearchServerlessVersion = "2.0.0"
 
 type ProviderConf struct {
 	rawUrl                  string
@@ -306,6 +308,25 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 			return nil, err
 		}
 		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
+	} else if m := awsOpensearchServerlessUrlRegexp.FindStringSubmatch(conf.parsedUrl.Hostname()); (m != nil || (conf.awsSig4Service == "aoss" && conf.awsRegion != "")) && conf.signAWSRequests {
+		var region string
+		if m != nil {
+			region = m[1]
+		} else {
+			region = conf.awsRegion
+		}
+		log.Printf("[INFO] Using AWS: %+v", region)
+		conf.awsSig4Service = "aoss"
+		client, err := awsHttpClient(region, conf, map[string]string{})
+		if err != nil {
+			return nil, err
+		}
+		client.Transport = Wrap(client.Transport)
+		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
+		conf.flavor = OpenSearch
+		if conf.osVersion == "" {
+			conf.osVersion = minimalOpensearchServerlessVersion
+		}
 	} else if awsRegion := conf.awsRegion; conf.awsRegion != "" && conf.signAWSRequests {
 		log.Printf("[INFO] Using AWS: %+v", awsRegion)
 		client, err := awsHttpClient(awsRegion, conf, map[string]string{})
