@@ -227,3 +227,26 @@ func getCreds(t *testing.T, region string, config map[string]interface{}) creden
 	}
 	return creds
 }
+
+// Given:
+// 1. A proxy URL is specified.
+// 2. No additional AWS configuration is provided to the provider
+//
+// This tests that: the proxy value is set for the transport. Note we cannot get the credentials, because that requires connecting to AWS.
+func TestAWSSocksProxy(t *testing.T) {
+	testRegion := "us-east-1"
+
+	testConfig := map[string]interface{}{
+		"proxy": "socks://127.0.0.1:8080",
+	}
+
+	testConfigData := schema.TestResourceDataRaw(t, Provider().Schema, testConfig)
+
+	conf := &ProviderConf{
+		proxy: testConfigData.Get("proxy").(string),
+	}
+	s := awsSession(testRegion, conf)
+	if s == nil {
+		t.Fatalf("awsSession returned nil")
+	}
+}

@@ -166,3 +166,15 @@ provider "opensearch" {
 ```
 
 The `host_override` flag will set the `Host` header of requests to the cluster and the `ServerName` used for certificate validation. It is recommended to set this flag instead of `insecure = true`, which causes certificate validation to be skipped. Note that if both `host_override` and `insecure = true` are set, certificate validation will be skipped and the `Host` header will be overridden.
+
+### Connecting to a cluster via a SOCKS proxy.
+
+If you need to connect to a cluster via a SOCKS proxy (for example, to an AWS VPC Cluster), set the following configuration options in your provider:
+
+```tf
+provider "opensearch" {
+  url               = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+  host_override     = "vpc-<******>.us-east-1.es.amazonaws.com"
+  proxy             = "socks5://127.0.0.1:9999" # Replace 9999 with the port your SOCKS proxy is running on
+}
+```
