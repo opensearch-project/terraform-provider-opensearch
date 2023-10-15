@@ -80,9 +80,23 @@ EOF
 - `id` (String) The ID of this resource.
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 11f5368 (Add anomaly detection (#105))
+=======
+>>>>>>> f6bf397 (Improve documentation for HTTP basic authentication (#114))
 =======
 
 
 >>>>>>> b33b9cb (Add anomaly detection (#105))
+<<<<<<< HEAD
+<<<<<<< HEAD
 =======
 >>>>>>> 4de3492 (Improve documentation for HTTP basic authentication (#114))
+=======
+>>>>>>> 11f5368 (Add anomaly detection (#105))
+=======
+=======
+>>>>>>> 4de3492 (Improve documentation for HTTP basic authentication (#114))
+>>>>>>> f6bf397 (Improve documentation for HTTP basic authentication (#114))
