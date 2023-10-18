@@ -142,3 +142,23 @@ func diffSuppressPolicy(k, old, new string, d *schema.ResourceData) bool {
 
 	return reflect.DeepEqual(oo, no)
 }
+
+func diffSuppressAnomalyDetection(k, old, new string, d *schema.ResourceData) bool {
+	var oo, no interface{}
+	if err := json.Unmarshal([]byte(old), &oo); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(new), &no); err != nil {
+		return false
+	}
+
+	if om, ok := oo.(map[string]interface{}); ok {
+		normalizeAnomalyDetection(om)
+	}
+
+	if nm, ok := no.(map[string]interface{}); ok {
+		normalizeAnomalyDetection(nm)
+	}
+
+	return reflect.DeepEqual(oo, no)
+}
