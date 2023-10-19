@@ -129,7 +129,7 @@ resource "opensearch_audit_config" "test" {
 
 resource "opensearch_anomaly_detection" "test-detector12" {
   depends_on = [opensearch_audit_config.test]
-  body = <<EOF
+  body       = <<EOF
 {
   "name": "test-detector12",
   "description": "Test detector",
@@ -234,7 +234,7 @@ resource "opensearch_audit_config" "test" {
 
 resource "opensearch_anomaly_detection" "test-detector12" {
   depends_on = [opensearch_audit_config.test]
-  body = <<EOF
+  body       = <<EOF
 {
   "name": "test-detector12",
   "description": "Test detector 12",
