@@ -156,6 +156,26 @@ resource "opensearch_index" "test_similarity_config" {
   })
 }
 `
+
+	testAccOpensearchIndexWithKNNConfig = `
+resource "opensearch_index" "test_knn_config" {
+  name               = "terraform-test-update-knn-module"
+  number_of_shards   = 1
+  number_of_replicas = 1
+  index_knn          = true
+}
+`
+
+	testAccOpensearchIndexWithKNNAlgoParamEfSearchConfig = `
+resource "opensearch_index" "test_knn_algo_param_ef_search_config" {
+  name                           = "terraform-test-update-knn-algo-param-ef-search-module"
+  number_of_shards               = 1
+  number_of_replicas             = 1
+  index_knn                      = true
+  index_knn_algo_param_ef_search = 600
+}
+`
+
 	testAccOpensearchIndexRolloverAliasOpendistro = `
 resource opensearch_ism_policy "test" {
   policy_id = "test"
@@ -430,6 +450,38 @@ func TestAccOpensearchIndex_similarityConfig(t *testing.T) {
 				Config: testAccOpensearchIndexWithSimilarityConfig,
 				Check: resource.ComposeTestCheckFunc(
 					checkOpensearchIndexExists("opensearch_index.test_similarity_config"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchIndex_knnConfig(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexWithKNNConfig,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_knn_config"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchIndex_knnAlgoParamEFSearchConfig(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexWithKNNAlgoParamEfSearchConfig,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_knn_algo_param_ef_search_config"),
 				),
 			},
 		},

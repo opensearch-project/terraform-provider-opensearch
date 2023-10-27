@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -23,6 +24,7 @@ var (
 		"shard.check_on_startup",
 		"sort.field",
 		"sort.order",
+		"index.knn",
 		"index.similarity.default",
 	}
 	dynamicsSettingsKeys = []string{
@@ -66,6 +68,7 @@ var (
 		"indexing.slowlog.threshold.index.trace",
 		"indexing.slowlog.level",
 		"indexing.slowlog.source",
+		"index.knn.algo_param.ef_search",
 	}
 	settingsKeys = append(staticSettingsKeys, dynamicsSettingsKeys...)
 )
@@ -139,6 +142,12 @@ var (
 			Description: "The direction to sort shards in. Accepts `asc`, `desc`.",
 			ForceNew:    true,
 			Optional:    true,
+		},
+		"index_knn": {
+			Type:        schema.TypeBool,
+			Description: "Indicates whether the index should build native library indices for the knn_vector fields. If set to false, the knn_vector fields will be stored in doc values, but Approximate k-NN search functionality will be disabled.",
+			Optional:    true,
+			ForceNew:    true,
 		},
 		"index_similarity_default": {
 			Type:         schema.TypeString,
@@ -346,6 +355,11 @@ var (
 		"indexing_slowlog_source": {
 			Type:        schema.TypeString,
 			Description: "Set the number of characters of the `_source` to include in the slowlog lines, `false` or `0` will skip logging the source entirely and setting it to `true` will log the entire source regardless of size. The original `_source` is reformatted by default to make sure that it fits on a single log line.",
+			Optional:    true,
+		},
+		"index_knn_algo_param_ef_search": {
+			Type:        schema.TypeString,
+			Description: "The size of the dynamic list used during k-NN searches. Higher values lead to more accurate but slower searches. Only available for nmslib.",
 			Optional:    true,
 		},
 		// Other attributes
@@ -572,6 +586,15 @@ func indexResourceDataFromSettings(settings map[string]interface{}, d *schema.Re
 		}
 
 		schemaName := strings.Replace(key, ".", "_", -1)
+
+		if configSchema[schemaName].Type == schema.TypeBool {
+			str := value.(string)
+			parsed, err := strconv.ParseBool(str)
+			if err == nil {
+				value = parsed
+			}
+		}
+
 		err := d.Set(schemaName, value)
 		if err != nil {
 			log.Printf("[ERROR] indexResourceDataFromSettings: %+v", err)
