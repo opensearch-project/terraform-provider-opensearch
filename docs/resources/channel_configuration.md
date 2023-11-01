@@ -22,5 +22,3 @@ Provides an OpenSearch channel configuration. Please refer to the OpenSearch cha
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-
-
