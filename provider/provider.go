@@ -242,6 +242,7 @@ func Provider() *schema.Provider {
 			"opensearch_script":                    resourceOpensearchScript(),
 			"opensearch_snapshot_repository":       resourceOpensearchSnapshotRepository(),
 			"opensearch_channel_configuration":     resourceOpenSearchChannelConfiguration(),
+			"opensearch_anomaly_detection":         resourceOpenSearchAnomalyDetection(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
@@ -402,11 +403,9 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 	return client, nil
 }
 
-func assumeRoleCredentials(region, roleARN, roleExternalID, profile string) *awscredentials.Credentials {
-	sessOpts := awsSessionOptions(region)
-	if profile == "" {
-		sessOpts.Profile = "default"
-	} else {
+func assumeRoleCredentials(region, roleARN, roleExternalID, profile string, endpoint string) *awscredentials.Credentials {
+	sessOpts := awsSessionOptions(region, endpoint)
+	if profile != "" {
 		sessOpts.Profile = profile
 	}
 
@@ -424,7 +423,7 @@ func assumeRoleCredentials(region, roleARN, roleExternalID, profile string) *aws
 	return awscredentials.NewChainCredentials([]awscredentials.Provider{assumeRoleProvider})
 }
 
-func awsSessionOptions(region string) awssession.Options {
+func awsSessionOptions(region string, endpoint string) awssession.Options {
 	return awssession.Options{
 		Config: aws.Config{
 			Region:   aws.String(region),
@@ -439,13 +438,14 @@ func awsSessionOptions(region string) awssession.Options {
 			// it fail with Credential error
 			// https://github.com/aws/aws-sdk-go/issues/2914
 			HTTPClient: &http.Client{Timeout: 10 * time.Second},
+			Endpoint:   aws.String(endpoint),
 		},
 		SharedConfigState: awssession.SharedConfigEnable,
 	}
 }
 
-func awsSession(region string, conf *ProviderConf) *awssession.Session {
-	sessOpts := awsSessionOptions(region)
+func awsSession(region string, conf *ProviderConf, endpoint string) *awssession.Session {
+	sessOpts := awsSessionOptions(region, endpoint)
 
 	// 1. access keys take priority
 	// 2. next is an assume role configuration
@@ -459,7 +459,7 @@ func awsSession(region string, conf *ProviderConf) *awssession.Session {
 		if conf.awsAssumeRoleExternalID == "" {
 			conf.awsAssumeRoleExternalID = ""
 		}
-		sessOpts.Config.Credentials = assumeRoleCredentials(region, conf.awsAssumeRoleArn, conf.awsAssumeRoleExternalID, conf.awsProfile)
+		sessOpts.Config.Credentials = assumeRoleCredentials(region, conf.awsAssumeRoleArn, conf.awsAssumeRoleExternalID, conf.awsProfile, endpoint)
 	} else if conf.awsProfile != "" {
 		sessOpts.Profile = conf.awsProfile
 	}
@@ -480,7 +480,7 @@ func awsSession(region string, conf *ProviderConf) *awssession.Session {
 }
 
 func awsHttpClient(region string, conf *ProviderConf, headers map[string]string) (*http.Client, error) {
-	session := awsSession(region, conf)
+	session := awsSession(region, conf, "")
 	// Call Get() to ensure concurrency safe retrieval of credentials. Since the
 	// client is created in many go routines, this synchronizes it.
 	_, err := session.Config.Credentials.Get()
