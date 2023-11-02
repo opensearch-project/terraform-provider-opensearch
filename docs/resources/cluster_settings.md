@@ -67,5 +67,3 @@ resource "opensearch_cluster_settings" "global" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-
-
