@@ -78,7 +78,6 @@ EOF
 - `insecure` (Boolean) Disable SSL verification of API calls
 - `opensearch_version` (String) opensearch Version
 - `password` (String) Password to use to connect to opensearch using basic auth
-- `sign_aws_requests` (Boolean) Enable signing of AWS opensearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.
 - `sniff` (Boolean) Set the node sniffing option for the opensearch client. Client won't work with sniffing if nodes are not routable.
 - `token` (String) A bearer token or ApiKey for an Authorization header, e.g. Active Directory API key.
 - `token_name` (String) The type of token, usually ApiKey or Bearer
