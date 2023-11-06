@@ -50,7 +50,6 @@ type ProviderConf struct {
 	token                   string
 	tokenName               string
 	parsedUrl               *url.URL
-	signAWSRequests         bool
 	osVersion               string
 	pingTimeoutSeconds      int
 	awsRegion               string
@@ -181,12 +180,6 @@ func Provider() *schema.Provider {
 				Description: "A X509 key to connect to opensearch",
 				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_KEY_PATH", ""),
 			},
-			"sign_aws_requests": {
-				Type:        schema.TypeBool,
-				Optional:    true,
-				Default:     true,
-				Description: "Enable signing of AWS opensearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.",
-			},
 			"aws_signature_service": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -265,7 +258,6 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 		token:              d.Get("token").(string),
 		tokenName:          d.Get("token_name").(string),
 		parsedUrl:          parsedUrl,
-		signAWSRequests:    d.Get("sign_aws_requests").(bool),
 		awsSig4Service:     d.Get("aws_signature_service").(string),
 		osVersion:          d.Get("opensearch_version").(string),
 		pingTimeoutSeconds: d.Get("version_ping_timeout").(int),
@@ -291,22 +283,26 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		elastic7.SetHealthcheck(conf.healthchecking),
 	}
 
+	var signRequests = true
+
 	if conf.parsedUrl.User.Username() != "" {
 		p, _ := conf.parsedUrl.User.Password()
 		opts = append(opts, elastic7.SetBasicAuth(conf.parsedUrl.User.Username(), p))
+		signRequests = false // Disable request signing for basic auth
 	}
 	if conf.username != "" && conf.password != "" {
 		opts = append(opts, elastic7.SetBasicAuth(conf.username, conf.password))
+		signRequests = false // Disable request signing for basic auth
 	}
 
-	if m := awsUrlRegexp.FindStringSubmatch(conf.parsedUrl.Hostname()); m != nil && conf.signAWSRequests {
+	if m := awsUrlRegexp.FindStringSubmatch(conf.parsedUrl.Hostname()); m != nil && signRequests {
 		log.Printf("[INFO] Using AWS: %+v", m[1])
 		client, err := awsHttpClient(m[1], conf, map[string]string{})
 		if err != nil {
 			return nil, err
 		}
 		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
-	} else if awsRegion := conf.awsRegion; conf.awsRegion != "" && conf.signAWSRequests {
+	} else if awsRegion := conf.awsRegion; conf.awsRegion != "" && signRequests {
 		log.Printf("[INFO] Using AWS: %+v", awsRegion)
 		client, err := awsHttpClient(awsRegion, conf, map[string]string{})
 		if err != nil {
