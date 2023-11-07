@@ -71,17 +71,22 @@ func resourceOpensearchOpenDistroChannelConfigurationRead(d *schema.ResourceData
 
 	log.Printf("[DEBUG] Config ID from API: %v", configId)
 
-	d.Set("config_id", configId)
+	if err := d.Set("config_id", configId); err != nil {
+		return err
+	  }
 
 	if _, ok := openDistroChannelConfigurationSchema["body"]; ok {
 		json, err := json.Marshal(res.ChannelConfigurationInfos[0])
 		if err != nil {
 			return err
 		}
-		d.Set("body", json)
+		if err := d.Set("body", json); err != nil {
+			return err
+		  }
 	}
 
-	return nil
+	err = d.Set("body", channelConfigurationJsonNormalized)
+	return err
 
 }
 
