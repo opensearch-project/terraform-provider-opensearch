@@ -64,6 +64,7 @@ type ProviderConf struct {
 	certPemPath             string
 	keyPemPath              string
 	hostOverride            string
+	proxy                   string
 	// determined after connecting to the server
 	flavor ServerFlavor
 }
@@ -214,6 +215,11 @@ func Provider() *schema.Provider {
 				Default:     "",
 				Description: "If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to opensearch via an SSH tunnel.",
 			},
+			"proxy": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Proxy URL to use for requests to opensearch.",
+			},
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -280,6 +286,7 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 		certPemPath:             d.Get("client_cert_path").(string),
 		keyPemPath:              d.Get("client_key_path").(string),
 		hostOverride:            d.Get("host_override").(string),
+		proxy:                   d.Get("proxy").(string),
 	}, nil
 }
 
@@ -457,19 +464,17 @@ func awsSession(region string, conf *ProviderConf, endpoint string) *awssession.
 		sessOpts.Profile = conf.awsProfile
 	}
 
+	transport := http.Transport{}
 	// If configured as insecure, turn off SSL verification
 	if conf.insecure {
-		client := &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}}
-		sessOpts.Config.HTTPClient = client
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	} else if conf.hostOverride != "" {
 		// Only use `host_override` to set `ServerName` if we're using a secure connection
-		client := &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{ServerName: conf.hostOverride},
-		}}
-		sessOpts.Config.HTTPClient = client
+		transport.TLSClientConfig = &tls.Config{ServerName: conf.hostOverride}
 	}
+
+	client := &http.Client{Transport: &transport}
+	sessOpts.Config.HTTPClient = client
 
 	return awssession.Must(awssession.NewSessionWithOptions(sessOpts))
 }
@@ -482,6 +487,17 @@ func awsHttpClient(region string, conf *ProviderConf, headers map[string]string)
 	if err != nil {
 		return nil, err
 	}
+
+	// Set the proxy URL after configuring AWS credentials since the proxy
+	// should be not used for credential sources that call a URL like ECS Task
+	// Roles or EC2 Instance Roles.
+	if conf.proxy != "" {
+		proxyURL, _ := url.Parse(conf.proxy)
+		transport, _ := session.Config.HTTPClient.Transport.(*http.Transport)
+		transport.Proxy = http.ProxyURL(proxyURL)
+		session.Config.HTTPClient.Transport = transport
+	}
+
 	signer := awssigv4.NewSigner(session.Config.Credentials)
 	client, err := aws_signing_client.New(signer, session.Config.HTTPClient, conf.awsSig4Service, region)
 	if err != nil {
@@ -509,6 +525,12 @@ func tokenHttpClient(conf *ProviderConf, headers map[string]string) *http.Client
 
 	// Wrapper to inject headers as needed
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	// Configure a proxy URL if one is provided.
+	if conf.proxy != "" {
+		proxyURL, _ := url.Parse(conf.proxy)
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+
 	rt := WithHeader(transport)
 	rt.hostOverride = conf.hostOverride
 	rt.Set("Authorization", fmt.Sprintf("%s %s", conf.tokenName, conf.token))
@@ -557,6 +579,11 @@ func tlsHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
 	}
 
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	// Configure a proxy URL if one is provided.
+	if conf.proxy != "" {
+		proxyURL, _ := url.Parse(conf.proxy)
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
 
 	rt := WithHeader(transport)
 	rt.hostOverride = conf.hostOverride
@@ -578,8 +605,14 @@ func defaultHttpClient(conf *ProviderConf, headers map[string]string) *http.Clie
 		tlsConfig.ServerName = conf.hostOverride
 	}
 
-	// Wrapper to inject headers as needed
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	// Configure a proxy URL if one is provided.
+	if conf.proxy != "" {
+		proxyURL, _ := url.Parse(conf.proxy)
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+
+	// Wrapper to inject headers as needed
 	rt := WithHeader(transport)
 	rt.hostOverride = conf.hostOverride
 	for k, v := range headers {
