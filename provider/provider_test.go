@@ -311,6 +311,9 @@ func getCreds(t *testing.T, region string, config *ProviderConf, endpoint string
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 97c7627 (Add proxy support (#95))
 // Given:
 // 1. A proxy URL is specified.
 // 2. No additional AWS configuration is provided to the provider
@@ -334,8 +337,11 @@ func TestAWSSocksProxy(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 =======
 >>>>>>> 0cfc9f2 (When the provider assumes a given role, don't use the default profile… (#87))
+=======
+>>>>>>> 97c7627 (Add proxy support (#95))
 type mockServer struct {
 	ResponseFixturePath string
 	ExpectedAccessKeyId string
