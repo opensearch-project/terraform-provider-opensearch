@@ -53,6 +53,7 @@ docker-compose up -d
 docker-compose ps -a
 export OPENSEARCH_URL=http://admin:admin@localhost:9200
 export TF_LOG=INFO
+cd ./provider
 TF_ACC=1 go test ./... -v -parallel 20 -cover -short
 ```
 
