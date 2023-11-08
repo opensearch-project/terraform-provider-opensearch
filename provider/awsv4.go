@@ -4,30 +4,35 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"hash"
 	"io"
 	"net/http"
 )
-
-var emptyStringSHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 type awsV4SignerWrapper struct {
 	internal http.RoundTripper
 }
 
+func hashPayload(hasher hash.Hash, payload []byte) string {
+	hasher.Write(payload)
+	hashBytes := hasher.Sum(nil)
+	hash := hex.EncodeToString(hashBytes)
+	return hash
+}
+
 func (client *awsV4SignerWrapper) RoundTrip(request *http.Request) (*http.Response, error) {
+	hasher := sha256.New()
 	var hash string
 	if request.Body == nil {
-		hash = emptyStringSHA256
+		hash = hashPayload(hasher, []byte(""))
 	} else {
 		payload, error := io.ReadAll(request.Body)
 		request.Body = io.NopCloser(bytes.NewReader(payload))
 		if error != nil {
 			return nil, error
 		}
-		hasher := sha256.New()
-		hasher.Write(payload)
-		hashBytes := hasher.Sum(nil)
-		hash = hex.EncodeToString(hashBytes)
+
+		hash = hashPayload(hasher, payload)
 	}
 	request.Header.Set("X-Amz-Content-Sha256", hash)
 

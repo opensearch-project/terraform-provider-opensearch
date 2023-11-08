@@ -28,7 +28,7 @@ func TestRoundTripWithEmptyBody(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if header, contains := request.Header["X-Amz-Content-Sha256"]; !contains || len(header) != 1 || header[0] != emptyStringSHA256 {
+	if header, contains := request.Header["X-Amz-Content-Sha256"]; !contains || len(header) != 1 || header[0] != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
 		t.Fatal("Request with empty body doesn't contain X-Amz-Content-Sha256 header with empty string hash value.")
 	}
 }
