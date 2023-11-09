@@ -41,6 +41,11 @@ resource "opensearch_index" "test" {
   indexing_slowlog_level                = "warn"
 }
 `
+	testAccOpensearchIndexDefaultShardsReplicas = `
+resource "opensearch_index" "testdefaultshardsreplicas" {
+  name = "terraform-testdefaultshardsreplicas"
+}
+`
 	testAccOpensearchIndexAnalysis = `
 resource "opensearch_index" "test" {
   name               = "terraform-test"
@@ -244,6 +249,28 @@ func TestAccOpensearchIndex(t *testing.T) {
 				Config: testAccOpensearchIndexUpdateForceDestroy,
 				Check: resource.ComposeTestCheckFunc(
 					checkOpensearchIndexUpdated("opensearch_index.test"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchIndexDefaultShardsReplicas(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexDefaultShardsReplicas,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.testdefaultshardsreplicas"),
+				),
+			},
+			{
+				Config: testAccOpensearchIndexDefaultShardsReplicas,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.testdefaultshardsreplicas"),
 				),
 			},
 		},

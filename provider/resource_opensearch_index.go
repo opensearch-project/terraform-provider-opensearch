@@ -152,6 +152,7 @@ var (
 			Type:        schema.TypeString,
 			Description: "Number of shard replicas. A stringified number.",
 			Optional:    true,
+			Computed:    true,
 		},
 		"auto_expand_replicas": {
 			Type:        schema.TypeString,
@@ -634,8 +635,10 @@ func resourceOpensearchIndexUpdate(d *schema.ResourceData, meta interface{}) err
 	settings := make(map[string]interface{})
 	for _, key := range settingsKeys {
 		schemaName := strings.Replace(key, ".", "_", -1)
-		if d.HasChange(schemaName) {
-			settings[key] = d.Get(schemaName)
+		if _, ok := d.GetOk(schemaName); ok {
+			if d.HasChange(schemaName) {
+				settings[key] = d.Get(schemaName)
+			}
 		}
 	}
 
