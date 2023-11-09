@@ -57,6 +57,57 @@ cd ./provider
 TF_ACC=1 go test ./... -v -parallel 20 -cover -short
 ```
 
+**Line by Line Explanation**  
+Step 1: Install Tools
+
+- Purpose: Ensures that all the necessary tools and dependencies required for the testing environment are installed.
+- Command:
+  `./script/install-tools`
+
+Step 2: Set Docker Image  
+- Purpose: Sets the Docker image to be used for the OpenSearch instance. In this case, it's pulling the "opensearchproject/opensearch:2" image.
+- Command:
+`export OSS_IMAGE="opensearchproject/opensearch:2"`
+
+Step 3: Start Docker Compose
+- Purpose: Launches the OpenSearch instance as a Docker container in the background using the specified image
+- Command:
+`docker-compose up -d` or `docker compose up -d`
+
+Step 4: Check Docker Compose Status
+- Purpose: Displays the status of all containers managed by Docker Compose.
+- Command: 
+`docker-compose ps -a` or `docker compose ps -a`
+
+Step 5: Set OpenSearch URL
+
+- Purpose: Sets the environment variable OPENSEARCH_URL to the URL of the OpenSearch instance with the specified credentials (admin:admin) and port (9200).
+- Command: 
+`export OPENSEARCH_URL=http://admin:admin@localhost:9200`
+
+Step 6: Set Terraform Logging Level
+- Purpose: Sets the logging level for Terraform to INFO.
+- Command: 
+`export TF_LOG=INFO`
+
+Step 7: Change folder directory to provider
+- Purpose: Enable Go test to run within the provider directory.
+- Command:
+`cd ./provider`
+
+Step 8: Enable Terraform Acceptance Tests
+
+- Purpose: Enables Terraform acceptance tests by setting the environment variable TF_ACC to 1. This allows running tests that interact with real resources.
+- Command: 
+`TF_ACC=1`
+
+Step 9: Run Terraform Tests
+
+- Purpose: Executes Terraform tests with specific configurations, verbosity, and parallelism.
+- Command: 
+`go test ./... -v -parallel 20 -cover -short`
+
+
 #### To Run Specific Test
 ```sh
 cd provider/
