@@ -1,5 +1,3 @@
-// TODO!
-
 package provider
 
 import (
@@ -17,15 +15,16 @@ func TestAccOpensearchSMPolicy(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var allowed bool
+	var allowed bool = true
 
 	config := testAccOpensearchSMPolicyV7
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
+
 			if !allowed {
-				t.Skip("OpenSearch SMPolicies only supported on ES 6.")
+				t.Skip("OpenSearch Snapshot Management only supported on Opensearch >= 2.1")
 			}
 		},
 		Providers:    testAccOpendistroProviders,
@@ -37,7 +36,7 @@ func TestAccOpensearchSMPolicy(t *testing.T) {
 					testCheckOpensearchSMPolicyExists("opensearch_sm_policy.test_policy"),
 					resource.TestCheckResourceAttr(
 						"opensearch_sm_policy.test_policy",
-						"policy_id",
+						"policy_name",
 						"test_policy",
 					),
 				),
@@ -59,7 +58,7 @@ func testCheckOpensearchSMPolicyExists(name string) resource.TestCheckFunc {
 		meta := testAccOpendistroProvider.Meta()
 
 		var err error
-		_, err = resourceOpensearchGetSMPolicy(rs.Primary.ID, meta.(*ProviderConf))
+		_, err = resourceOpensearchGetSMPolicy(rs.Primary.Attributes["policy_name"], meta.(*ProviderConf))
 
 		if err != nil {
 			return err
@@ -81,7 +80,7 @@ func testCheckOpensearchSMPolicyDestroy(s *terraform.State) error {
 		if err != nil {
 			return err
 		}
-		_, err = resourceOpensearchGetSMPolicy(rs.Primary.ID, meta.(*ProviderConf))
+		_, err = resourceOpensearchGetSMPolicy(rs.Primary.Attributes["policy_name"], meta.(*ProviderConf))
 
 		if err != nil {
 			return nil // should be not found error
@@ -94,58 +93,48 @@ func testCheckOpensearchSMPolicyDestroy(s *terraform.State) error {
 }
 
 var testAccOpensearchSMPolicyV7 = `
+resource "opensearch_snapshot_repository" "test" {
+  name = "terraform-test"
+  type = "fs"
+
+  settings = {
+    location = "/tmp/opensearch"
+  }
+}
+
 resource "opensearch_sm_policy" "test_policy" {
-  policy_id = "test_policy"
+  policy_name = "test_policy"
   body      = <<EOF
   {
-		"policy": {
-		  "description": "ingesting logs",
-		  "default_state": "ingest",
-      "ism_template": [{
-        "index_patterns": ["foo-*"],
-        "priority": 0
-			}],
-		  "error_notification": {
-        "destination": {
-          "slack": {
-            "url": "https://webhook.slack.example.com"
-          }
-        },
-        "message_template": {
-          "lang": "mustache",
-          "source": "The index *{{ctx.index}}* failed to rollover."
-        }
-      },
-		  "states": [
-				{
-				  "name": "ingest",
-				  "actions": [{
-					  "rollover": {
-						"min_doc_count": 5
-					  }
-					}],
-				  "transitions": [{
-					  "state_name": "search"
-					}]
-				},
-				{
-				  "name": "search",
-				  "actions": [],
-				  "transitions": [{
-					  "state_name": "delete",
-					  "conditions": {
-						"min_index_age": "5m"
-					  }
-					}]
-				},
-				{
-				  "name": "delete",
-				  "actions": [{
-					  "delete": {}
-					}],
-				  "transitions": []
+		"enabled": true,
+		"description": "Test policy",
+		"creation": {
+			"schedule": {
+				"cron": {
+					"expression": "0 0 * * *",
+					"timezone": "UTC"
 				}
-			]
+			},
+			"time_limit": "1h"
+		},
+		"deletion": {
+			"schedule": {
+				"cron": {
+					"expression": "0 1 * * *",
+					"timezone": "UTC"
+				}
+			},
+			"condition": {
+				"max_age": "14d",
+				"max_count": 400,
+				"min_count": 1
+			},
+			"time_limit": "1h"
+		},
+		"snapshot_config": {
+			"timezone": "UTC",
+			"indices": "*",
+			"repository": "${opensearch_snapshot_repository.test.name}"
 		}
 	}
   EOF

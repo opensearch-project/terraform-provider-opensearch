@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -19,8 +20,8 @@ import (
 )
 
 var openSearchSMPolicySchema = map[string]*schema.Schema{
-	"policy_id": {
-		Description: "The id of the SM policy.",
+	"policy_name": {
+		Description: "The name of the SM policy.",
 		Type:        schema.TypeString,
 		Required:    true,
 		ForceNew:    true,
@@ -29,7 +30,7 @@ var openSearchSMPolicySchema = map[string]*schema.Schema{
 		Description:      "The policy document.",
 		Type:             schema.TypeString,
 		Required:         true,
-		DiffSuppressFunc: diffSuppressPolicy,
+		DiffSuppressFunc: smDiffSuppressPolicy,
 		StateFunc: func(v interface{}) string {
 			json, _ := structure.NormalizeJsonString(v)
 			return json
@@ -58,28 +59,33 @@ func resourceOpenSearchSMPolicy() *schema.Resource {
 		Delete:      resourceOpensearchSMPolicyDelete,
 		Schema:      openSearchSMPolicySchema,
 		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
+			StateContext: func(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+				d.Set("policy_name", d.Id())
+				d.SetId(fmt.Sprintf("%s-sm-policy", d.Id()))
+				return []*schema.ResourceData{d}, nil
+			},
 		},
 	}
 }
 
 func resourceOpensearchSMPolicyCreate(d *schema.ResourceData, m interface{}) error {
-	if _, err := resourceOpensearchPostPutSMPolicy(d, m, "POST"); err != nil {
+	policyResponse, err := resourceOpensearchPostPutSMPolicy(d, m, "POST")
+
+	if err != nil {
 		log.Printf("[INFO] Failed to create OpensearchPolicy: %+v", err)
 		return err
 	}
 
-	policyID := d.Get("policy_id").(string)
-	d.SetId(policyID)
+	d.SetId(policyResponse.PolicyID)
 	return resourceOpensearchSMPolicyRead(d, m)
 }
 
 func resourceOpensearchSMPolicyRead(d *schema.ResourceData, m interface{}) error {
-	policyResponse, err := resourceOpensearchGetSMPolicy(d.Id(), m)
+	policyResponse, err := resourceOpensearchGetSMPolicy(d.Get("policy_name").(string), m)
 
 	if err != nil {
 		if elastic6.IsNotFound(err) || elastic7.IsNotFound(err) {
-			log.Printf("[WARN] Opensearch Policy (%s) not found, removing from state", d.Id())
+			log.Printf("[WARN] Opensearch Policy (%s) not found, removing from state", d.Get("policy_name").(string))
 			d.SetId("")
 			return nil
 		}
@@ -91,10 +97,12 @@ func resourceOpensearchSMPolicyRead(d *schema.ResourceData, m interface{}) error
 		return err
 	}
 
-	if err := d.Set("policy_id", policyResponse.PolicyID); err != nil {
-		return fmt.Errorf("error setting policy_id: %s", err)
+	bodyStringNormalized, _ := structure.NormalizeJsonString(string(bodyString))
+
+	if err := d.Set("policy_name", policyResponse.Policy["name"]); err != nil {
+		return fmt.Errorf("error setting policy_name: %s", err)
 	}
-	if err := d.Set("body", bodyString); err != nil {
+	if err := d.Set("body", bodyStringNormalized); err != nil {
 		return fmt.Errorf("error setting body: %s", err)
 	}
 	if err := d.Set("primary_term", policyResponse.PrimaryTerm); err != nil {
@@ -116,8 +124,8 @@ func resourceOpensearchSMPolicyUpdate(d *schema.ResourceData, m interface{}) err
 }
 
 func resourceOpensearchSMPolicyDelete(d *schema.ResourceData, m interface{}) error {
-	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_id}", map[string]string{
-		"policy_id": d.Id(),
+	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_name}", map[string]string{
+		"policy_name": d.Get("policy_name").(string),
 	})
 	if err != nil {
 		return fmt.Errorf("error building URL path for policy: %+v", err)
@@ -143,12 +151,12 @@ func resourceOpensearchSMPolicyDelete(d *schema.ResourceData, m interface{}) err
 	return err
 }
 
-func resourceOpensearchGetSMPolicy(policyID string, m interface{}) (SMPolicyResponse, error) {
+func resourceOpensearchGetSMPolicy(policyName string, m interface{}) (SMPolicyResponse, error) {
 	var err error
 	response := new(SMPolicyResponse)
 
-	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_id}", map[string]string{
-		"policy_id": policyID,
+	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_name}", map[string]string{
+		"policy_name": policyName,
 	})
 
 	if err != nil {
@@ -196,8 +204,8 @@ func resourceOpensearchPostPutSMPolicy(d *schema.ResourceData, m interface{}, me
 		params.Set("if_primary_term", strconv.Itoa(primTerm))
 	}
 
-	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_id}", map[string]string{
-		"policy_id": d.Get("policy_id").(string),
+	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_name}", map[string]string{
+		"policy_name": d.Get("policy_name").(string),
 	})
 	if err != nil {
 		return response, fmt.Errorf("error building URL path for policy: %+v", err)
@@ -241,4 +249,39 @@ type SMPolicyResponse struct {
 	PrimaryTerm int                    `json:"_primary_term"`
 	SeqNo       int                    `json:"_seq_no"`
 	Policy      map[string]interface{} `json:"sm_policy"`
+}
+
+func smDiffSuppressPolicy(k, old, new string, d *schema.ResourceData) bool {
+	var oo, no interface{}
+	if err := json.Unmarshal([]byte(old), &oo); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(new), &no); err != nil {
+		return false
+	}
+
+	om, ok := oo.(map[string]interface{})
+	if ok {
+		normalizePolicy(om)
+	}
+
+	nm, ok := no.(map[string]interface{})
+	if ok {
+		normalizePolicy(nm)
+	}
+
+	// Suppress diff of autogenerated fields by copying them to the old object
+	if name, ok := om["name"]; ok {
+		nm["name"] = name
+	}
+
+	if enabled_time, ok := om["enabled_time"]; ok {
+		nm["enabled_time"] = enabled_time
+	}
+
+	if schedule, ok := om["schedule"]; ok {
+		nm["schedule"] = schedule
+	}
+
+	return reflect.DeepEqual(oo, no)
 }

@@ -15,8 +15,8 @@ Provides an OpenSearch Snapshot Management (SM) policy. Please refer to the Open
 ```terraform
 # Create an SM policy
 resource "opensearch_sm_policy" "snapshot_to_s3" {
-  policy_id = "snapshot_to_s3"
-  body      = file("${path.module}/policies/snapshot_to_s3.json")
+  policy_name = "snapshot_to_s3"
+  body        = file("${path.module}/policies/snapshot_to_s3.json")
 }
 ```
 
@@ -26,7 +26,7 @@ resource "opensearch_sm_policy" "snapshot_to_s3" {
 ### Required
 
 - `body` (String) The policy document.
-- `policy_id` (String) The id of the SM policy.
+- `policy_name` (String) The name of the SM policy.
 
 ### Optional
 
