@@ -12,7 +12,7 @@ import (
 	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
-var maximumOSTemplateVersion, _ = version.NewVersion("1.0.0")
+var maximumOSTemplateVersion, _ = version.NewVersion("2.0.0")
 
 func resourceOpensearchIndexTemplate() *schema.Resource {
 	return &schema.Resource{
@@ -147,7 +147,7 @@ func elastic7IndexPutTemplate(openSearchVersion *version.Version, client *elasti
 	var err error
 
 	// making use of _template endpoint (legacy index templates) for older opensearch versions (<= 1.0.0)
-	if openSearchVersion.LessThanOrEqual(maximumOSTemplateVersion) {
+	if openSearchVersion.LessThan(maximumOSTemplateVersion) {
 		_, err = client.IndexPutTemplate(name).BodyString(body).Create(create).Do(context.TODO())
 	} else {
 		_, err = client.IndexPutIndexTemplate(name).BodyString(body).Create(create).Do(context.TODO())
