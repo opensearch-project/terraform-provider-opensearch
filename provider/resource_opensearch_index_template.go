@@ -146,7 +146,7 @@ func resourceOpensearchPutIndexTemplate(d *schema.ResourceData, meta interface{}
 func elastic7IndexPutTemplate(openSearchVersion *version.Version, client *elastic7.Client, name string, body string, create bool) error {
 	var err error
 
-	// making use of _template endpoint (legacy index templates) for older opensearch versions (<= 1.0.0)
+	// making use of _template endpoint (legacy index templates) for older opensearch versions (< 2.0.0)
 	if openSearchVersion.LessThan(maximumOSTemplateVersion) {
 		_, err = client.IndexPutTemplate(name).BodyString(body).Create(create).Do(context.TODO())
 	} else {
