@@ -104,7 +104,7 @@ resource "opensearch_snapshot_repository" "test" {
 
 resource "opensearch_sm_policy" "test_policy" {
   policy_name = "test_policy"
-  body      = <<EOF
+  body        = <<EOF
   {
 		"enabled": true,
 		"description": "Test policy",
