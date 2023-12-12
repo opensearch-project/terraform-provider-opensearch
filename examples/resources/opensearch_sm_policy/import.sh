@@ -1,0 +1,1 @@
+terraform import opensearch_sm_policy.cleanup snapshot_to_s3
