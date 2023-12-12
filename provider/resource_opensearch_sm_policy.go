@@ -16,7 +16,6 @@ import (
 	"github.com/olivere/elastic/uritemplates"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 )
 
 var openSearchSMPolicySchema = map[string]*schema.Schema{
@@ -88,7 +87,7 @@ func resourceOpensearchSMPolicyRead(d *schema.ResourceData, m interface{}) error
 	policyResponse, err := resourceOpensearchGetSMPolicy(d.Get("policy_name").(string), m)
 
 	if err != nil {
-		if elastic6.IsNotFound(err) || elastic7.IsNotFound(err) {
+		if elastic7.IsNotFound(err) {
 			log.Printf("[WARN] Opensearch Policy (%s) not found, removing from state", d.Get("policy_name").(string))
 			d.SetId("")
 			return nil

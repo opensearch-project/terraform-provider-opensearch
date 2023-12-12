@@ -1,7 +1,7 @@
 # Create a snapshot repository. Make sure you also have created the bucket (eg. 
 # via `terraform-aws-modules/s3-bucket/aws`) and matching IAM role.
 resource "opensearch_snapshot_repository" "repo" {
-  name = "es-index-backups"
+  name = "os-index-backups"
   type = "s3"
 
   settings = {
