@@ -69,7 +69,7 @@ jobs:
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: ${{ runner.os }}-go-
     - name: Run Docker containers
-      run: docker-compose up --detach
+      run: docker-compose --env-file .github/workflows/.env up --detach
       env:
         OSS_IMAGE: "${{ matrix.oss-image }}:${{ matrix.version }}"
         OS_COMMAND: "${{matrix.OS_COMMAND}}"
@@ -91,13 +91,13 @@ jobs:
     - name: Wait for Opensearch
       # ensure that OS has come up and is available
       run: |
-        ./script/wait-for-endpoint --timeout=20 http://admin:admin@localhost:9200
+        ./script/wait-for-endpoint --timeout=20 http://admin:myStrongPassword123!@localhost:9200
     - name: Dump docker logs on failure
       if: failure()
       uses: jwalton/gh-docker-logs@v2
     - name: Run the tests
       run: |
-        export OPENSEARCH_URL=http://admin:admin@localhost:9200
+        export OPENSEARCH_URL=http://admin:myStrongPassword123!@localhost:9200
         export TF_LOG=INFO
         TF_ACC=1 go test ./... -v -parallel 20 -cover -short
         # check goreleaser config for deprecations

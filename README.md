@@ -51,7 +51,7 @@ Examples of resources can be found in the examples directory.
 export OSS_IMAGE="opensearchproject/opensearch:2"
 docker-compose up -d
 docker-compose ps -a  # Checks that the process is running
-export OPENSEARCH_URL=http://admin:admin@localhost:9200
+export OPENSEARCH_URL=http://admin:myStrongPassword123!@localhost:9200
 export TF_LOG=INFO
 TF_ACC=1 go test ./... -v -parallel 20 -cover -short
 ```
