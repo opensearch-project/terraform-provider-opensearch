@@ -115,7 +115,7 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 			"cluster_info_update_interval": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "A time string controlling how often Opensearch should check on disk usage for each node in the cluster",
+				Description: "A time string controlling how often OpenSearch should check on disk usage for each node in the cluster",
 			},
 			"cluster_routing_allocation_allow_rebalance": {
 				Type:        schema.TypeString,

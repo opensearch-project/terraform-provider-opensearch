@@ -3,12 +3,12 @@
 page_title: "opensearch_snapshot_repository Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an Opensearch snapshot repository resource.
+  Provides an OpenSearch snapshot repository resource.
 ---
 
 # opensearch_snapshot_repository (Resource)
 
-Provides an Opensearch snapshot repository resource.
+Provides an OpenSearch snapshot repository resource.
 
 ## Example Usage
 

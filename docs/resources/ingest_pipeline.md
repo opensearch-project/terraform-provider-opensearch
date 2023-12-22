@@ -3,12 +3,12 @@
 page_title: "opensearch_ingest_pipeline Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an Opensearch ingest pipeline resource.
+  Provides an OpenSearch ingest pipeline resource.
 ---
 
 # opensearch_ingest_pipeline (Resource)
 
-Provides an Opensearch ingest pipeline resource.
+Provides an OpenSearch ingest pipeline resource.
 
 ## Example Usage
 

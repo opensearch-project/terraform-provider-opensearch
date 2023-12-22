@@ -1,4 +1,4 @@
-# Configure the Opensearch provider
+# Configure the OpenSearch provider
 provider "opensearch" {
   url = "http://127.0.0.1:9200"
 }
