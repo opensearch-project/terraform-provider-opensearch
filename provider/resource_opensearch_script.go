@@ -33,7 +33,7 @@ var scriptSchema = map[string]*schema.Schema{
 
 func resourceOpensearchScript() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an Opensearch script resource.",
+		Description: "Provides an OpenSearch script resource.",
 		Create:      resourceOpensearchScriptCreate,
 		Read:        resourceOpensearchScriptRead,
 		Update:      resourceOpensearchScriptUpdate,

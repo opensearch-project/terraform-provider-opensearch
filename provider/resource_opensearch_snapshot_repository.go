@@ -9,7 +9,7 @@ import (
 
 func resourceOpensearchSnapshotRepository() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an Opensearch snapshot repository resource.",
+		Description: "Provides an OpenSearch snapshot repository resource.",
 		Create:      resourceOpensearchSnapshotRepositoryCreate,
 		Read:        resourceOpensearchSnapshotRepositoryRead,
 		Update:      resourceOpensearchSnapshotRepositoryUpdate,

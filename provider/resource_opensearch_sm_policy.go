@@ -75,7 +75,7 @@ func resourceOpensearchSMPolicyCreate(d *schema.ResourceData, m interface{}) err
 	policyResponse, err := resourceOpensearchPostPutSMPolicy(d, m, "POST")
 
 	if err != nil {
-		log.Printf("[INFO] Failed to create OpensearchPolicy: %+v", err)
+		log.Printf("[INFO] Failed to create OpenSearchPolicy: %+v", err)
 		return err
 	}
 
@@ -88,7 +88,7 @@ func resourceOpensearchSMPolicyRead(d *schema.ResourceData, m interface{}) error
 
 	if err != nil {
 		if elastic7.IsNotFound(err) {
-			log.Printf("[WARN] Opensearch Policy (%s) not found, removing from state", d.Get("policy_name").(string))
+			log.Printf("[WARN] OpenSearch Policy (%s) not found, removing from state", d.Get("policy_name").(string))
 			d.SetId("")
 			return nil
 		}

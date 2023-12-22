@@ -11,7 +11,7 @@ import (
 
 func resourceOpensearchIngestPipeline() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an Opensearch ingest pipeline resource.",
+		Description: "Provides an OpenSearch ingest pipeline resource.",
 		Create:      resourceOpensearchIngestPipelineCreate,
 		Read:        resourceOpensearchIngestPipelineRead,
 		Update:      resourceOpensearchIngestPipelineUpdate,
