@@ -16,9 +16,9 @@ This is a terraform provider to provision OpenSearch resources.
 
 ### Compatibility
 
-This provider will target compatibility with major versions of Opensearch, each major version of this provider corresponding to the major version of Opensearch.
+This provider will target compatibility with major versions of OpenSearch, each major version of this provider corresponding to the major version of OpenSearch.
 
-| Opensearch version | Supported          |
+| OpenSearch version | Supported          |
 | -----------        | ---------          |
 | 2.x                | :white_check_mark: |
 
@@ -121,7 +121,7 @@ If you discover a potential security issue in this project we ask that you notif
 
 ## License
 
-This project is licensed under the [Apache v2.0 License](LICENSE.txt).
+This project is licensed under the [Apache v2.0 License](LICENSE).
 
 ## Copyright
 

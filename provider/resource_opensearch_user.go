@@ -21,7 +21,7 @@ var openDistroUserSchema = map[string]*schema.Schema{
 		Required:    true,
 	},
 	"password": {
-		Description:   "The plain text password for the user, cannot be specified with `password_hash`. Some implementations may enforce a password policy. Invalid passwords may cause a non-descriptive HTTP 400 Bad Request error. For AWS Opensearch domains \"password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character\".",
+		Description:   "The plain text password for the user, cannot be specified with `password_hash`. Some implementations may enforce a password policy. Invalid passwords may cause a non-descriptive HTTP 400 Bad Request error. For AWS OpenSearch domains \"password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character\".",
 		Type:          schema.TypeString,
 		Optional:      true,
 		Sensitive:     true,

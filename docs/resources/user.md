@@ -55,7 +55,7 @@ resource "opensearch_roles_mapping" "reader" {
 - `attributes` (Map of String) A map of arbitrary key value string pairs stored alongside of users.
 - `backend_roles` (Set of String) A list of backend roles.
 - `description` (String) Description of the user.
-- `password` (String, Sensitive) The plain text password for the user, cannot be specified with `password_hash`. Some implementations may enforce a password policy. Invalid passwords may cause a non-descriptive HTTP 400 Bad Request error. For AWS Opensearch domains "password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character".
+- `password` (String, Sensitive) The plain text password for the user, cannot be specified with `password_hash`. Some implementations may enforce a password policy. Invalid passwords may cause a non-descriptive HTTP 400 Bad Request error. For AWS OpenSearch domains "password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character".
 - `password_hash` (String, Sensitive) The pre-hashed password for the user, cannot be specified with `password`.
 
 ### Read-Only
