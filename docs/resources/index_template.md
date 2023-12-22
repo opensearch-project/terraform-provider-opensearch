@@ -3,12 +3,12 @@
 page_title: "opensearch_index_template Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an Opensearch index template resource.
+  Provides an OpenSearch index template resource.
 ---
 
 # opensearch_index_template (Resource)
 
-Provides an Opensearch index template resource.
+Provides an OpenSearch index template resource.
 
 ## Example Usage
 

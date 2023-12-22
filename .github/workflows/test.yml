@@ -96,11 +96,11 @@ jobs:
       run: |
         ./script/test-mod-tidy
         ./script/test-terraform-fmt
-    - name: Wait for Opensearch
+    - name: Wait for OpenSearch
       # ensure that OS has come up and is available
       run: |
         ./script/wait-for-endpoint --timeout=20 http://localhost:9200
-    - name: Warm up OpenDistro/Opensearch
+    - name: Warm up OpenDistro/OpenSearch
       # - OpenDistro lazily initializes its indexes, see
       #   https://github.com/opendistro-for-elasticsearch/alerting/issues/60
       run: |

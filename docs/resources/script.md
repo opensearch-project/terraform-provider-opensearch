@@ -3,12 +3,12 @@
 page_title: "opensearch_script Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an Opensearch script resource.
+  Provides an OpenSearch script resource.
 ---
 
 # opensearch_script (Resource)
 
-Provides an Opensearch script resource.
+Provides an OpenSearch script resource.
 
 ## Example Usage
 

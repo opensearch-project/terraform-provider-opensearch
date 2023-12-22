@@ -29,7 +29,7 @@ resource "opensearch_cluster_settings" "global" {
 - `cluster_blocks_read_only` (Boolean) Make the whole cluster read only and metadata is not allowed to be modified
 - `cluster_blocks_read_only_allow_delete` (Boolean) Make the whole cluster read only, but allows to delete indices to free up resources
 - `cluster_indices_close_enable` (Boolean) If false, you cannot close open indices
-- `cluster_info_update_interval` (String) A time string controlling how often Opensearch should check on disk usage for each node in the cluster
+- `cluster_info_update_interval` (String) A time string controlling how often OpenSearch should check on disk usage for each node in the cluster
 - `cluster_max_shards_per_node` (Number) The total number of primary and replica shards for the cluster, this number is multiplied by the number of non-frozen data nodes; shards for closed indices do not count toward this limit
 - `cluster_max_shards_per_node_frozen` (Number) The total number of primary and replica frozen shards, for the cluster; Ssards for closed indices do not count toward this limit, a cluster with no frozen data nodes is unlimited.
 - `cluster_no_master_block` (String) Specifies which operations are rejected when there is no active master in a cluster (all, write)
