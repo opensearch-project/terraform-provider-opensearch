@@ -23,7 +23,6 @@ func TestAccOpensearchOpenDistroMonitor(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchMonitorExists("opensearch_monitor.test_monitor"),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
@@ -47,21 +46,27 @@ func testCheckOpensearchMonitorExists(name string) resource.TestCheckFunc {
 			return err
 		}
 
-		monitorJson, err := json.Marshal(resp.Monitor)
+		respMonitor := resp.Monitor
+		normalizeMonitor(respMonitor)
+		monitorJson, err := json.Marshal(respMonitor)
 
 		if err != nil {
 			return err
 		}
 
+		originalMonitorJsonNormalized, err := structure.NormalizeJsonString(testAccOpensearchOpenDistroMonitorJSON)
+		if err != nil {
+			return err
+		}
 		monitorJsonNormalized, err := structure.NormalizeJsonString(string(monitorJson))
 		if err != nil {
 			return err
 		}
 
-		diff := diffSuppressMonitor("", monitorJsonNormalized, testAccOpensearchOpenDistroMonitorJSON, nil)
-
+		diff := diffSuppressMonitor("", monitorJsonNormalized, originalMonitorJsonNormalized, nil)
 		if !diff {
-			return fmt.Errorf("Monitor does not match")
+
+			return fmt.Errorf("Monitor does not match.\nOld monitor: %s,\nNew monitor: %s", originalMonitorJsonNormalized, monitorJsonNormalized)
 		}
 
 		return nil
@@ -94,6 +99,7 @@ var testAccOpensearchOpenDistroMonitorJSON = `
 	"name": "test-monitor",
 	"type": "monitor",
 	"monitor_type": "query_level_monitor",
+	"owner": "alerting",
 	"enabled": true,
 	"schedule": {
 		"period": {
@@ -107,7 +113,6 @@ var testAccOpensearchOpenDistroMonitorJSON = `
 			"indices": ["*"],
 			"query": {
 			"size": 0,
-			"aggregations": {},
 			"query": {
 				"bool": {
 				"adjust_pure_negative": true,
@@ -139,7 +144,50 @@ var testAccOpensearchOpenDistroMonitorJSON = `
 var testAccOpensearchOpenDistroMonitor = `
 resource "opensearch_monitor" "test_monitor" {
   body = <<EOF
-` + testAccOpensearchOpenDistroMonitorJSON + `
+  {
+	"name": "test-monitor",
+	"type": "monitor",
+	"monitor_type": "query_level_monitor",
+	"owner": "alerting",
+	"enabled": true,
+	"schedule": {
+		"period": {
+		"interval": 1,
+		"unit": "MINUTES"
+		}
+	},
+	"inputs": [
+		{
+		"search": {
+			"indices": ["*"],
+			"query": {
+			"size": 0,
+			"query": {
+				"bool": {
+				"adjust_pure_negative": true,
+				"boost": 1,
+				"filter": [
+					{
+					"range": {
+						"@timestamp": {
+						"boost": 1,
+						"from": "||-1h",
+						"to": "",
+						"include_lower": true,
+						"include_upper": true,
+						"format": "epoch_millis"
+						}
+					}
+					}
+				]
+				}
+			}
+			}
+		}
+		}
+	],
+	"triggers": []
+}
 EOF
 }
 `
