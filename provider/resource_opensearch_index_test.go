@@ -26,15 +26,15 @@ resource "opensearch_index" "test1import" {
   name               = "terraform-test1import"
   number_of_shards   = 1
   number_of_replicas = 1
-  mappings           = jsonencode(
-  {
-	"properties": {
-	  "name": {
-		"type": "text"
-	  }
-	}
-  }
-)
+  mappings = jsonencode(
+    {
+      "properties" : {
+        "name" : {
+          "type" : "text"
+        }
+      }
+    }
+  )
 }
 `
 
@@ -139,15 +139,15 @@ EOF
 resource "opensearch_index" "test_doctype" {
   name               = "terraform-test"
   number_of_replicas = "1"
-  mappings           = jsonencode(
-	  {
-		"properties": {
-		  "name": {
-			"type": "text"
-		  }
-		}
-	  }
-	)
+  mappings = jsonencode(
+    {
+      "properties" : {
+        "name" : {
+          "type" : "text"
+        }
+      }
+    }
+  )
 }
 `
 	testAccOpensearchIndexUpdateForceDestroy = `
