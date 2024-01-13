@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
+	"github.com/olivere/elastic/uritemplates"
 	elastic7 "github.com/olivere/elastic/v7"
 )
 
@@ -786,6 +787,47 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 	}
 
 	indexResourceDataFromSettings(settings, d)
+
+	var response *json.RawMessage
+	var res *elastic7.Response
+	var mappingsResponse map[string]interface{}
+	path, err := uritemplates.Expand("/{index}/_mapping", map[string]string{
+		"index": index,
+	})
+	if err != nil {
+		return err
+	}
+	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return err
+	}
+	response = &res.Body
+
+	err = json.Unmarshal(*response, &mappingsResponse)
+
+	if err != nil {
+		return fmt.Errorf("fail to unmarshal: %v", err)
+	}
+
+	lenMappings := len(mappingsResponse[index].(map[string]interface{})["mappings"].(map[string]interface{}))
+
+	if lenMappings == 0 {
+		return nil
+	}
+
+	jsonString, err := json.Marshal(mappingsResponse[index].(map[string]interface{})["mappings"])
+	if err != nil {
+		return fmt.Errorf("fail to marshal: %v", err)
+	}
+
+	err = d.Set("mappings", string(jsonString))
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -20,6 +20,24 @@ resource "opensearch_index" "test" {
   number_of_replicas = 1
 }
 `
+
+	testOpensearchIndexImport = `
+resource "opensearch_index" "test1import" {
+  name               = "terraform-test1import"
+  number_of_shards   = 1
+  number_of_replicas = 1
+  mappings = jsonencode(
+    {
+      "properties" : {
+        "name" : {
+          "type" : "text"
+        }
+      }
+    }
+  )
+}
+`
+
 	testAccOpensearchIndexUpdate1 = `
 resource "opensearch_index" "test" {
   name                                  = "terraform-test"
@@ -121,15 +139,15 @@ EOF
 resource "opensearch_index" "test_doctype" {
   name               = "terraform-test"
   number_of_replicas = "1"
-  mappings           = <<EOF
-	  {
-		"properties": {
-		  "name": {
-			"type": "text"
-		  }
-		}
-	  }
-	  EOF
+  mappings = jsonencode(
+    {
+      "properties" : {
+        "name" : {
+          "type" : "text"
+        }
+      }
+    }
+  )
 }
 `
 	testAccOpensearchIndexUpdateForceDestroy = `
@@ -436,10 +454,10 @@ func TestAccOpensearchIndex_importBasic(t *testing.T) {
 		CheckDestroy: checkOpensearchIndexDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccOpensearchIndex,
+				Config: testOpensearchIndexImport,
 			},
 			{
-				ResourceName:      "opensearch_index.test",
+				ResourceName:      "opensearch_index.test1import",
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
