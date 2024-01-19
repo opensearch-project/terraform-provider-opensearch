@@ -199,7 +199,7 @@ func resourceOpensearchAuditConfigCheckVersion(meta interface{}) error {
 		return err
 	}
 
-	if providerConf.flavor != Unknown && openSearchVersion.Segments()[0] < 1 {
+	if openSearchVersion.Segments()[0] < 1 {
 		return fmt.Errorf("audit config only available from OpenSearch >= 1.0, got version %s", openSearchVersion.String())
 	}
 

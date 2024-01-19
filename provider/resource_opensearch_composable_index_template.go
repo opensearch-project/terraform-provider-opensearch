@@ -52,7 +52,7 @@ func resourceOpensearchComposableIndexTemplateCreate(d *schema.ResourceData, met
 }
 
 func resourceOpensearchComposableIndexTemplateAvailable(v *version.Version, c *ProviderConf) bool {
-	return v.GreaterThanOrEqual(minimalOSComposableTemplateVersion) || c.flavor == Unknown
+	return v.GreaterThanOrEqual(minimalOSComposableTemplateVersion)
 }
 
 func resourceOpensearchComposableIndexTemplateRead(d *schema.ResourceData, meta interface{}) error {

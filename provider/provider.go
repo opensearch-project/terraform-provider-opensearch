@@ -28,15 +28,6 @@ import (
 	elastic7 "github.com/olivere/elastic/v7"
 )
 
-type ServerFlavor int64
-
-// opensearch
-const (
-	Unknown ServerFlavor = iota
-	OpenSearch
-	Default = 2
-)
-
 var awsUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).es.amazonaws.com$`)
 var awsOpensearchServerlessUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).aoss.amazonaws.com$`)
 var minimalOpensearchServerlessVersion = "2.0.0"
@@ -67,8 +58,6 @@ type ProviderConf struct {
 	keyPemPath              string
 	hostOverride            string
 	proxy                   string
-	// determined after connecting to the server
-	flavor ServerFlavor
 }
 
 func Provider() *schema.Provider {
@@ -200,7 +189,7 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "opensearch Version",
+				Description: "opensearch Version, expects a semver in the form of a string (for example: '2.11').",
 			},
 			// version_ping_timeout is the time the ping to check the cluster
 			// version waits for a response from opensearch on startup, e.g. when
@@ -331,7 +320,6 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		}
 		client.Transport = Wrap(client.Transport)
 		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
-		conf.flavor = OpenSearch
 		if conf.osVersion == "" {
 			conf.osVersion = minimalOpensearchServerlessVersion
 		}
@@ -412,14 +400,11 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		// if upstream library exposes support for OpenSearch's distribution
 		// param, we can use that as well
 		log.Printf("[INFO] OS version %+v", info.Version)
-		switch info.Version.BuildFlavor {
-		case "default":
-			conf.flavor = Unknown
-		default:
-			conf.flavor = OpenSearch
+		if info.Version.BuildFlavor != "oss" {
+			return nil, errors.New("This plugin only supports opensearch, please do not use it with any other flavor")
 		}
-	} else if conf.flavor == Unknown || conf.osVersion < "1.0.0" {
-		return nil, fmt.Errorf("opensearch version %s is older than 1.0.0 and is not supported, flavor: %v.", conf.osVersion, conf.flavor)
+	} else if conf.osVersion < "1.0.0" {
+		return nil, fmt.Errorf("opensearch version %s is older than 1.0.0 and is not supported", conf.osVersion)
 	}
 
 	return client, nil

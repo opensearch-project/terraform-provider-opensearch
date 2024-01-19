@@ -135,7 +135,7 @@ func resourceOpensearchComponentTemplateDelete(d *schema.ResourceData, meta inte
 }
 
 func resourceOpensearchComponentTemplateAvailable(v *version.Version, c *ProviderConf) bool {
-	return v.GreaterThanOrEqual(osComponentTemplateMinimalVersion) || c.flavor == Unknown
+	return v.GreaterThanOrEqual(osComponentTemplateMinimalVersion)
 }
 
 func elastic7DeleteComponentTemplate(client *elastic7.Client, id string) error {

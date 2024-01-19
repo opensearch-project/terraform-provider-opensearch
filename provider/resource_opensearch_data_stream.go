@@ -45,7 +45,7 @@ func resourceOpensearchDataStreamCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceOpensearchDataStreamAvailable(v *version.Version, c *ProviderConf) bool {
-	return v.GreaterThanOrEqual(minimalOSDataStreamVersion) || c.flavor == Unknown
+	return v.GreaterThanOrEqual(minimalOSDataStreamVersion)
 }
 
 func resourceOpensearchDataStreamRead(d *schema.ResourceData, meta interface{}) error {
