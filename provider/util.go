@@ -56,7 +56,7 @@ func normalizeMonitor(tpl map[string]interface{}) {
 }
 
 func normalizeMonitorTriggers(triggers []interface{}) {
-	trigger_types := []string{"alerting_trigger", "anomaly_detector_trigger", "bucket_level_trigger", "document_level_trigger", "query_level_trigger"}
+	trigger_types := []string{"alerting_trigger", "anomaly_detector_trigger", "bucket_level_trigger", "chained_alert_trigger", "document_level_trigger", "query_level_trigger"}
 	for _, t := range triggers {
 		if trigger, ok := t.(map[string]interface{}); ok {
 			delete(trigger, "id")
