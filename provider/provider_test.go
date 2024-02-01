@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -66,6 +67,29 @@ func TestProvider_impl(t *testing.T) {
 func testAccPreCheck(t *testing.T) {
 	if v := os.Getenv("OPENSEARCH_URL"); v == "" {
 		t.Fatal("OPENSEARCH_URL must be set for acceptance tests")
+	}
+}
+
+// Given:
+// 1. invalid username and password and healthcheck is false
+//
+// this tests that 401 error is returned by getClient
+func TestInvalidCredentials(t *testing.T) {
+	parsedUrl, _ := url.Parse("http://127.0.0.1:9200")
+	testConfig := &ProviderConf{
+		username:           "1234",
+		password:           "1234",
+		healthchecking:     false,
+		rawUrl:             "http://127.0.0.1:9200",
+		sniffing:           false,
+		parsedUrl:          parsedUrl,
+		pingTimeoutSeconds: 10,
+	}
+	_, err := getClient(testConfig)
+
+	errString := "HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster"
+	if err.Error() != errString {
+		t.Errorf("Error thrown should be %s", errString)
 	}
 }
 

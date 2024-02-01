@@ -398,6 +398,8 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		info, httpStatus, err := client.Ping(conf.rawUrl).Do(ctx)
 		if httpStatus == http.StatusForbidden {
 			return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster.")
+		} else if httpStatus == http.StatusUnauthorized {
+			return nil, errors.New("HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster")
 		}
 		if err != nil {
 			// Replace the timeout error because it gives no context
