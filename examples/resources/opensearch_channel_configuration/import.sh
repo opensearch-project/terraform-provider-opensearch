@@ -1,0 +1,1 @@
+terraform import opensearch_channel_configuration.configuration_1 configuration_1
