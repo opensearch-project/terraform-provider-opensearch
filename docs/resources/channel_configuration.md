@@ -24,7 +24,7 @@ resource "opensearch_channel_configuration" "configuration_1" {
     "config_type" : "slack",
     "is_enabled" : true,
     "slack": {
-      "url": "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+      "url": "https://sample-slack-webhook"
     }
   }
 }
