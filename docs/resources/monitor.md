@@ -65,7 +65,7 @@ resource "opensearch_monitor" "movies_last_hour" {
       "actions" : [
         {
           "name" : "Slack",
-          "destination_id" : "${opensearch_destination.slack_on_call_channel.id}",
+          "destination_id" : "${opensearch_channel_configuration.slack_on_call_channel.id}",
           "message_template" : {
             "source" : "bogus",
             "lang" : "mustache"
