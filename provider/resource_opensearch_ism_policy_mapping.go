@@ -66,7 +66,7 @@ func resourceOpenSearchISMPolicyMapping() *schema.Resource {
 			Create: schema.DefaultTimeout(5 * time.Minute),
 			Update: schema.DefaultTimeout(5 * time.Minute),
 		},
-		DeprecationMessage: "opensearch_ism_policy_mapping is deprecated in Opensearch 1.x please use ism_template attribute in policies instead.",
+		DeprecationMessage: "opensearch_ism_policy_mapping is deprecated in Opensearch 1.x please use the opensearch_ism_policy resource and specify the ism_template attribute in the policies instead.",
 	}
 }
 
