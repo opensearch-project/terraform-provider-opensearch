@@ -46,7 +46,7 @@ func init() {
 
 	opendistroOriginalConfigureFunc := testAccOpendistroProvider.ConfigureContextFunc
 	testAccOpendistroProvider.ConfigureContextFunc = func(c context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-		err := d.Set("url", "http://admin:admin@127.0.0.1:9200")
+		err := d.Set("url", os.Getenv("OPENSEARCH_URL"))
 		if err != nil {
 			return nil, diag.FromErr(err)
 		}

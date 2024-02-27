@@ -15,6 +15,7 @@ services:
       - network.publish_host=127.0.0.1
       - logger.org.opensearch=warn
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456"
       - "plugins.security.ssl.http.enabled=false"
       - ${OSS_ENV_VAR:-FOO=bar}
     command: ${OS_COMMAND}
