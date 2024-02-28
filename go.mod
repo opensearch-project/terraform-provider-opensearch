@@ -3,7 +3,7 @@ module github.com/opensearch-project/terraform-provider-opensearch
 go 1.14
 
 require (
-	github.com/aws/aws-sdk-go v1.45.24
+	github.com/aws/aws-sdk-go v1.50.1
 	github.com/deoxxa/aws_signing_client v0.0.0-20161109131055-c20ee106809e
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/go-version v1.6.0
