@@ -18,22 +18,21 @@ resource "opensearch_index_template" "template_1" {
   name = "template_1"
   body = <<EOF
 {
-  "template": "te*",
-  "settings": {
-    "number_of_shards": 1
-  },
-  "mappings": {
-    "type1": {
-      "_source": {
-        "enabled": false
-      },
+  "index_patterns": [
+    "logs-2020-01-*"
+  ],
+  "template": {
+    "aliases": {
+      "my_logs": {}
+    },
+    "mappings": {
       "properties": {
-        "host_name": {
-          "type": "keyword"
-        },
-        "created_at": {
+        "timestamp": {
           "type": "date",
-          "format": "EEE MMM dd HH:mm:ss Z YYYY"
+          "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+        },
+        "value": {
+          "type": "double"
         }
       }
     }
