@@ -18,12 +18,16 @@ resource "opensearch_index_template" "template_1" {
   name = "template_1"
   body = <<EOF
 {
-  "template": "te*",
-  "settings": {
-    "number_of_shards": 1
-  },
-  "mappings": {
-    "type1": {
+  "index_patterns": [
+    "your-pattern-here-*"
+  ],
+  "template": {
+    "settings": {
+      "index": {
+        "number_of_shards": "1"
+      }
+    },
+    "mappings": {
       "_source": {
         "enabled": false
       },

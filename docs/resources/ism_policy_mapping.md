@@ -6,6 +6,8 @@ description: |-
   Provides an OpenSearch Index State Management (ISM) policy. Please refer to the OpenSearch ISM documentation for details.
 ---
 
+!> **NOTE:** `opensearch_ism_policy_mapping` is deprecated in Opensearch 1.x please use the `opensearch_ism_policy` resource and specify the `ism_template` attribute in the policies instead.
+
 # opensearch_ism_policy_mapping (Resource)
 
 Provides an OpenSearch Index State Management (ISM) policy. Please refer to the OpenSearch ISM documentation for details.

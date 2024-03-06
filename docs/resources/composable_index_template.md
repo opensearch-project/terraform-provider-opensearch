@@ -21,7 +21,7 @@ resource "opensearch_composable_index_template" "template_1" {
   "template": {
     "settings": {
       "index": {
-        "number_of_shards": 1
+        "number_of_shards": "1"
       }
     },
     "mappings": {
