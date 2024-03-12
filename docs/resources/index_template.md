@@ -19,25 +19,26 @@ resource "opensearch_index_template" "template_1" {
   body = <<EOF
 {
   "index_patterns": [
-    "your-pattern-here-*"
+    "logs-2020-01-*"
   ],
   "template": {
+    "aliases": {
+      "my_logs": {}
+    },
     "settings": {
       "index": {
-        "number_of_shards": "1"
+        "number_of_shards": "2",
+        "number_of_replicas": "1"
       }
     },
     "mappings": {
-      "_source": {
-        "enabled": false
-      },
       "properties": {
-        "host_name": {
-          "type": "keyword"
-        },
-        "created_at": {
+        "timestamp": {
           "type": "date",
-          "format": "EEE MMM dd HH:mm:ss Z YYYY"
+          "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+        },
+        "value": {
+          "type": "double"
         }
       }
     }

@@ -10,6 +10,12 @@ resource "opensearch_index_template" "template_1" {
     "aliases": {
       "my_logs": {}
     },
+    "settings": {
+      "index": {
+        "number_of_shards": "2",
+        "number_of_replicas": "1"
+      }
+    },
     "mappings": {
       "properties": {
         "timestamp": {

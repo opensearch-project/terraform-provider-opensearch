@@ -79,7 +79,7 @@ func resourceOpensearchISMPolicyRead(d *schema.ResourceData, m interface{}) erro
 
 	if err != nil {
 		if elastic6.IsNotFound(err) || elastic7.IsNotFound(err) {
-			log.Printf("[WARN] Opensearch Policy (%s) not found, removing from state", d.Id())
+			log.Printf("[WARN] OpenSearch Policy (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
 		}

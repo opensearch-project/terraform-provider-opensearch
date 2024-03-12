@@ -30,7 +30,7 @@ import (
 
 type ServerFlavor int64
 
-// opensearch
+// OpenSearch
 const (
 	Unknown ServerFlavor = iota
 	OpenSearch
@@ -78,31 +78,31 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Required:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_URL", nil),
-				Description: "Opensearch URL",
+				Description: "OpenSearch URL",
 			},
 			"sniff": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_SNIFF", false),
-				Description: "Set the node sniffing option for the opensearch client. Client won't work with sniffing if nodes are not routable.",
+				Description: "Set the node sniffing option for the OpenSearch client. Client won't work with sniffing if nodes are not routable.",
 			},
 			"healthcheck": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_HEALTH", true),
-				Description: "Set the client healthcheck option for the opensearch client. Healthchecking is designed for direct access to the cluster.",
+				Description: "Set the client healthcheck option for the OpenSearch client. Healthchecking is designed for direct access to the cluster.",
 			},
 			"username": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_USERNAME", nil),
-				Description: "Username to use to connect to opensearch using basic auth",
+				Description: "Username to use to connect to OpenSearch using basic auth",
 			},
 			"password": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PASSWORD", nil),
-				Description: "Password to use to connect to opensearch using basic auth",
+				Description: "Password to use to connect to OpenSearch using basic auth",
 			},
 			"token": {
 				Type:        schema.TypeString,
@@ -132,31 +132,31 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "The access key for use with AWS opensearch Service domains",
+				Description: "The access key for use with AWS OpenSearch Service domains",
 			},
 			"aws_secret_key": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "The secret key for use with AWS opensearch Service domains",
+				Description: "The secret key for use with AWS OpenSearch Service domains",
 			},
 			"aws_token": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "The session token for use with AWS opensearch Service domains",
+				Description: "The session token for use with AWS OpenSearch Service domains",
 			},
 			"aws_profile": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "The AWS profile for use with AWS opensearch Service domains",
+				Description: "The AWS profile for use with AWS OpenSearch Service domains",
 			},
 			"aws_region": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "The AWS region for use in signing of AWS opensearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.",
+				Description: "The AWS region for use in signing of AWS OpenSearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.",
 			},
 			"cacert_file": {
 				Type:        schema.TypeString,
@@ -174,36 +174,36 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "A X509 certificate to connect to opensearch",
+				Description: "A X509 certificate to connect to OpenSearch",
 				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_CERTIFICATE_PATH", ""),
 			},
 			"client_key_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "A X509 key to connect to opensearch",
+				Description: "A X509 key to connect to OpenSearch",
 				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_KEY_PATH", ""),
 			},
 			"sign_aws_requests": {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Default:     true,
-				Description: "Enable signing of AWS opensearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.",
+				Description: "Enable signing of AWS OpenSearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.",
 			},
 			"aws_signature_service": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "es",
-				Description: "AWS service name used in the credential scope of signed requests to opensearch.",
+				Description: "AWS service name used in the credential scope of signed requests to OpenSearch.",
 			},
 			"opensearch_version": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "opensearch Version",
+				Description: "OpenSearch Version",
 			},
 			// version_ping_timeout is the time the ping to check the cluster
-			// version waits for a response from opensearch on startup, e.g. when
+			// version waits for a response from OpenSearch on startup, e.g. when
 			// creating a provider.
 			"version_ping_timeout": {
 				Type:        schema.TypeInt,
@@ -215,12 +215,12 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
-				Description: "If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to opensearch via an SSH tunnel.",
+				Description: "If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to OpenSearch via an SSH tunnel.",
 			},
 			"proxy": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "Proxy URL to use for requests to opensearch.",
+				Description: "Proxy URL to use for requests to OpenSearch.",
 			},
 		},
 
@@ -421,7 +421,7 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 			conf.flavor = OpenSearch
 		}
 	} else if conf.flavor == Unknown || conf.osVersion < "1.0.0" {
-		return nil, fmt.Errorf("opensearch version %s is older than 1.0.0 and is not supported, flavor: %v.", conf.osVersion, conf.flavor)
+		return nil, fmt.Errorf("OpenSearch version %s is older than 1.0.0 and is not supported, flavor: %v.", conf.osVersion, conf.flavor)
 	}
 
 	return client, nil
