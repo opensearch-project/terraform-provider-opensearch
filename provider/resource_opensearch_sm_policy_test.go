@@ -24,7 +24,7 @@ func TestAccOpensearchSMPolicy(t *testing.T) {
 			testAccPreCheck(t)
 
 			if !allowed {
-				t.Skip("OpenSearch Snapshot Management only supported on Opensearch >= 2.1")
+				t.Skip("OpenSearch Snapshot Management only supported on OpenSearch >= 2.1")
 			}
 		},
 		Providers:    testAccOpendistroProviders,

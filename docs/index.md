@@ -28,12 +28,16 @@ resource "opensearch_index_template" "template_1" {
   name = "template_1"
   body = <<EOF
 {
-  "template": "te*",
-  "settings": {
-    "number_of_shards": 1
-  },
-  "mappings": {
-    "type1": {
+  "index_patterns": [
+    "your-pattern-here-*"
+  ],
+  "template": {
+    "settings": {
+      "index": {
+        "number_of_shards": "1"
+      }
+    },
+    "mappings": {
       "_source": {
         "enabled": false
       },
@@ -68,22 +72,22 @@ EOF
 - `aws_profile` (String) The AWS profile for use with AWS OpenSearch Service domains
 - `aws_region` (String) The AWS region for use in signing of AWS OpenSearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.
 - `aws_secret_key` (String) The secret key for use with AWS OpenSearch Service domains
-- `aws_signature_service` (String) AWS service name used in the credential scope of signed requests to opensearch.
+- `aws_signature_service` (String) AWS service name used in the credential scope of signed requests to OpenSearch.
 - `aws_token` (String) The session token for use with AWS OpenSearch Service domains
 - `cacert_file` (String) A Custom CA certificate
-- `client_cert_path` (String) A X509 certificate to connect to opensearch
-- `client_key_path` (String) A X509 key to connect to opensearch
-- `healthcheck` (Boolean) Set the client healthcheck option for the opensearch client. Healthchecking is designed for direct access to the cluster.
-- `host_override` (String) If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to opensearch via an SSH tunnel.
+- `client_cert_path` (String) A X509 certificate to connect to OpenSearch
+- `client_key_path` (String) A X509 key to connect to OpenSearch
+- `healthcheck` (Boolean) Set the client healthcheck option for the OpenSearch client. Healthchecking is designed for direct access to the cluster.
+- `host_override` (String) If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to OpenSearch via an SSH tunnel.
 - `insecure` (Boolean) Disable SSL verification of API calls
-- `opensearch_version` (String) opensearch Version
-- `password` (String) Password to use to connect to opensearch using basic auth
-- `proxy` (String) Proxy URL to use for requests to opensearch.
-- `sign_aws_requests` (Boolean) Enable signing of AWS opensearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.
-- `sniff` (Boolean) Set the node sniffing option for the opensearch client. Client won't work with sniffing if nodes are not routable.
+- `opensearch_version` (String) OpenSearch Version
+- `password` (String) Password to use to connect to OpenSearch using basic auth
+- `proxy` (String) Proxy URL to use for requests to OpenSearch.
+- `sign_aws_requests` (Boolean) Enable signing of AWS OpenSearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.
+- `sniff` (Boolean) Set the node sniffing option for the OpenSearch client. Client won't work with sniffing if nodes are not routable.
 - `token` (String) A bearer token or ApiKey for an Authorization header, e.g. Active Directory API key.
 - `token_name` (String) The type of token, usually ApiKey or Bearer
-- `username` (String) Username to use to connect to opensearch using basic auth
+- `username` (String) Username to use to connect to OpenSearch using basic auth
 - `version_ping_timeout` (Number) Version ping timeout in seconds
 
 ## Authentication

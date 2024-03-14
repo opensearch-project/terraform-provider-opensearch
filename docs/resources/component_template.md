@@ -20,7 +20,7 @@ resource "opensearch_component_template" "test" {
   "template": {
     "settings": {
       "index": {
-        "number_of_shards": 1
+        "number_of_shards": "1"
       }
     },
     "mappings": {

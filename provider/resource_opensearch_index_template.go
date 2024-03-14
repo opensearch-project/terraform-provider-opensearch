@@ -13,7 +13,7 @@ import (
 
 func resourceOpensearchIndexTemplate() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an Opensearch index template resource.",
+		Description: "Provides an OpenSearch index template resource.",
 		Create:      resourceOpensearchIndexTemplateCreate,
 		Read:        resourceOpensearchIndexTemplateRead,
 		Update:      resourceOpensearchIndexTemplateUpdate,

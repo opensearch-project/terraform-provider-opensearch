@@ -53,7 +53,7 @@ var openDistroISMPolicyMappingSchema = map[string]*schema.Schema{
 
 func resourceOpenSearchISMPolicyMapping() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch Index State Management (ISM) policy. Please refer to the OpenSearch ISM documentation for details.",
+		Description: "Provides an OpenSearch Index State Management (ISM) policy. Please refer to the OpenSearch ISM documentation for details.\n\n!> `opensearch_ism_policy_mapping` is deprecated in OpenSearch 1.x please use the `opensearch_ism_policy` resource and specify the `ism_template` attribute in the policies instead.",
 		Create:      resourceOpensearchOpenDistroISMPolicyMappingCreate,
 		Read:        resourceOpensearchOpenDistroISMPolicyMappingRead,
 		Update:      resourceOpensearchOpenDistroISMPolicyMappingUpdate,
@@ -66,7 +66,7 @@ func resourceOpenSearchISMPolicyMapping() *schema.Resource {
 			Create: schema.DefaultTimeout(5 * time.Minute),
 			Update: schema.DefaultTimeout(5 * time.Minute),
 		},
-		DeprecationMessage: "opensearch_ism_policy_mapping is deprecated in Opensearch 1.x please use the opensearch_ism_policy resource and specify the ism_template attribute in the policies instead.",
+		DeprecationMessage: "opensearch_ism_policy_mapping is deprecated in OpenSearch 1.x please use the opensearch_ism_policy resource and specify the ism_template attribute in the policies instead.",
 	}
 }
 
