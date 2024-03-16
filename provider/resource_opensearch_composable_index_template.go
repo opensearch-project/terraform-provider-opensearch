@@ -3,16 +3,12 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 
-	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	elastic7 "github.com/olivere/elastic/v7"
 )
-
-var minimalOSComposableTemplateVersion, _ = version.NewVersion("2.0.0")
 
 func resourceOpensearchComposableIndexTemplate() *schema.Resource {
 	return &schema.Resource{
@@ -51,30 +47,17 @@ func resourceOpensearchComposableIndexTemplateCreate(d *schema.ResourceData, met
 	return nil
 }
 
-func resourceOpensearchComposableIndexTemplateAvailable(v *version.Version, c *ProviderConf) bool {
-	return v.GreaterThanOrEqual(minimalOSComposableTemplateVersion) || c.flavor == Unknown
-}
-
 func resourceOpensearchComposableIndexTemplateRead(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 
 	var result string
-	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
 	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
-
-	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-	if err == nil {
-		if resourceOpensearchComposableIndexTemplateAvailable(openSearchVersion, providerConf) {
-			result, err = elastic7GetIndexTemplate(osClient, id)
-		} else {
-			err = fmt.Errorf("index_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
-		}
-	}
+	result, err = elastic7GetIndexTemplate(osClient, id)
 	if err != nil {
 		if elastic7.IsNotFound(err) {
 			log.Printf("[WARN] Index template (%s) not found, removing from state", id)
@@ -115,22 +98,13 @@ func resourceOpensearchComposableIndexTemplateUpdate(d *schema.ResourceData, met
 func resourceOpensearchComposableIndexTemplateDelete(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 
-	var openSearchVersion *version.Version
-
 	providerConf := meta.(*ProviderConf)
 	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-	if err == nil {
-		if resourceOpensearchComposableIndexTemplateAvailable(openSearchVersion, providerConf) {
-			err = elastic7DeleteIndexTemplate(osClient, id)
-		} else {
-			err = fmt.Errorf("index_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
-		}
-	}
+	err = elastic7DeleteIndexTemplate(osClient, id)
 
 	if err != nil {
 		return err
@@ -148,22 +122,13 @@ func resourceOpensearchPutComposableIndexTemplate(d *schema.ResourceData, meta i
 	name := d.Get("name").(string)
 	body := d.Get("body").(string)
 
-	var openSearchVersion *version.Version
-
 	providerConf := meta.(*ProviderConf)
 	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-	if err == nil {
-		if resourceOpensearchComposableIndexTemplateAvailable(openSearchVersion, providerConf) {
-			err = elastic7PutIndexTemplate(osClient, name, body, create)
-		} else {
-			err = fmt.Errorf("index_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
-		}
-	}
+	err = elastic7PutIndexTemplate(osClient, name, body, create)
 
 	return err
 }

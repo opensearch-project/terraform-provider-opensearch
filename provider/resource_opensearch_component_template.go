@@ -3,16 +3,12 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 
-	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	elastic7 "github.com/olivere/elastic/v7"
 )
-
-var osComponentTemplateMinimalVersion, _ = version.NewVersion("2.0.0")
 
 func resourceOpensearchComponentTemplate() *schema.Resource {
 	return &schema.Resource{
@@ -55,7 +51,6 @@ func resourceOpensearchComponentTemplateRead(d *schema.ResourceData, meta interf
 	id := d.Id()
 
 	var result string
-	var openSearchVersion *version.Version
 
 	providerConf := meta.(*ProviderConf)
 	osClient, err := getClient(providerConf)
@@ -63,14 +58,7 @@ func resourceOpensearchComponentTemplateRead(d *schema.ResourceData, meta interf
 		return err
 	}
 
-	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-	if err == nil {
-		if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
-			result, err = elastic7GetComponentTemplate(osClient, id)
-		} else {
-			err = fmt.Errorf("component_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
-		}
-	}
+	result, err = elastic7GetComponentTemplate(osClient, id)
 	if err != nil {
 		if elastic7.IsNotFound(err) {
 			log.Printf("[WARN] Index template (%s) not found, removing from state", id)
@@ -110,32 +98,19 @@ func resourceOpensearchComponentTemplateUpdate(d *schema.ResourceData, meta inte
 func resourceOpensearchComponentTemplateDelete(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 
-	var openSearchVersion *version.Version
-
 	providerConf := meta.(*ProviderConf)
 	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-	if err == nil {
-		if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
-			err = elastic7DeleteComponentTemplate(osClient, id)
-		} else {
-			err = fmt.Errorf("component_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
-		}
-	}
+	err = elastic7DeleteComponentTemplate(osClient, id)
 
 	if err != nil {
 		return err
 	}
 	d.SetId("")
 	return nil
-}
-
-func resourceOpensearchComponentTemplateAvailable(v *version.Version, c *ProviderConf) bool {
-	return v.GreaterThanOrEqual(osComponentTemplateMinimalVersion) || c.flavor == Unknown
 }
 
 func elastic7DeleteComponentTemplate(client *elastic7.Client, id string) error {
@@ -147,22 +122,13 @@ func resourceOpensearchPutComponentTemplate(d *schema.ResourceData, meta interfa
 	name := d.Get("name").(string)
 	body := d.Get("body").(string)
 
-	var openSearchVersion *version.Version
-
 	providerConf := meta.(*ProviderConf)
 	osClient, err := getClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
-	if err == nil {
-		if resourceOpensearchComponentTemplateAvailable(openSearchVersion, providerConf) {
-			err = elastic7PutComponentTemplate(osClient, name, body, create)
-		} else {
-			err = fmt.Errorf("component_template endpoint only available from server version >= 2.0.0, got version %s", openSearchVersion.String())
-		}
-	}
+	err = elastic7PutComponentTemplate(osClient, name, body, create)
 
 	return err
 }
