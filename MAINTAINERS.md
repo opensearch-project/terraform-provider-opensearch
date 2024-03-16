@@ -10,3 +10,4 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | Prudhvi Godithi | [prudhvigodithi](https://github.com/prudhvigodithi)   | Amazon               |
 | jackson Theisen | [jackson-theisen](https://github.com/jackson-theisen) | External contributor  |
 | Phillip Baker   | [phillbaker](https://github.com/phillbaker)           | External contributor |
+| Rupa Lahiri   | [rblcoder](https://github.com/rblcoder)           | External contributor |
