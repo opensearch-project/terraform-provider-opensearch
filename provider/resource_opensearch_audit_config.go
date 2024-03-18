@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	elastic7 "github.com/olivere/elastic/v7"
@@ -187,29 +186,7 @@ func resourceOpenSearchAuditConfig() *schema.Resource {
 		},
 	}
 }
-
-func resourceOpensearchAuditConfigCheckVersion(meta interface{}) error {
-	providerConf := meta.(*ProviderConf)
-	if _, err := getClient(providerConf); err != nil {
-		return err
-	}
-
-	openSearchVersion, err := version.NewVersion(providerConf.osVersion)
-	if err != nil {
-		return err
-	}
-
-	if providerConf.flavor != Unknown && openSearchVersion.Segments()[0] < 1 {
-		return fmt.Errorf("audit config only available from OpenSearch >= 1.0, got version %s", openSearchVersion.String())
-	}
-
-	return nil
-}
-
 func resourceOpensearchAuditConfigCreate(d *schema.ResourceData, m interface{}) error {
-	if err := resourceOpensearchAuditConfigCheckVersion(m); err != nil {
-		return err
-	}
 
 	if _, err := resourceOpensearchPutAuditConfig(d, m); err != nil {
 		return err
@@ -220,9 +197,6 @@ func resourceOpensearchAuditConfigCreate(d *schema.ResourceData, m interface{}) 
 }
 
 func resourceOpensearchAuditConfigRead(d *schema.ResourceData, m interface{}) error {
-	if err := resourceOpensearchAuditConfigCheckVersion(m); err != nil {
-		return err
-	}
 
 	res, err := resourceOpensearchGetAuditConfig(m)
 	if err != nil {
@@ -296,9 +270,6 @@ func flattenAudit(aud auditConfig_audit) []map[string]interface{} {
 }
 
 func resourceOpensearchAuditConfigUpdate(d *schema.ResourceData, m interface{}) error {
-	if err := resourceOpensearchAuditConfigCheckVersion(m); err != nil {
-		return err
-	}
 
 	if _, err := resourceOpensearchPutAuditConfig(d, m); err != nil {
 		return err
@@ -308,9 +279,6 @@ func resourceOpensearchAuditConfigUpdate(d *schema.ResourceData, m interface{}) 
 }
 
 func resourceOpensearchAuditConfigDelete(d *schema.ResourceData, m interface{}) error {
-	if err := resourceOpensearchAuditConfigCheckVersion(m); err != nil {
-		return err
-	}
 
 	return nil
 }
