@@ -64,23 +64,30 @@ func resourceOpensearchOpenDistroChannelConfigurationRead(d *schema.ResourceData
 		d.SetId("")
 		return nil
 	}
-
 	if err != nil {
 		return err
 	}
+	configId := res.ChannelConfigurationInfos[0]["config_id"].(string)
 
-	d.SetId(res.ChannelConfigurationInfos[0]["config_id"].(string))
+	log.Printf("[DEBUG] Config ID from API: %v", configId)
 
-	channelConfigurationJson, err := json.Marshal(res.ChannelConfigurationInfos[0])
-	if err != nil {
+	if err := d.Set("config_id", configId); err != nil {
 		return err
+	  }
+
+	if _, ok := openDistroChannelConfigurationSchema["body"]; ok {
+		json, err := json.Marshal(res.ChannelConfigurationInfos[0])
+		if err != nil {
+			return err
+		}
+		if err := d.Set("body", json); err != nil {
+			return err
+		  }
 	}
-	channelConfigurationJsonNormalized, err := structure.NormalizeJsonString(string(channelConfigurationJson))
-	if err != nil {
-		return err
-	}
+
 	err = d.Set("body", channelConfigurationJsonNormalized)
 	return err
+
 }
 
 func resourceOpensearchOpenDistroChannelConfigurationUpdate(d *schema.ResourceData, m interface{}) error {
