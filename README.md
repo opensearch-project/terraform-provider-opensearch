@@ -14,15 +14,6 @@
 ## Terraform Provider OpenSearch
 This is a terraform provider to provision OpenSearch resources.
 
-### Compatibility
-
-This provider will target compatibility with major versions of OpenSearch, each major version of this provider corresponding to the major version of OpenSearch.
-
-| OpenSearch provider version | OpenSearch 1.x     | OpenSearch 2.x     |
-| -----------                 | ---------          | ---------          |
-| 1.x                         | &check;            | &cross;            |
-| 2.x                         | &cross;            | &check;            |
-
 ### Supported Functionalities 
 
 Examples of resources can be found in the examples directory.
