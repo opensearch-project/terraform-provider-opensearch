@@ -393,38 +393,21 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		return nil, err
 	}
 
-	// Use the v7 client to ping the cluster to determine the version if one was not provided
-	if conf.osVersion == "" {
-		log.Printf("[INFO] Pinging url to determine version %+v with timeout %ds", conf.rawUrl, conf.pingTimeoutSeconds)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(conf.pingTimeoutSeconds)*time.Second)
-		defer cancel()
-		info, httpStatus, err := client.Ping(conf.rawUrl).Do(ctx)
-		if httpStatus == http.StatusForbidden {
-			return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster.")
-		} else if httpStatus == http.StatusUnauthorized {
-			return nil, errors.New("HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(conf.pingTimeoutSeconds)*time.Second)
+	defer cancel()
+	_, httpStatus, err := client.Ping(conf.rawUrl).Do(ctx)
+	if httpStatus == http.StatusForbidden {
+		return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster.")
+	} else if httpStatus == http.StatusUnauthorized {
+		return nil, errors.New("HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster")
+	}
+	if err != nil {
+		// Replace the timeout error because it gives no context
+		if os.IsTimeout(err) {
+			err = fmt.Errorf("timeout after %d seconds while pinging '%+v' to determine server version, please consider setting 'opensearch_version' to avoid this lookup", conf.pingTimeoutSeconds, conf.rawUrl)
 		}
-		if err != nil {
-			// Replace the timeout error because it gives no context
-			if os.IsTimeout(err) {
-				err = fmt.Errorf("timeout after %d seconds while pinging '%+v' to determine server version, please consider setting 'opensearch_version' to avoid this lookup", conf.pingTimeoutSeconds, conf.rawUrl)
-			}
 
-			return nil, err
-		}
-		conf.osVersion = info.Version.Number
-
-		// if upstream library exposes support for OpenSearch's distribution
-		// param, we can use that as well
-		log.Printf("[INFO] OS version %+v", info.Version)
-		switch info.Version.BuildFlavor {
-		case "default":
-			conf.flavor = Unknown
-		default:
-			conf.flavor = OpenSearch
-		}
-	} else if conf.flavor == Unknown || conf.osVersion < "1.0.0" {
-		return nil, fmt.Errorf("OpenSearch version %s is older than 1.0.0 and is not supported, flavor: %v.", conf.osVersion, conf.flavor)
+		return nil, err
 	}
 
 	return client, nil
