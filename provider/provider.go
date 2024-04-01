@@ -342,10 +342,13 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 			return nil, err
 		}
 		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
-	} else if conf.token != "" {
-		opts = append(opts, elastic7.SetHttpClient(tokenHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
 	} else if conf.insecure || conf.cacertFile != "" {
 		opts = append(opts, elastic7.SetHttpClient(tlsHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
+		if conf.token != "" {
+			opts = append(opts, elastic7.SetHttpClient(tokenHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
+		}
+	} else if conf.token != "" {
+		opts = append(opts, elastic7.SetHttpClient(tokenHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
 	} else {
 		opts = append(opts, elastic7.SetHttpClient(defaultHttpClient(conf, map[string]string{})))
 	}
