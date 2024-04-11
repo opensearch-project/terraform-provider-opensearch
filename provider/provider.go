@@ -415,7 +415,7 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		default:
 			conf.flavor = OpenSearch
 		}
-	} 
+	}
 
 	return client, nil
 }
