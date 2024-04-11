@@ -393,21 +393,34 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(conf.pingTimeoutSeconds)*time.Second)
-	defer cancel()
-	_, httpStatus, err := client.Ping(conf.rawUrl).Do(ctx)
-	if httpStatus == http.StatusForbidden {
-		return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster.")
-	} else if httpStatus == http.StatusUnauthorized {
-		return nil, errors.New("HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster")
-	}
-	if err != nil {
-		// Replace the timeout error because it gives no context
-		if os.IsTimeout(err) {
-			err = fmt.Errorf("timeout after %d seconds while pinging '%+v' to determine server version, please consider setting 'opensearch_version' to avoid this lookup", conf.pingTimeoutSeconds, conf.rawUrl)
+	if conf.osVersion == "" {
+		log.Printf("[INFO] Pinging url to determine version %+v with timeout %ds", conf.rawUrl, conf.pingTimeoutSeconds)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(conf.pingTimeoutSeconds)*time.Second)
+		defer cancel()
+		info, httpStatus, err := client.Ping(conf.rawUrl).Do(ctx)
+		if httpStatus == http.StatusForbidden {
+			return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster.")
+		} else if httpStatus == http.StatusUnauthorized {
+			return nil, errors.New("HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster")
 		}
 
-		return nil, err
+		if err != nil {
+			// Replace the timeout error because it gives no context
+			if os.IsTimeout(err) {
+				err = fmt.Errorf("timeout after %d seconds while pinging '%+v' to determine server version, please consider setting 'opensearch_version' to avoid this lookup", conf.pingTimeoutSeconds, conf.rawUrl)
+			}
+
+			return nil, err
+		}
+		conf.osVersion = info.Version.Number
+
+		log.Printf("[INFO] OS version %+v", info.Version)
+		switch info.Version.BuildFlavor {
+		case "default":
+			conf.flavor = Unknown
+		default:
+			conf.flavor = OpenSearch
+		}
 	}
 
 	return client, nil
