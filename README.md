@@ -12,6 +12,7 @@
 - [Copyright](#copyright)
 
 ## Terraform Provider OpenSearch
+
 This is a terraform provider to provision OpenSearch resources.
 
 ### Supported Functionalities 
@@ -35,7 +36,6 @@ Examples of resources can be found in the examples directory.
 - [x] [Alerting Monitors](https://opensearch.org/docs/latest/observing-your-data/alerting/monitors/)
 - [x] [Notification Channels](https://opensearch.org/docs/latest/observing-your-data/notifications/index/)
 
-
 ### Running tests locally
 
 ```sh
@@ -47,9 +47,11 @@ export OPENSEARCH_URL=http://admin:admin@localhost:9200
 export TF_LOG=INFO
 TF_ACC=1 go test ./... -v -parallel 20 -cover -short
 ```
+
 Note:  Starting from version `2.12.0`, the `admin` user password is determined by the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable. If testing against a cluster with version `2.12.0` or later and have set `OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456`, please update the URL as follows: `export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200`
 
 #### To Run Specific Test
+
 ```sh
 cd provider/
 TF_ACC=2 go test -run TestAccOpensearchOpenDistroDashboardTenant  -v -cover -short
@@ -60,7 +62,6 @@ TF_ACC=2 go test -run TestAccOpensearchOpenDistroDashboardTenant  -v -cover -sho
 ```sh
 golangci-lint run --out-format=github-actions 
 ```
-
 
 ### Debugging this provider
 
@@ -86,13 +87,16 @@ $ terraform apply
 The local provider will be used instead, and you should see debug information printed to the terminal.
 
 ## Version and Branching
+
 As of now, this terraform-provider-opensearch repository maintains 2 branches:
-* _main_ (2.x.x OpenSearch development)
-* _1.x_ (1.x.x OpenSearch development)
+
+- _main_ (2.x.x OpenSearch development)
+- _1.x_ (1.x.x OpenSearch development)
 
 Contributors should choose the corresponding branch(es) when commiting their change(s):
-* If you have a change for a specific version, only open PR to specific branch
-* If you have a change for all available versions, first open a PR on `main`, then open a backport PR with `[x]` in the title, with label `backport 1.x`, etc.
+
+- If you have a change for a specific version, only open PR to specific branch
+- If you have a change for all available versions, first open a PR on `main`, then open a backport PR with `[x]` in the title, with label `backport 1.x`, etc.
 
 ## Contributing
 
