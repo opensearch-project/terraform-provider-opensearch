@@ -84,8 +84,8 @@ func checkOpensearchClusterSettingsDestroy(s *terraform.State) error {
 
 var testAccOpensearchClusterSettings = `
 resource "opensearch_cluster_settings" "global" {
-  cluster_max_shards_per_node = 10
+  cluster_max_shards_per_node       = 10
   cluster_routing_allocation_enable = "all"
-  action_auto_create_index    = "my-index-000001,index10,-index1*,+ind*,-.aws_cold_catalog*,+*"
+  action_auto_create_index          = "my-index-000001,index10,-index1*,+ind*,-.aws_cold_catalog*,+*"
 }
 `
