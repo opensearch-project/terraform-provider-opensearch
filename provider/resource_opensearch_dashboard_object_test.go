@@ -215,7 +215,7 @@ resource "opensearch_dashboard_object" "test_visualization" {
 	      "uiStateJSON": "{}",
 	      "description": "",
 	      "version": 1,
-	      "dashboardSavedObjectMeta": {
+	      "kibanaSavedObjectMeta": {
 	        "searchSourceJSON": "{\"index\":\"filebeat-*\",\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}},\"filter\":[]}"
 	      }
 	    },
@@ -249,7 +249,7 @@ resource "opensearch_dashboard_object" "test_visualization" {
 	      "uiStateJSON": "{}",
 	      "description": "",
 	      "version": 1,
-	      "dashboardSavedObjectMeta": {
+	      "kibanaSavedObjectMeta": {
 	        "searchSourceJSON": "{\"index\":\"filebeat-*\",\"query\":{\"query_string\":{\"query\":\"*\",\"analyze_wildcard\":true}},\"filter\":[]}"
 	      }
 	    },
