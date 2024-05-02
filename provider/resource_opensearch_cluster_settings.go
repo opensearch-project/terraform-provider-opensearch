@@ -35,6 +35,7 @@ var (
 		"script.max_compilations_rate",
 		"search.default_search_timeout",
 		"action.auto_create_index",
+		"cluster.routing.allocation.enable",
 	}
 	intClusterSettings = []string{
 		"cluster.max_shards_per_node",
@@ -60,7 +61,6 @@ var (
 		"cluster.indices.close.enable",
 		"cluster.routing.allocation.disk.include_relocations",
 		"cluster.routing.allocation.disk.threshold_enabled",
-		"cluster.routing.allocation.enable",
 		"cluster.routing.allocation.same_shard.host",
 		"action.destructive_requires_name",
 	}
