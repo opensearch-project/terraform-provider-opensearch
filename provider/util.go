@@ -2,7 +2,6 @@ package provider
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"fmt"
 	"hash/crc32"
@@ -14,28 +13,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/mitchellh/go-homedir"
-	elastic7 "github.com/olivere/elastic/v7"
 )
-
-var (
-	errObjNotFound = fmt.Errorf("object not found")
-)
-
-func elastic7GetObject(client *elastic7.Client, index string, id string) (*elastic7.GetResult, error) {
-	result, err := client.Get().
-		Index(index).
-		Id(id).
-		Do(context.TODO())
-
-	if err != nil {
-		return nil, err
-	}
-	if !result.Found {
-		return nil, errObjNotFound
-	}
-
-	return result, nil
-}
 
 func normalizeChannelConfiguration(tpl map[string]interface{}) {
 	delete(tpl, "last_updated_time_ms")

@@ -1,6 +1,7 @@
 
 resource "opensearch_dashboard_object" "test_visualization_v6" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "visualization:response-time-percentile",
@@ -22,7 +23,8 @@ EOF
 
 
 resource "opensearch_dashboard_object" "test_visualization_v7" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "response-time-percentile",
@@ -42,7 +44,8 @@ EOF
 }
 
 resource "opensearch_dashboard_object" "test_index_pattern_v6" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "index-pattern:cloudwatch",
@@ -60,7 +63,8 @@ EOF
 }
 
 resource "opensearch_dashboard_object" "test_index_pattern_v7" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "index-pattern:cloudwatch",

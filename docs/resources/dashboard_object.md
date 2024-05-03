@@ -14,7 +14,8 @@ Provides an OpenSearch Dashboards object resource. This resource interacts direc
 
 ```terraform
 resource "opensearch_dashboard_object" "test_visualization_v6" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "visualization:response-time-percentile",
@@ -36,7 +37,8 @@ EOF
 
 
 resource "opensearch_dashboard_object" "test_visualization_v7" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "response-time-percentile",
@@ -56,7 +58,8 @@ EOF
 }
 
 resource "opensearch_dashboard_object" "test_index_pattern_v6" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "index-pattern:cloudwatch",
@@ -74,7 +77,8 @@ EOF
 }
 
 resource "opensearch_dashboard_object" "test_index_pattern_v7" {
-  body = <<EOF
+  tenant_name = "tenant"
+  body        = <<EOF
 [
   {
     "_id": "index-pattern:cloudwatch",
@@ -101,7 +105,8 @@ EOF
 
 ### Optional
 
-- `index` (String) The name of the index where dashboard data is stored.
+- `index` (String) The name of the index where dashboard data is stored. Does not work with tenant_name.
+- `tenant_name` (String) The name of the tenant to which dashboard data associate. Empty string defaults to global tenant.
 
 ### Read-Only
 
