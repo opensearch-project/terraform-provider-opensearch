@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -173,11 +172,11 @@ func testCheckOpensearchDashboardObjectDestroy(s *terraform.State) error {
 			Do(context.TODO())
 
 		if err != nil {
-			if elastic7.IsNotFound(err) || elastic6.IsNotFound(err) {
+			if elastic7.IsNotFound(err) {
 				return nil // should be not found error
 			}
 
-			if tenantName != "global_tenant" && (elastic7.IsForbidden(err) || elastic6.IsForbidden(err)) {
+			if tenantName != "global_tenant" && (elastic7.IsForbidden(err)) {
 				// when tenant has been destroyed this is the expected error
 				return nil
 			}

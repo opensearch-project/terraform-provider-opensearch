@@ -113,10 +113,10 @@ Example usage:
 
 ```tf
 provider "opensearch" {
-    url            = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
-    aws_access_key = "anaccesskey"
-    aws_secret_key = "asecretkey"
-    aws_token      = "" # if necessary
+  url            = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+  aws_access_key = "anaccesskey"
+  aws_secret_key = "asecretkey"
+  aws_token      = "" # if necessary
 }
 ```
 
@@ -128,11 +128,11 @@ Example usage:
 
 ```tf
 provider "opensearch" {
-    url               = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
-    username          = "ausername"
-    password          = "apassword"
-    # Must be disabled for basic auth
-    sign_aws_requests = false
+  url      = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+  username = "ausername"
+  password = "apassword"
+  # Must be disabled for basic auth
+  sign_aws_requests = false
 }
 ```
 
@@ -145,9 +145,9 @@ Example usage:
 
 ```tf
 provider "opensearch" {
-    url                         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
-    aws_assume_role_arn         = "arn:aws:iam::012345678901:role/rolename"
-    aws_assume_role_external_id = "SecretID"
+  url                         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+  aws_assume_role_arn         = "arn:aws:iam::012345678901:role/rolename"
+  aws_assume_role_external_id = "SecretID"
 }
 ```
 
@@ -169,8 +169,8 @@ You can specify a named profile that will be used for credentials (either static
 
 ```tf
 provider "opensearch" {
-    url         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
-    aws_profile = "profilename"
+  url         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+  aws_profile = "profilename"
 }
 ```
 
