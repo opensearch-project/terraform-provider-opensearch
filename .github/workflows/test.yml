@@ -8,10 +8,10 @@ jobs:
     name: Runs go linters
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-go@v3
+    - uses: actions/setup-go@v5
       with:
-        go-version: 1.17
-    - uses: actions/checkout@v3
+        go-version: 1.22.1
+    - uses: actions/checkout@v4
       with:
         # we depend on full git history for linters
         fetch-depth: 0
@@ -26,7 +26,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.18.x]
+        go-version: [1.22.1]
         os: [ubuntu-latest]
         os-major-version:
           - "2-opensearch"
@@ -50,11 +50,11 @@ jobs:
       run: |
         sudo sysctl -w vm.max_map_count=262144
     - name: Setup Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         # we depend on full git history for linters
         fetch-depth: 0
@@ -76,18 +76,21 @@ jobs:
     - name: Check Docker containers
       run: docker ps -a
     # While docker/OS is booting up, run the linters
-    - name: Get tools
-      run: |
-        ./script/install-tools
     - name: Install managed version of terraform
-      uses: hashicorp/setup-terraform@v1
+      uses: hashicorp/setup-terraform@v3
       with:
-        terraform_version: 1.0.11
+        terraform_version: 1.1.7
         terraform_wrapper: false
+    - name: Terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: false
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
     - name: Run check scripts
       run: |
         ./script/test-mod-tidy
-        ./script/test-terraform-fmt
     - name: Wait for OpenSearch
       # ensure that OS has come up and is available
       run: |
@@ -109,9 +112,9 @@ jobs:
     name: Release
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Setup Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
         go-version: 1.18.x
     - name: Import GPG key

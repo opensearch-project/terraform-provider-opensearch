@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -26,7 +25,7 @@ func TestAccOpensearchOpenSearchSecurityAuditConfig(t *testing.T) {
 		Providers: testAccOpendistroProviders,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccOpenSearchSecurityAuditConfigResource(true),
+				Config: testAccOpenSearchSecurityAuditConfigResource(),
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchSecurityAuditConfigExists("opensearch_audit_config.test"),
 					testCheckOpensearchSecurityAuditConfigConnects("opensearch_audit_config.test"),
@@ -41,7 +40,7 @@ func TestAccOpensearchOpenSearchSecurityAuditConfig(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccOpenSearchSecurityAuditConfigResourceUpdated(false),
+				Config: testAccOpenSearchSecurityAuditConfigResourceUpdated(),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("opensearch_audit_config.test", "enabled", "false"),
 					testCheckOpensearchRoleExists("opensearch_audit_config.test"),
@@ -52,10 +51,10 @@ func TestAccOpensearchOpenSearchSecurityAuditConfig(t *testing.T) {
 	})
 }
 
-func testAccOpenSearchSecurityAuditConfigResource(enabled bool) string {
-	return fmt.Sprintf(`
+func testAccOpenSearchSecurityAuditConfigResource() string {
+	return `
 resource "opensearch_audit_config" "test" {
-  enabled = %t
+  enabled = true
   audit {
     enable_rest                   = true
     disabled_rest_categories      = ["GRANTED_PRIVILEGES", "AUTHENTICATED"]
@@ -87,13 +86,13 @@ resource "opensearch_audit_config" "test" {
     write_watched_indices = ["write-index-1", "write-index-2", "log-*", "*"]
     write_ignore_users    = ["write-ignore-1"]
   }
-}`, enabled)
+}`
 }
 
-func testAccOpenSearchSecurityAuditConfigResourceUpdated(enabled bool) string {
-	return fmt.Sprintf(`
+func testAccOpenSearchSecurityAuditConfigResourceUpdated() string {
+	return `
 resource "opensearch_audit_config" "test" {
-  enabled = %t
+  enabled = false
   audit {
     enable_rest                   = true
     disabled_rest_categories      = ["GRANTED_PRIVILEGES"]
@@ -125,7 +124,8 @@ resource "opensearch_audit_config" "test" {
     write_watched_indices = ["write-index-1", "write-index-2", "log-*", "*"]
     write_ignore_users    = ["write-ignore-1"]
   }
-}`, enabled)
+}
+`
 }
 
 func testCheckOpensearchSecurityAuditConfigExists(name string) resource.TestCheckFunc {

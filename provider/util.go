@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"hash/crc32"
-	"io/ioutil"
 	"log"
 	"os"
 	"sort"
@@ -460,7 +459,7 @@ func readPathOrContent(poc string) (string, bool, error) {
 	}
 
 	if _, err := os.Stat(path); err == nil {
-		contents, err := ioutil.ReadFile(path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
 			return string(contents), true, err
 		}
