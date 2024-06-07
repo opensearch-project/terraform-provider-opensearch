@@ -27,6 +27,27 @@ func TestAccOpensearchOpenDistroRolesMapping(t *testing.T) {
 		CheckDestroy: testAccCheckOpensearchRolesMappingDestroy,
 		Steps: []resource.TestStep{
 			{
+				Config: testAccOpenDistroRoleMappingTestOnlyUser(randomName),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchRolesMappingExists("opensearch_roles_mapping.test"),
+					resource.TestCheckResourceAttr(
+						"opensearch_roles_mapping.test",
+						"id",
+						"readall",
+					),
+					resource.TestCheckResourceAttr(
+						"opensearch_roles_mapping.test",
+						"users.#",
+						"1",
+					),
+					resource.TestCheckResourceAttr(
+						"opensearch_roles_mapping.test",
+						"description",
+						randomName,
+					),
+				),
+			},
+			{
 				Config: testAccOpenDistroRolesMappingResource(randomName),
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchRolesMappingExists("opensearch_roles_mapping.test"),
@@ -125,6 +146,20 @@ resource "opensearch_roles_mapping" "test" {
   ]
 
   description = "%s update"
+}
+	`, resourceName)
+}
+
+func testAccOpenDistroRoleMappingTestOnlyUser(resourceName string) string {
+	return fmt.Sprintf(`
+resource "opensearch_roles_mapping" "test" {
+  role_name = "readall"
+  users = [
+    "admin",
+    
+  ]
+
+  description = "%s"
 }
 	`, resourceName)
 }
