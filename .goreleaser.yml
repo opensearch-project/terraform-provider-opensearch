@@ -1,8 +1,12 @@
 # Visit https://goreleaser.com for documentation on how to customize this
 # behavior.
+# Version of the configuration file
+version: 2
+
 before:
   hooks:
     - go mod tidy
+
 builds:
   - env:
       - CGO_ENABLED=0
@@ -45,4 +49,4 @@ signs:
 release:
   draft: false
 changelog:
-  skip: true
+  disable: true
