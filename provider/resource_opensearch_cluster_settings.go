@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -36,6 +35,11 @@ var (
 		"search.default_search_timeout",
 		"action.auto_create_index",
 		"cluster.routing.allocation.enable",
+		"cluster.search.request.slowlog.level",
+		"cluster.search.request.slowlog.threshold.warn",
+		"cluster.search.request.slowlog.threshold.info",
+		"cluster.search.request.slowlog.threshold.debug",
+		"cluster.search.request.slowlog.threshold.trace",
 	}
 	intClusterSettings = []string{
 		"cluster.max_shards_per_node",
@@ -64,7 +68,10 @@ var (
 		"cluster.routing.allocation.same_shard.host",
 		"action.destructive_requires_name",
 	}
-	dynamicClusterSettings = concatStringSlice(stringClusterSettings, intClusterSettings, floatClusterSettings, boolClusterSettings)
+	typeListClusterSettings = []string{
+		"cluster.routing.allocation.awareness.force.zone.values",
+	}
+	dynamicClusterSettings = concatStringSlice(stringClusterSettings, intClusterSettings, floatClusterSettings, boolClusterSettings, typeListClusterSettings)
 )
 
 func resourceOpensearchClusterSettings() *schema.Resource {
@@ -125,6 +132,14 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Optional:    true,
 				Description: "Use custom node attributes to take hardware configuration into account when allocating shards",
 			},
+			"cluster_routing_allocation_awareness_force_zone_values": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "A list of zones for awareness allocation.",
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+			},
 			"cluster_routing_allocation_balance_index": {
 				Type:        schema.TypeFloat,
 				Optional:    true,
@@ -169,6 +184,31 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "Enable or disable allocation for specific kinds of shards (all, primaries, new_primaries, none)",
+			},
+			"cluster_search_request_slowlog_level": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Log level for search requests slowlog (TRACE, DEBUG, INFO, WARN)",
+			},
+			"cluster_search_request_slowlog_threshold_warn": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Slowlog threshold for WARN level search requests (e.g., 10s)",
+			},
+			"cluster_search_request_slowlog_threshold_info": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Slowlog threshold for INFO level search requests (e.g., 5s)",
+			},
+			"cluster_search_request_slowlog_threshold_debug": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Slowlog threshold for DEBUG level search requests (e.g., 2s)",
+			},
+			"cluster_search_request_slowlog_threshold_trace": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Slowlog threshold for TRACE level search requests (e.g., 10ms)",
 			},
 			"cluster_routing_allocation_node_concurrent_incoming_recoveries": {
 				Type:        schema.TypeInt,
@@ -401,15 +441,19 @@ func clusterSettingsFromResourceData(d *schema.ResourceData) map[string]interfac
 	for _, key := range dynamicClusterSettings {
 		schemaName := strings.Replace(key, ".", "_", -1)
 		if raw, ok := d.GetOk(schemaName); ok {
-			log.Printf("[INFO] clusterSettingsFromResourceData: key:%+v schemaName:%+v value:%+v, %+v", key, schemaName, raw, settings)
-			settings[key] = raw
+			if isTypeListSetting(key) {
+				if list, ok := raw.([]interface{}); ok {
+					settings[key] = convertListToSlice(list)
+				}
+			} else {
+				settings[key] = raw
+			}
 		}
 	}
 	return settings
 }
 
 func clusterResourceDataFromSettings(settings map[string]interface{}, d *schema.ResourceData) error {
-	log.Printf("[INFO] clusterResourceDataFromSettings: %+v", settings)
 	for _, key := range dynamicClusterSettings {
 		value, ok := settings[key]
 		if !ok {
@@ -417,30 +461,49 @@ func clusterResourceDataFromSettings(settings map[string]interface{}, d *schema.
 		}
 
 		schemaName := strings.Replace(key, ".", "_", -1)
-		if containsString(intClusterSettings, key) && reflect.TypeOf(value).String() == "string" {
-			var err error
-			value, err = strconv.Atoi(value.(string))
-			if err != nil {
-				return err
+		if isTypeListSetting(key) {
+			if list, ok := value.([]interface{}); ok {
+				if err := d.Set(schemaName, list); err != nil {
+					return fmt.Errorf("error setting %s: %s", schemaName, err)
+				}
 			}
-		} else if containsString(floatClusterSettings, key) && reflect.TypeOf(value).String() == "string" {
+		} else {
 			var err error
-			value, err = strconv.ParseFloat(value.(string), 64)
-			if err != nil {
-				return err
+			if containsString(intClusterSettings, key) && reflect.TypeOf(value).String() == "string" {
+				value, err = strconv.Atoi(value.(string))
+				if err != nil {
+					return fmt.Errorf("error converting %s to int: %s", key, err)
+				}
+			} else if containsString(floatClusterSettings, key) && reflect.TypeOf(value).String() == "string" {
+				value, err = strconv.ParseFloat(value.(string), 64)
+				if err != nil {
+					return fmt.Errorf("error converting %s to float: %s", key, err)
+				}
+			} else if containsString(boolClusterSettings, key) && reflect.TypeOf(value).String() == "string" {
+				value, err = strconv.ParseBool(value.(string))
+				if err != nil {
+					return fmt.Errorf("error converting %s to bool: %s", key, err)
+				}
 			}
-		} else if containsString(boolClusterSettings, key) && reflect.TypeOf(value).String() == "string" {
-			var err error
-			value, err = strconv.ParseBool(value.(string))
-			if err != nil {
-				return err
+
+			if err := d.Set(schemaName, value); err != nil {
+				return fmt.Errorf("error setting %s: %s", schemaName, err)
 			}
-		}
-		err := d.Set(schemaName, value)
-		if err != nil {
-			log.Printf("[ERROR] clusterResourceDataFromSettings: %+v", err)
-			return err
 		}
 	}
 	return nil
+}
+
+func isTypeListSetting(key string) bool {
+	return containsString(typeListClusterSettings, key)
+}
+
+func convertListToSlice(list []interface{}) []string {
+	var slice []string
+	for _, item := range list {
+		if str, ok := item.(string); ok {
+			slice = append(slice, str)
+		}
+	}
+	return slice
 }
