@@ -37,6 +37,7 @@ resource "opensearch_cluster_settings" "global" {
 - `cluster_persistent_tasks_allocation_recheck_interval` (String) A time string controling how often assignment checks are performed to react to whether persistent tasks can be assigned to nodes
 - `cluster_routing_allocation_allow_rebalance` (String) Specify when shard rebalancing is allowed (always, indices_primaries_active, indices_all_active)
 - `cluster_routing_allocation_awareness_attributes` (String) Use custom node attributes to take hardware configuration into account when allocating shards
+- `cluster_routing_allocation_awareness_force_zone_values` (List of String) A list of zones for awareness allocation.
 - `cluster_routing_allocation_balance_index` (Number) Weight factor for the number of shards per index allocated on a node, increasing this raises the tendency to equalize the number of shards per index across all nodes
 - `cluster_routing_allocation_balance_shard` (Number) Weight factor for the total number of shards allocated on a node, increasing this raises the tendency to equalize the number of shards across all nodes
 - `cluster_routing_allocation_balance_threshold` (Number) Minimal optimization value of operations that should be performed, raising this will cause the cluster to be less aggressive about optimizing the shard balance
@@ -53,6 +54,11 @@ resource "opensearch_cluster_settings" "global" {
 - `cluster_routing_allocation_same_shard_host` (Boolean) Perform a check to prevent allocation of multiple instances of the same shard on a single host, if multiple nodes are started on the host
 - `cluster_routing_allocation_total_shards_per_node` (Number) Maximum number of primary and replica shards allocated to each node
 - `cluster_routing_rebalance_enable` (String) Allow rebalancing for specific kinds of shards (all, primaries, replicas, none)
+- `cluster_search_request_slowlog_level` (String) Log level for search requests slowlog (TRACE, DEBUG, INFO, WARN)
+- `cluster_search_request_slowlog_threshold_debug` (String) Slowlog threshold for DEBUG level search requests (e.g., 2s)
+- `cluster_search_request_slowlog_threshold_info` (String) Slowlog threshold for INFO level search requests (e.g., 5s)
+- `cluster_search_request_slowlog_threshold_trace` (String) Slowlog threshold for TRACE level search requests (e.g., 10ms)
+- `cluster_search_request_slowlog_threshold_warn` (String) Slowlog threshold for WARN level search requests (e.g., 10s)
 - `indices_breaker_fielddata_limit` (String) The percentage of memory above which if loading a field into the field data cache would cause the cache to exceed this limit, an error is returned
 - `indices_breaker_fielddata_overhead` (Number) A constant that all field data estimations are multiplied by
 - `indices_breaker_request_limit` (String) The percentabge of memory above which per-request data structures (e.g. calculating aggregations) are prevented from exceeding
@@ -67,3 +73,5 @@ resource "opensearch_cluster_settings" "global" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+
+

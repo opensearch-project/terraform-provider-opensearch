@@ -39,3 +39,5 @@ resource "opensearch_data_stream" "foo" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+
+
