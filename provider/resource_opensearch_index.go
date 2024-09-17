@@ -378,7 +378,6 @@ var (
 			Optional:    true,
 			// In order to not handle the separate endpoint of alias updates, updates
 			// are not allowed via this provider currently.
-			ForceNew:     true,
 			ValidateFunc: validation.StringIsJSON,
 		},
 		"analysis_analyzer": {
@@ -666,6 +665,21 @@ func resourceOpensearchIndexUpdate(d *schema.ResourceData, meta interface{}) err
 		}
 	}
 
+	// Check for alias changes
+	if d.HasChange("aliases") {
+		oldAliases, newAliases := d.GetChange("aliases")
+
+		// Convert the alias JSON strings to maps
+		var oldAliasesMap, newAliasesMap map[string]interface{}
+		_ = json.Unmarshal([]byte(oldAliases.(string)), &oldAliasesMap)
+		_ = json.Unmarshal([]byte(newAliases.(string)), &newAliasesMap)
+
+		// Update the aliases using OpenSearch API
+		if err := updateAliases(d.Id(), oldAliasesMap, newAliasesMap, meta); err != nil {
+			return fmt.Errorf("error updating aliases: %v", err)
+		}
+	}
+
 	// if we're not changing any settings, no-op this function
 	if len(settings) == 0 {
 		return resourceOpensearchIndexRead(d, meta)
@@ -827,6 +841,48 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func updateAliases(index string, oldAliases, newAliases map[string]interface{}, meta interface{}) error {
+	ctx := context.Background()
+
+	osClient, err := getClient(meta.(*ProviderConf))
+	if err != nil {
+		return err
+	}
+
+	// Remove old aliases that are not present in the new aliases
+	for aliasName := range oldAliases {
+		if _, exists := newAliases[aliasName]; !exists {
+			aliasDeletePath := fmt.Sprintf("/%s/_alias/%s", index, aliasName)
+
+			_, err := osClient.PerformRequest(ctx, elastic7.PerformRequestOptions{
+				Method: "DELETE",
+				Path:   aliasDeletePath,
+			})
+
+			if err != nil {
+				return fmt.Errorf("error removing alias %s: %v", aliasName, err)
+			}
+		}
+	}
+
+	// Add or update new aliases
+	for aliasName, aliasConfig := range newAliases {
+		aliasUpdatePath := fmt.Sprintf("/%s/_alias/%s", index, aliasName)
+
+		_, err := osClient.PerformRequest(ctx, elastic7.PerformRequestOptions{
+			Method: "PUT",
+			Path:   aliasUpdatePath,
+			Body:   aliasConfig,
+		})
+
+		if err != nil {
+			return fmt.Errorf("error adding/updating alias %s: %v", aliasName, err)
+		}
 	}
 
 	return nil

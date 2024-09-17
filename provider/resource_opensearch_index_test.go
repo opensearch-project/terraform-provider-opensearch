@@ -639,3 +639,152 @@ func checkOpensearchIndexDestroy(s *terraform.State) error {
 
 	return nil
 }
+
+const testAccOpensearchIndexWithAlias = `
+resource "opensearch_index" "test" {
+  name               = "terraform-test-with-alias"
+  number_of_shards   = 1
+  number_of_replicas = 1
+  aliases = jsonencode({
+    "alias1" = {
+      "is_write_index" = false
+    }
+  })
+}
+`
+
+func TestAccOpensearchIndexWithAlias(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexWithAlias,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test"),
+					checkOpensearchAliasExists("terraform-test-with-alias", "alias1"),
+				),
+			},
+		},
+	})
+}
+
+func checkOpensearchAliasExists(indexName, aliasName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		osClient, err := getClient(testAccProvider.Meta().(*ProviderConf))
+		if err != nil {
+			return err
+		}
+
+		// Check if the alias exists for the index
+		aliases, err := osClient.CatAliases().Alias(aliasName).Do(context.TODO())
+		if err != nil {
+			return err
+		}
+
+		if len(aliases) == 0 {
+			return fmt.Errorf("alias %q not found for index %q", aliasName, indexName)
+		}
+
+		return nil
+	}
+}
+
+const testAccOpensearchIndexUpdateAlias = `
+resource "opensearch_index" "test" {
+  name               = "terraform-test-update-alias"
+  number_of_shards   = 1
+  number_of_replicas = 1
+  aliases = jsonencode({
+    "alias1" = {
+      "is_write_index" = false
+    }
+  })
+}
+`
+
+const testAccOpensearchIndexUpdatedAlias = `
+resource "opensearch_index" "test" {
+  name               = "terraform-test-update-alias"
+  number_of_shards   = 1
+  number_of_replicas = 1
+  aliases = jsonencode({
+    "alias2" = {
+      "is_write_index" = true
+    }
+  })
+}
+`
+
+func TestAccOpensearchIndexUpdateAlias(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexUpdateAlias,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test"),
+					checkOpensearchAliasExists("terraform-test-update-alias", "alias1"),
+				),
+			},
+			{
+				Config: testAccOpensearchIndexUpdatedAlias,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test"),
+					checkOpensearchAliasExists("terraform-test-update-alias", "alias2"),
+				),
+			},
+		},
+	})
+}
+func TestAccOpensearchIndexWithAliasAndDelete(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchAliasDeleted("terraform-test-with-alias", "alias1"),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexWithAlias,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test"),
+					checkOpensearchAliasExists("terraform-test-with-alias", "alias1"),
+				),
+			},
+			{
+				ResourceName:      "opensearch_index.test",
+				ImportState:       true,
+				ImportStateId:     "terraform-test-with-alias",
+				ImportStateVerify: true,
+				Destroy:           true,
+				ImportStateVerifyIgnore: []string{
+					"aliases",       // not handled by this provider
+					"force_destroy", // not returned from the API
+				},
+			},
+		},
+	})
+}
+
+func checkOpensearchAliasDeleted(indexName, aliasName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		osClient, err := getClient(testAccProvider.Meta().(*ProviderConf))
+		if err != nil {
+			return err
+		}
+
+		// Check if the alias no longer exists for the index
+		aliases, err := osClient.CatAliases().Alias(aliasName).Do(context.TODO())
+		if err != nil {
+			return err
+		}
+
+		if len(aliases) > 0 {
+			return fmt.Errorf("alias %q still exists for index %q", aliasName, indexName)
+		}
+
+		return nil
+	}
+}
