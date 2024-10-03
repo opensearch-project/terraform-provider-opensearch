@@ -19,7 +19,6 @@ import (
 	awsstscreds "github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	awssession "github.com/aws/aws-sdk-go/aws/session"
 	awssigv4 "github.com/aws/aws-sdk-go/aws/signer/v4"
-	awssts "github.com/aws/aws-sdk-go/service/sts"
 	"github.com/deoxxa/aws_signing_client"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -433,17 +432,12 @@ func assumeRoleCredentials(region, roleARN, roleExternalID, profile string, endp
 	}
 
 	sess := awssession.Must(awssession.NewSessionWithOptions(sessOpts))
-	stsClient := awssts.New(sess)
-	assumeRoleProvider := &awsstscreds.AssumeRoleProvider{
-		Client:  stsClient,
-		RoleARN: roleARN,
-	}
 
-	if roleExternalID != "" {
-		assumeRoleProvider.ExternalID = aws.String(roleExternalID)
-	}
-
-	return awscredentials.NewChainCredentials([]awscredentials.Provider{assumeRoleProvider})
+	return awsstscreds.NewCredentials(sess, roleARN, func(p *awsstscreds.AssumeRoleProvider) {
+		if roleExternalID != "" {
+			p.ExternalID = aws.String(roleExternalID)
+		}
+	})
 }
 
 func awsSessionOptions(region string, endpoint string) awssession.Options {
