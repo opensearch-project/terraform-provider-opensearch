@@ -37,9 +37,11 @@ const (
 	Default = 2
 )
 
-var awsUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).es.amazonaws.com$`)
-var awsOpensearchServerlessUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).aoss.amazonaws.com$`)
-var minimalOpensearchServerlessVersion = "2.0.0"
+var (
+	awsUrlRegexp                       = regexp.MustCompile(`([a-z0-9-]+).es.amazonaws.com$`)
+	awsOpensearchServerlessUrlRegexp   = regexp.MustCompile(`([a-z0-9-]+).aoss.amazonaws.com$`)
+	minimalOpensearchServerlessVersion = "2.0.0"
+)
 
 type ProviderConf struct {
 	rawUrl                  string
@@ -487,7 +489,9 @@ func awsSession(region string, conf *ProviderConf, endpoint string) *awssession.
 		sessOpts.Profile = conf.awsProfile
 	}
 
-	transport := http.Transport{}
+	transport := http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+	}
 	// If configured as insecure, turn off SSL verification
 	if conf.insecure {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
@@ -514,12 +518,13 @@ func awsHttpClient(region string, conf *ProviderConf, headers map[string]string)
 	// Set the proxy URL after configuring AWS credentials since the proxy
 	// should be not used for credential sources that call a URL like ECS Task
 	// Roles or EC2 Instance Roles.
+	transport, _ := session.Config.HTTPClient.Transport.(*http.Transport)
+	transport.Proxy = http.ProxyFromEnvironment
 	if conf.proxy != "" {
 		proxyURL, _ := url.Parse(conf.proxy)
-		transport, _ := session.Config.HTTPClient.Transport.(*http.Transport)
 		transport.Proxy = http.ProxyURL(proxyURL)
-		session.Config.HTTPClient.Transport = transport
 	}
+	session.Config.HTTPClient.Transport = transport
 
 	signer := awssigv4.NewSigner(session.Config.Credentials)
 	client, err := aws_signing_client.New(signer, session.Config.HTTPClient, conf.awsSig4Service, region)
@@ -547,7 +552,10 @@ func tokenHttpClient(conf *ProviderConf, headers map[string]string) *http.Client
 	}
 
 	// Wrapper to inject headers as needed
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+		Proxy:           http.ProxyFromEnvironment,
+	}
 	// Configure a proxy URL if one is provided.
 	if conf.proxy != "" {
 		proxyURL, _ := url.Parse(conf.proxy)
@@ -601,7 +609,10 @@ func tlsHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
 		tlsConfig.ServerName = conf.hostOverride
 	}
 
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+		Proxy:           http.ProxyFromEnvironment,
+	}
 	// Configure a proxy URL if one is provided.
 	if conf.proxy != "" {
 		proxyURL, _ := url.Parse(conf.proxy)
@@ -628,7 +639,10 @@ func defaultHttpClient(conf *ProviderConf, headers map[string]string) *http.Clie
 		tlsConfig.ServerName = conf.hostOverride
 	}
 
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+		Proxy:           http.ProxyFromEnvironment,
+	}
 	// Configure a proxy URL if one is provided.
 	if conf.proxy != "" {
 		proxyURL, _ := url.Parse(conf.proxy)
