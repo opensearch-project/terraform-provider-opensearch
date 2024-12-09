@@ -263,6 +263,52 @@ resource "opensearch_index" "test" {
   depends_on = [opensearch_index_template.test]
 }
 `
+	testAccOpensearchIndexImportAnalysis = `
+resource "opensearch_index" "test_import_analysis" {
+  name               = "terraform-test-import-analysis"
+  number_of_shards   = 1
+  number_of_replicas = 1
+
+  analysis_analyzer = jsonencode({
+    custom_analyzer = {
+      type      = "custom"
+      tokenizer = "standard"
+      filter    = ["lowercase", "asciifolding"]
+    }
+  })
+
+  analysis_filter = jsonencode({
+    my_shingle_filter = {
+      type             = "shingle"
+      max_shingle_size = 2
+      min_shingle_size = 2
+      output_unigrams  = false
+    }
+  })
+
+  analysis_tokenizer = jsonencode({
+    my_ngram_tokenizer = {
+      type     = "ngram"
+      min_gram = "3"
+      max_gram = "4"
+    }
+  })
+
+  analysis_char_filter = jsonencode({
+    my_char_filter_apostrophe = {
+      type     = "mapping"
+      mappings = ["'=>"]
+    }
+  })
+
+  analysis_normalizer = jsonencode({
+    my_normalizer = {
+      type   = "custom"
+      filter = ["lowercase", "asciifolding"]
+    }
+  })
+}
+`
 )
 
 func TestAccOpensearchIndex(t *testing.T) {
@@ -787,4 +833,45 @@ func checkOpensearchAliasDeleted(indexName, aliasName string) resource.TestCheck
 
 		return nil
 	}
+}
+
+func TestAccOpensearchIndex_importAnalysis(t *testing.T) {
+	resourceName := "opensearch_index.test_import_analysis"
+	indexName := "terraform-test-import-analysis"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create the index with analysis fields
+			{
+				Config: testAccOpensearchIndexImportAnalysis,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists(resourceName),
+				),
+			},
+			// Step 2: Import the index
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateId:     indexName,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy",
+				},
+			},
+			// Step 3: Re-run the same config and ensure no diffs appear
+			{
+				Config: testAccOpensearchIndexImportAnalysis,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "analysis_analyzer", `{"custom_analyzer":{"filter":["lowercase","asciifolding"],"tokenizer":"standard","type":"custom"}}`),
+					resource.TestCheckResourceAttr(resourceName, "analysis_filter", `{"my_shingle_filter":{"max_shingle_size":"2","min_shingle_size":"2","output_unigrams":false,"type":"shingle"}}`),
+					resource.TestCheckResourceAttr(resourceName, "analysis_tokenizer", `{"my_ngram_tokenizer":{"max_gram":"4","min_gram":"3","type":"ngram"}}`),
+					resource.TestCheckResourceAttr(resourceName, "analysis_char_filter", `{"my_char_filter_apostrophe":{"mappings":["'=>"],"type":"mapping"}}`),
+					resource.TestCheckResourceAttr(resourceName, "analysis_normalizer", `{"my_normalizer":{"filter":["lowercase","asciifolding"],"type":"custom"}}`),
+				),
+			},
+		},
+	})
 }
