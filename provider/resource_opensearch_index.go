@@ -802,6 +802,53 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 
 	indexResourceDataFromSettings(settings, d)
 
+	// Reconstruct analysis fields from flattened keys
+	analysisData := map[string]map[string]interface{}{
+		"analyzer":     {},
+		"tokenizer":    {},
+		"filter":       {},
+		"char_filter":  {},
+		"normalizer":   {},
+	}
+
+	for key, value := range settings {
+		if strings.HasPrefix(key, "index.analysis.") {
+			parts := strings.Split(strings.TrimPrefix(key, "index.analysis."), ".")
+			if len(parts) < 2 {
+				continue
+			}
+
+			category := parts[0] // should be one of analyzer, tokenizer, filter, char_filter, normalizer
+			if _, ok := analysisData[category]; !ok {
+				continue
+			}
+
+			subkeys := parts[1:]
+			insertIntoNestedMap(analysisData[category], subkeys, value)
+		}
+	}
+
+	if len(analysisData["analyzer"]) > 0 {
+		analyzerJSON, _ := json.Marshal(analysisData["analyzer"])
+		d.Set("analysis_analyzer", string(analyzerJSON))
+	}
+	if len(analysisData["tokenizer"]) > 0 {
+		tokenizerJSON, _ := json.Marshal(analysisData["tokenizer"])
+		d.Set("analysis_tokenizer", string(tokenizerJSON))
+	}
+	if len(analysisData["filter"]) > 0 {
+		filterJSON, _ := json.Marshal(analysisData["filter"])
+		d.Set("analysis_filter", string(filterJSON))
+	}
+	if len(analysisData["char_filter"]) > 0 {
+		charFilterJSON, _ := json.Marshal(analysisData["char_filter"])
+		d.Set("analysis_char_filter", string(charFilterJSON))
+	}
+	if len(analysisData["normalizer"]) > 0 {
+		normalizerJSON, _ := json.Marshal(analysisData["normalizer"])
+		d.Set("analysis_normalizer", string(normalizerJSON))
+	}
+
 	var response *json.RawMessage
 	var res *elastic7.Response
 	var mappingsResponse map[string]interface{}
@@ -844,6 +891,19 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 	}
 
 	return nil
+}
+
+// This is used to rebuild nested analysis configuration (analyzers, tokenizers, filters, char_filters, normalizers)
+// from the flattened `index.analysis.*` keys returned by OpenSearch on import.
+func insertIntoNestedMap(m map[string]interface{}, keys []string, value interface{}) {
+	if len(keys) == 1 {
+		m[keys[0]] = value
+		return
+	}
+	if _, ok := m[keys[0]].(map[string]interface{}); !ok {
+		m[keys[0]] = map[string]interface{}{}
+	}
+	insertIntoNestedMap(m[keys[0]].(map[string]interface{}), keys[1:], value)
 }
 
 func updateAliases(index string, oldAliases, newAliases map[string]interface{}, meta interface{}) error {
