@@ -165,6 +165,42 @@ resource "opensearch_index" "test_mappings_whitespace_stability" {
 EOF
 }
 `
+	testAccOpensearchMappingFunctionallyEquivalent1 = `
+resource "opensearch_index" "test_functionally_equivalent_mappings" {
+  name               = "terraform-test"
+  number_of_replicas = "1"
+  mappings = <<EOF
+{
+  "properties" : {
+    "foo" : {
+      "type" : "text"
+    },
+    "bar" : {
+      "type" : "text"
+    }
+  }
+}
+EOF
+}
+`
+	testAccOpensearchMappingFunctionallyEquivalent2 = `
+resource "opensearch_index" "test_functionally_equivalent_mappings" {
+  name               = "terraform-test"
+  number_of_replicas = "1"
+  mappings = <<EOF
+{
+  "properties" : {
+    "bar" : {
+      "type" : "text"
+    },
+    "foo" : {
+      "type" : "text"
+    }
+  }
+}
+EOF
+}
+`
 	testAccOpensearchIndexUpdateForceDestroy = `
 resource "opensearch_index" "test" {
   name               = "terraform-test"
@@ -564,6 +600,27 @@ func TestAccOpensearchIndex_mappingsWhitespaceStability(t *testing.T) {
 			},
 			{
 				Config:             config,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
+		},
+	})
+}
+
+func TestAccOpensearchIndex_functionallyEquivalentMappings(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchMappingFunctionallyEquivalent1,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_functionally_equivalent_mappings"),
+				),
+			},
+			{
+				Config:             testAccOpensearchMappingFunctionallyEquivalent2,
 				PlanOnly:           true,
 				ExpectNonEmptyPlan: false,
 			},
