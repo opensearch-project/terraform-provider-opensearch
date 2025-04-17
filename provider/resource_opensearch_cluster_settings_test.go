@@ -2,7 +2,6 @@ package provider
 
 import (
 	"fmt"
-	"log"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -11,9 +10,8 @@ import (
 
 func TestAccOpensearchClusterSettings(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		PreCheck:  func() { testAccPreCheck(t) },
+		Providers: testAccProviders,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchClusterSettings,
@@ -28,9 +26,8 @@ func TestAccOpensearchClusterSettings(t *testing.T) {
 
 func TestAccOpensearchClusterSettingsSlowLogs(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		PreCheck:  func() { testAccPreCheck(t) },
+		Providers: testAccProviders,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchClusterSettingsSlowLog,
@@ -45,9 +42,8 @@ func TestAccOpensearchClusterSettingsSlowLogs(t *testing.T) {
 
 func TestAccOpensearchClusterSettingsTypeList(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		PreCheck:  func() { testAccPreCheck(t) },
+		Providers: testAccProviders,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchClusterSettingsTypeList,
@@ -90,30 +86,6 @@ func testCheckOpensearchClusterSettingExists(name string) resource.TestCheckFunc
 
 		return nil
 	}
-}
-
-func checkOpensearchClusterSettingsDestroy(s *terraform.State) error {
-	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "opensearch_cluster_settings" {
-			continue
-		}
-
-		meta := testAccProvider.Meta()
-		settings, err := resourceOpensearchClusterSettingsGet(meta)
-		if err != nil {
-			return err
-		}
-
-		persistentSettings := settings["persistent"].(map[string]interface{})
-		if len(persistentSettings) != 0 {
-			log.Printf("[INFO] checkOpensearchClusterSettingsDestroy: %+v", persistentSettings)
-			return fmt.Errorf("%d cluster settings still exist", len(persistentSettings))
-		}
-
-		return nil
-	}
-
-	return nil
 }
 
 var testAccOpensearchClusterSettings = `

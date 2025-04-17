@@ -369,13 +369,8 @@ func resourceOpensearchClusterSettingsUpdate(d *schema.ResourceData, meta interf
 }
 
 func resourceOpensearchClusterSettingsDelete(d *schema.ResourceData, meta interface{}) error {
-	err := clearAllSettings(meta)
-	if err != nil {
-		return err
-	}
-
 	d.SetId("")
-	return err
+	return nil
 }
 
 func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interface{}, error) {
@@ -403,37 +398,6 @@ func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interfac
 	}
 
 	return settings, err
-}
-
-func clearAllSettings(meta interface{}) error {
-	var err error
-
-	osClient, err := getClient(meta.(*ProviderConf))
-	if err != nil {
-		return err
-	}
-	body := `{
-		"persistent" : {
-			"cluster.*": null,
-			"indices.*": null,
-			"action.*": null,
-			"script.*": null,
-			"network.*": null,
-			"search.*": null,
-			"plugins.*": null
-		}
-	  }`
-
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   "/_cluster/settings",
-		Body:   body,
-	})
-	if err != nil {
-		return err
-	}
-
-	return err
 }
 
 func clusterSettingsFromResourceData(d *schema.ResourceData) map[string]interface{} {
