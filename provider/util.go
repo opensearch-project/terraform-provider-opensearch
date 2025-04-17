@@ -3,10 +3,12 @@ package provider
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"log"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -178,6 +180,17 @@ func containsString(h []string, n string) bool {
 		}
 	}
 	return false
+}
+
+func functionallyEquivalentJSON(j1, j2 string) bool {
+	var unmarshaled1, unmarshaled2 map[string]interface{}
+	if err := json.Unmarshal([]byte(j1), &unmarshaled1); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(j2), &unmarshaled2); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(unmarshaled1, unmarshaled2)
 }
 
 // Takes the result of flatmap.Expand for an array of strings
