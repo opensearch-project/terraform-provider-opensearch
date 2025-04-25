@@ -118,6 +118,7 @@ func checkOpensearchClusterSettingsDestroy(s *terraform.State) error {
 
 var testAccOpensearchClusterSettings = `
 resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete          = true
   cluster_max_shards_per_node       = 10
   cluster_routing_allocation_enable = "all"
   action_auto_create_index          = "my-index-000001,index10,-index1*,+ind*,-.aws_cold_catalog*,+*"
@@ -126,12 +127,15 @@ resource "opensearch_cluster_settings" "global" {
 
 var testAccOpensearchClusterSettingsSlowLog = `
 resource "opensearch_cluster_settings" "global" {
-  cluster_search_request_slowlog_level       = "WARN"
+  reset_settings_on_delete                      = true
+  cluster_search_request_slowlog_level          = "WARN"
   cluster_search_request_slowlog_threshold_warn = "10s"
 }
 `
+
 var testAccOpensearchClusterSettingsTypeList = `
 resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete                               = true
   cluster_routing_allocation_awareness_force_zone_values = ["zone1", "zone2", "zone3"]
 }
 `
