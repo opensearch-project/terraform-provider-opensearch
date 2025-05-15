@@ -67,11 +67,10 @@ resource "opensearch_cluster_settings" "global" {
 - `indices_recovery_max_bytes_per_sec` (String) Maximum total inbound and outbound recovery traffic for each node, in mb
 - `network_breaker_inflight_requests_limit` (String) The percentage limit of memory usage on a node of all currently active incoming requests on transport or HTTP level
 - `network_breaker_inflight_requests_overhead` (Number) A constant that all in flight requests estimations are multiplied by
+- `reset_settings_on_delete` (Boolean) If true, cluster settings will be reset to defaults when this resource is deleted
 - `script_max_compilations_rate` (String) Limit for the number of unique dynamic scripts within a certain interval that are allowed to be compiled, expressed as compilations divided by a time string
 - `search_default_search_timeout` (String) A time string setting a cluster-wide default timeout for all search requests
 
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-
-
