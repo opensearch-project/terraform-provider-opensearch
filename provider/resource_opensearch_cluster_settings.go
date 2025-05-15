@@ -290,6 +290,12 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Optional:    true,
 				Description: "A constant that all in flight requests estimations are multiplied by",
 			},
+			"reset_settings_on_delete": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "If true, cluster settings will be reset to defaults when this resource is deleted",
+			},
 			"script_max_compilations_rate": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -369,13 +375,15 @@ func resourceOpensearchClusterSettingsUpdate(d *schema.ResourceData, meta interf
 }
 
 func resourceOpensearchClusterSettingsDelete(d *schema.ResourceData, meta interface{}) error {
-	err := clearAllSettings(meta)
-	if err != nil {
-		return err
+	if d.Get("reset_settings_on_delete").(bool) {
+		err := clearAllSettings(meta)
+		if err != nil {
+			return err
+		}
 	}
 
 	d.SetId("")
-	return err
+	return nil
 }
 
 func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interface{}, error) {
