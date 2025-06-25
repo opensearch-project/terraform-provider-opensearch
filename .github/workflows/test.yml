@@ -117,12 +117,25 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: 1.22.1
+    - name: Load secret
+      uses: 1password/load-secrets-action@v2
+      with:
+        # Export loaded secrets as environment variables
+        export-env: true
+      env:
+        OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+        GPG_PRIVATE_KEY: op://opensearch-infra-secrets/release-gpg-key/signing-subkey-private
+        GPG_PASSPHRASE: op://opensearch-infra-secrets/release-gpg-key/passphrase
+        GPG_FINGERPRINT: op://opensearch-infra-secrets/release-gpg-key/signing-subkey-fingerprint
+
     - name: Import GPG key
       id: import_gpg
       uses: crazy-max/ghaction-import-gpg@v6
       with:
-        gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-        passphrase: ${{ secrets.GPG_PASSPHRASE }}
+        gpg_private_key: ${{ env.GPG_PRIVATE_KEY }}
+        passphrase: ${{ env.GPG_PASSPHRASE }}
+        fingerprint: ${{ env.GPG_FINGERPRINT }}
+        
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v6
       with:
