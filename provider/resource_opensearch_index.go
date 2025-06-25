@@ -371,6 +371,9 @@ var (
 			Optional:     true,
 			ForceNew:     true,
 			ValidateFunc: validation.StringIsJSON,
+			DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+				return functionallyEquivalentJSON(old, new)
+			},
 		},
 		"aliases": {
 			Type:        schema.TypeString,
