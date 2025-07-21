@@ -805,28 +805,24 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 
 	indexResourceDataFromSettings(settings, d)
 
-	var response *json.RawMessage
-	var res *elastic7.Response
-	var mappingsResponse map[string]interface{}
-	path, err := uritemplates.Expand("/{index}/_mapping", map[string]string{
-		"index": index,
-	})
+	aliasesResponse, err := getIndexSubResource(osClient, index, "_alias")
 	if err != nil {
 		return err
 	}
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
+
+	aliasesString, err := json.Marshal(aliasesResponse[index].(map[string]interface{})["aliases"])
+	if err != nil {
+		return fmt.Errorf("fail to marshal: %v", err)
+	}
+
+	err = d.Set("aliases", string(aliasesString))
 	if err != nil {
 		return err
 	}
-	response = &res.Body
 
-	err = json.Unmarshal(*response, &mappingsResponse)
-
+	mappingsResponse, err := getIndexSubResource(osClient, index, "_mappings")
 	if err != nil {
-		return fmt.Errorf("fail to unmarshal: %v", err)
+		return err
 	}
 
 	lenMappings := len(mappingsResponse[index].(map[string]interface{})["mappings"].(map[string]interface{}))
@@ -835,18 +831,44 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 		return nil
 	}
 
-	jsonString, err := json.Marshal(mappingsResponse[index].(map[string]interface{})["mappings"])
+	mappingsString, err := json.Marshal(mappingsResponse[index].(map[string]interface{})["mappings"])
 	if err != nil {
 		return fmt.Errorf("fail to marshal: %v", err)
 	}
 
-	err = d.Set("mappings", string(jsonString))
-
+	err = d.Set("mappings", string(mappingsString))
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func getIndexSubResource(osClient *elastic7.Client, index string, subResource string) (map[string]interface{}, error) {
+	var response *elastic7.Response
+	var responseMap map[string]interface{}
+
+	path, err := uritemplates.Expand("/{index}/{subResource}", map[string]string{
+		"index":       index,
+		"subResource": subResource,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	response, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "GET",
+		Path:   path,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if json.Unmarshal(response.Body, &responseMap) != nil {
+		return nil, fmt.Errorf("fail to unmarshal: %v", err)
+	}
+
+	return responseMap, nil
 }
 
 func updateAliases(index string, oldAliases, newAliases map[string]interface{}, meta interface{}) error {
