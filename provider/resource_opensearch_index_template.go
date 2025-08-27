@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	elastic7 "github.com/olivere/elastic/v7"
 	elastic6 "gopkg.in/olivere/elastic.v6"
 )
+
+var maximumOSTemplateVersion, _ = version.NewVersion("2.0.0")
 
 func resourceOpensearchIndexTemplate() *schema.Resource {
 	return &schema.Resource{
@@ -53,10 +56,12 @@ func resourceOpensearchIndexTemplateRead(d *schema.ResourceData, meta interface{
 
 	var result string
 	var err error
+
 	osClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
+
 	result, err = elastic7IndexGetTemplate(osClient, id)
 	if err != nil {
 		if elastic7.IsNotFound(err) || elastic6.IsNotFound(err) {
@@ -122,17 +127,31 @@ func resourceOpensearchPutIndexTemplate(d *schema.ResourceData, meta interface{}
 	body := d.Get("body").(string)
 
 	var err error
+	var openSearchVersion *version.Version
+
+	providerConf := meta.(*ProviderConf)
 	osClient, err := getClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	err = elastic7IndexPutTemplate(osClient, name, body, create)
+
+	openSearchVersion, err = version.NewVersion(providerConf.osVersion)
+	if err == nil {
+		err = elastic7IndexPutTemplate(openSearchVersion, osClient, name, body, create)
+	}
 
 	return err
 }
 
-func elastic7IndexPutTemplate(client *elastic7.Client, name string, body string, create bool) error {
-	_, err := client.IndexPutIndexTemplate(name).BodyString(body).Create(create).Do(context.TODO())
+func elastic7IndexPutTemplate(openSearchVersion *version.Version, client *elastic7.Client, name string, body string, create bool) error {
+	var err error
+
+	// making use of _template endpoint (legacy index templates) for older opensearch versions (< 2.0.0)
+	if openSearchVersion.LessThan(maximumOSTemplateVersion) {
+		_, err = client.IndexPutTemplate(name).BodyString(body).Create(create).Do(context.TODO())
+	} else {
+		_, err = client.IndexPutIndexTemplate(name).BodyString(body).Create(create).Do(context.TODO())
+	}
 
 	return err
 }
