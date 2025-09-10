@@ -213,10 +213,25 @@ func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interf
 		return err
 	}
 	index, _ := d.GetChange("index")
+	indexStr := index.(string)
 	tenantName, _ := d.GetChange("tenant_name")
+	tenantNameStr := tenantName.(string)
+
+	// Calculate index if tenantName is given
+	if tenantNameStr != "" {
+		indexStr, err = resourceOpensearchOpenDistroDashboardComputeIndex(tenantNameStr)
+		if err != nil {
+			return fmt.Errorf("could not compute tenant name: %+v", err)
+		}
+	}
+
+	// Default for index if still empty
+	if indexStr == "" {
+		indexStr = ".kibana"
+	}
 
 	// make delete api call
-	return elastic7DeleteDashboardObject(client, index.(string), d.Id(), tenantName.(string))
+	return elastic7DeleteDashboardObject(client, indexStr, d.Id(), tenantNameStr)
 }
 
 func elastic7CreateIndexIfNotExists(client *elastic7.Client, index string) error {
@@ -263,7 +278,6 @@ func readDashboardObjectState(d *schema.ResourceData) (*dashboardObjectState, er
 	if indexName == "" {
 		indexName = ".kibana"
 	}
-	// Default
 	return &dashboardObjectState{
 		index:           indexName,
 		tenantName:      tenantName,
