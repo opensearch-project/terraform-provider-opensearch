@@ -82,18 +82,20 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 				Description: "The JSON body of the dashboard object.",
 			},
 			"tenant_name": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Default:     "",
-				Description: "The name of the tenant to which dashboard data associate. Empty string defaults to global tenant.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Default:       "",
+				Description:   "The name of the tenant to which dashboard data associate. Empty string defaults to global tenant.",
+				ConflictsWith: []string{"index"},
 			},
 			"index": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Default:     ".kibana",
-				Description: "The name of the index where dashboard data is stored. Does not work with tenant_name.",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ForceNew:      true,
+				Default:       "",
+				Description:   "The name of the index where dashboard data is stored. Does not work with tenant_name.",
+				ConflictsWith: []string{"tenant_name"},
 			},
 		},
 	}
@@ -211,10 +213,25 @@ func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interf
 		return err
 	}
 	index, _ := d.GetChange("index")
+	indexStr := index.(string)
 	tenantName, _ := d.GetChange("tenant_name")
+	tenantNameStr := tenantName.(string)
+
+	// Calculate index if tenantName is given
+	if tenantNameStr != "" {
+		indexStr, err = resourceOpensearchOpenDistroDashboardComputeIndex(tenantNameStr)
+		if err != nil {
+			return fmt.Errorf("could not compute tenant name: %+v", err)
+		}
+	}
+
+	// Default for index if still empty
+	if indexStr == "" {
+		indexStr = ".kibana"
+	}
 
 	// make delete api call
-	return elastic7DeleteDashboardObject(client, index.(string), d.Id(), tenantName.(string))
+	return elastic7DeleteDashboardObject(client, indexStr, d.Id(), tenantNameStr)
 }
 
 func elastic7CreateIndexIfNotExists(client *elastic7.Client, index string) error {
@@ -248,10 +265,22 @@ func readDashboardObjectState(d *schema.ResourceData) (*dashboardObjectState, er
 	if err != nil {
 		return nil, fmt.Errorf("Could not read body interface: %+v", err)
 	}
-
+	// Calculate index if tenantName is given
+	indexName := d.Get("index").(string)
+	tenantName := d.Get("tenant_name").(string)
+	if tenantName != "" {
+		indexName, err = resourceOpensearchOpenDistroDashboardComputeIndex(tenantName)
+		if err != nil {
+			return nil, fmt.Errorf("could not compute tenant name: %+v", err)
+		}
+	}
+	// Default to .kibana
+	if indexName == "" {
+		indexName = ".kibana"
+	}
 	return &dashboardObjectState{
-		index:           d.Get("index").(string),
-		tenantName:      d.Get("tenant_name").(string),
+		index:           indexName,
+		tenantName:      tenantName,
 		dashboardObject: dashboardObject,
 		id:              dashboardObject["_id"].(string),
 	}, nil

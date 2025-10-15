@@ -1,8 +1,6 @@
-version: '3'
-
 services:
   opensearch:
-    image:  ${OSS_IMAGE}
+    image:  ${OSS_IMAGE:-opensearchproject/opensearch:2}
     hostname: opensearch
     container_name: opensearch
     networks: 
@@ -18,7 +16,7 @@ services:
       - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456"
       - "plugins.security.ssl.http.enabled=false"
       - ${OSS_ENV_VAR:-FOO=bar}
-    command: ${OS_COMMAND}
+    command: ${OS_COMMAND:-}
     ulimits:
       nproc: 65536
       nofile:

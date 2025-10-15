@@ -1,3 +1,5 @@
 /vendor
 .DS_Store
+.vscode/
 terraform-provider-opensearch
+__debug*

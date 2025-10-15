@@ -1,10 +1,14 @@
 <img src="https://opensearch.org/assets/brand/SVG/Logo/opensearch_logo_default.svg" height="64px"/>
 
-- [Terraform Provider OpenSearch](#Terraform-Provider-OpenSearch)
-- [Compatibility](#compatibility)
+- [Terraform Provider OpenSearch](#terraform-provider-opensearch)
+  - [Supported Functionalities](#supported-functionalities)
+    - [OpenSearch and OpenSearch Dashboards](#opensearch-and-opensearch-dashboards)
+  - [Running tests locally](#running-tests-locally)
+    - [To Run Specific Test](#to-run-specific-test)
+    - [Fix the go-lint errors](#fix-the-go-lint-errors)
+  - [Debugging this provider](#debugging-this-provider)
 - [Version and Branching](#version-and-branching)
 - [Contributing](#contributing)
-- [Maintainer Responsibilities](MAINTAINERS.md)
 - [Getting Help](#getting-help)
 - [Code of Conduct](#code-of-conduct)
 - [Security](#security)
@@ -39,11 +43,12 @@ Examples of resources can be found in the examples directory.
 ### Running tests locally
 
 ```sh
-./script/install-tools
 export OSS_IMAGE="opensearchproject/opensearch:2"
-docker-compose up -d
-docker-compose ps -a  # Checks that the process is running
-export OPENSEARCH_URL=http://admin:admin@localhost:9200
+docker compose up -d
+docker compose ps -a  # Checks that the process is running
+# Before OS 2.12.0
+# export OPENSEARCH_URL=http://admin:admin@localhost:9200
+export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
 export TF_LOG=INFO
 TF_ACC=1 go test ./... -v -parallel 20 -cover -short
 ```

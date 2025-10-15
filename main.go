@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"flag"
-	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
 
@@ -19,19 +17,9 @@ func main() {
 	flag.BoolVar(&debugMode, "debuggable", false, "set to true to run the provider with support for debuggers like delve")
 	flag.Parse()
 
-	if debugMode {
-		//nolint:staticcheck // SA1019 ignore this!
-		err := plugin.Debug(context.Background(), "registry.terraform.io/opensearch-project/opensearch",
-			&plugin.ServeOpts{
-				ProviderFunc: provider.Provider,
-			},
-		)
-		if err != nil {
-			log.Println(err.Error())
-		}
-	} else {
-		plugin.Serve(&plugin.ServeOpts{
-			ProviderFunc: provider.Provider,
-		})
-	}
+	plugin.Serve(&plugin.ServeOpts{
+		ProviderFunc: provider.Provider,
+		ProviderAddr: "registry.terraform.io/opensearch-project/opensearch",
+		Debug:        debugMode,
+	})
 }
