@@ -140,7 +140,7 @@ func resourceOpensearchGetOpenDistroUser(userID string, m interface{}) (UserBody
 	path, err := uritemplates.Expand("/_plugins/_security/api/internalusers/{name}", map[string]string{
 		"name": userID,
 	})
-	log.Printf("The resourceOpensearchGetOpenDistroUser path is " + string(path))
+	log.Printf("The resourceOpensearchGetOpenDistroUser path is %s", path)
 	if err != nil {
 		return *user, fmt.Errorf("Error building URL path for user: %+v", err)
 	}
@@ -155,8 +155,8 @@ func resourceOpensearchGetOpenDistroUser(userID string, m interface{}) (UserBody
 		Method: "GET",
 		Path:   path,
 	})
-	log.Printf("The resourceOpensearchGetOpenDistroUser res is " + string(res.Body))
-	log.Printf("The resourceOpensearchGetOpenDistroUser res StatusCode is " + fmt.Sprint(res.StatusCode))
+	log.Printf("The resourceOpensearchGetOpenDistroUser res is %s", res.Body)
+	log.Printf("The resourceOpensearchGetOpenDistroUser res StatusCode is %d", res.StatusCode)
 	if err != nil {
 		return *user, err
 	}
