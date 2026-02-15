@@ -69,6 +69,8 @@ type ProviderConf struct {
 	proxy                   string
 	// determined after connecting to the server
 	flavor ServerFlavor
+	// New opensearch-go/v4 client (Phase 2 migration)
+	opensearchClient *OpenSearchClient
 }
 
 func Provider() *schema.Provider {
@@ -423,6 +425,53 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		}
 	}
 
+	return client, nil
+}
+
+// getOpenSearchClient returns the opensearch-go/v4 client, creating it if necessary
+// This is the new client getter for Phase 2 migration
+func getOpenSearchClient(conf *ProviderConf) (*OpenSearchClient, error) {
+	// Return existing client if already created
+	if conf.opensearchClient != nil {
+		return conf.opensearchClient, nil
+	}
+
+	// Create new client
+	client, err := NewOpenSearchClient(conf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OpenSearch client: %w", err)
+	}
+
+	// Perform version detection if not already set
+	if conf.osVersion == "" {
+		log.Printf("[INFO] Getting server info to determine version %s with timeout %ds", conf.rawUrl, conf.pingTimeoutSeconds)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(conf.pingTimeoutSeconds)*time.Second)
+		defer cancel()
+
+		// Use the new client's Info method to get version
+		info, err := client.Client.Info(ctx, nil)
+		if err != nil {
+			// Check for specific error types
+			if os.IsTimeout(err) {
+				return nil, fmt.Errorf("timeout after %d seconds while getting info from '%s' to determine server version, please consider setting 'opensearch_version' to avoid this lookup", conf.pingTimeoutSeconds, conf.rawUrl)
+			}
+			return nil, fmt.Errorf("failed to get OpenSearch info: %w", err)
+		}
+
+		conf.osVersion = info.Version.Number
+		log.Printf("[INFO] OpenSearch version %s (distribution: %s)", info.Version.Number, info.Version.Distribution)
+
+		// Determine flavor based on distribution
+		switch info.Version.Distribution {
+		case "opensearch":
+			conf.flavor = OpenSearch
+		default:
+			conf.flavor = Unknown
+		}
+	}
+
+	// Store client in config for reuse
+	conf.opensearchClient = client
 	return client, nil
 }
 

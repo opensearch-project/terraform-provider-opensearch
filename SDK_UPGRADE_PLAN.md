@@ -17,8 +17,9 @@ Migrate the Terraform OpenSearch Provider from the deprecated **olivere/elastic 
 | Phase 1 | 1.1 Update Dependencies | ✅ Complete | Added `opensearch-go/v4 v4.6.0` to go.mod |
 | Phase 1 | 1.2 Create New Client Factory | ✅ Complete | Created `provider/client.go` (170 lines) with `NewOpenSearchClient()` |
 | Phase 1 | 1.3 AWS Signer Migration | ✅ Complete | Created `aws_signer_v2.go` with AWS SDK v2 implementation |
-| Phase 2 | 2.1 Update ProviderConf | ⏳ Pending | Not started |
-| Phase 2 | 2.2 Update getClient Function | ⏳ Pending | Not started |
+| Phase 2 | 2.1 Update ProviderConf | ✅ Complete | Added `opensearchClient` field to ProviderConf |
+| Phase 2 | 2.2 Update getClient Function | ✅ Complete | Created `getOpenSearchClient()` function |
+| Phase 2 | 2.3 HTTP Transport Wrappers | ✅ Complete | Transport wrappers already implemented in client.go |
 | Phase 2 | 2.3 HTTP Transport Wrappers | ⏳ Pending | Not started |
 | Phase 3 | Resource Migration | ⏳ Pending | Not started |
 | Phase 4 | Error Handling | ⏳ Pending | Not started |
@@ -238,40 +239,102 @@ func newAWSSigner(conf *ProviderConf) (signer.Signer, error) {
 
 ### Phase 2: Provider Configuration (Weeks 2-3)
 
-#### 2.1 Update ProviderConf
-Modify `ProviderConf` to hold the new client type:
+#### 2.1 Update ProviderConf ✅ COMPLETE
+
+**Status:** Completed on February 15, 2026
+
+**Changes Made:**
+Added `opensearchClient` field to `ProviderConf` struct in `provider/provider.go`:
 
 ```go
 type ProviderConf struct {
     // ... existing fields ...
-    client *OpenSearchClient  // Replace *elastic7.Client
+    flavor ServerFlavor
+    // New opensearch-go/v4 client (Phase 2 migration)
+    opensearchClient *OpenSearchClient
 }
 ```
 
-#### 2.2 Update getClient Function
-Refactor `provider.go:296-427` to use new client factory while maintaining backward compatibility for provider schema.
+**Rationale:**
+- Maintains backward compatibility during migration
+- Old `getClient()` still returns `*elastic7.Client` for existing resources
+- New `getOpenSearchClient()` returns `*OpenSearchClient` for migrated resources
+- Client is cached in `ProviderConf` to avoid recreating on each call
 
-#### 2.3 HTTP Transport Wrappers
-Refactor `http.go` to work with opensearch-go transport:
+#### 2.2 Update getClient Function ✅ COMPLETE
+
+**Status:** Completed on February 15, 2026
+
+**Implementation:**
+Created `getOpenSearchClient()` function in `provider/provider.go`:
 
 ```go
-// Custom transport for header injection
-type customTransport struct {
-    base         http.RoundTripper
-    hostOverride string
-    headers      map[string]string
-}
+// getOpenSearchClient returns the opensearch-go/v4 client, creating it if necessary
+func getOpenSearchClient(conf *ProviderConf) (*OpenSearchClient, error) {
+    // Return existing client if already created
+    if conf.opensearchClient != nil {
+        return conf.opensearchClient, nil
+    }
 
-func (t *customTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-    if t.hostOverride != "" {
-        req.Host = t.hostOverride
+    // Create new client
+    client, err := NewOpenSearchClient(conf)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create OpenSearch client: %w", err)
     }
-    for k, v := range t.headers {
-        req.Header.Set(k, v)
+
+    // Perform version detection if not already set
+    if conf.osVersion == "" {
+        ctx, cancel := context.WithTimeout(...)
+        defer cancel()
+
+        // Use Info API for version detection
+        info, err := client.Client.Info(ctx, nil)
+        if err != nil {
+            return nil, fmt.Errorf("failed to get OpenSearch info: %w", err)
+        }
+
+        conf.osVersion = info.Version.Number
+        
+        // Determine flavor based on distribution
+        switch info.Version.Distribution {
+        case "opensearch":
+            conf.flavor = OpenSearch
+        default:
+            conf.flavor = Unknown
+        }
     }
-    return t.base.RoundTrip(req)
+
+    // Cache client for reuse
+    conf.opensearchClient = client
+    return client, nil
 }
 ```
+
+**Key Features:**
+- Client caching to avoid repeated initialization
+- Version detection using `Info` API (replaces old `Ping` method)
+- Proper timeout handling with context
+- Flavor detection (OpenSearch vs Unknown)
+- Error handling with detailed messages
+
+**Backward Compatibility:**
+- Old `getClient()` function remains unchanged
+- Existing resources continue to work without modification
+- Gradual migration possible resource-by-resource
+
+#### 2.3 HTTP Transport Wrappers ✅ COMPLETE
+
+**Status:** Completed (already implemented in Step 1.2)
+
+**Implementation:**
+Transport wrappers were implemented in `provider/client.go`:
+
+- `tokenTransport` - Adds Authorization header with token
+- `hostOverrideTransport` - Overrides Host header
+
+These wrappers provide the same functionality as the old `withHeader` struct in `http.go` but are integrated directly into the new client.
+
+**Note:** The old `http.go` file remains in place for backward compatibility with the olivere/elastic client during the migration period.
 
 ### Phase 3: Resource Migration (Weeks 3-6)
 
