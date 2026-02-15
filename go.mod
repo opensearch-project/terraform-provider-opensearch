@@ -1,15 +1,16 @@
 module github.com/opensearch-project/terraform-provider-opensearch
 
-go 1.22.12
+go 1.24
 
 require (
-	github.com/aws/aws-sdk-go v1.52.2
+	github.com/aws/aws-sdk-go v1.55.8
 	github.com/deoxxa/aws_signing_client v0.0.0-20161109131055-c20ee106809e
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.36.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/olivere/elastic v6.2.37+incompatible
 	github.com/olivere/elastic/v7 v7.0.32
+	github.com/opensearch-project/opensearch-go/v4 v4.6.0
 	gopkg.in/olivere/elastic.v6 v6.2.37
 )
 
