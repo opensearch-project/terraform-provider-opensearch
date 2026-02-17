@@ -1,17 +1,15 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/olivere/elastic/uritemplates"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var openDistroUserSchema = map[string]*schema.Schema{
@@ -85,7 +83,7 @@ func resourceOpensearchOpenDistroUserRead(d *schema.ResourceData, m interface{})
 	res, err := resourceOpensearchGetOpenDistroUser(d.Id(), m)
 
 	if err != nil {
-		if elastic7.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] OdfeUser (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
@@ -111,56 +109,94 @@ func resourceOpensearchOpenDistroUserUpdate(d *schema.ResourceData, m interface{
 func resourceOpensearchOpenDistroUserDelete(d *schema.ResourceData, m interface{}) error {
 	var err error
 
-	path, err := uritemplates.Expand("/_plugins/_security/api/internalusers/{name}", map[string]string{
-		"name": d.Get("username").(string),
-	})
-	if err != nil {
-		return fmt.Errorf("Error building URL path for user: %+v", err)
-	}
+	username := d.Get("username").(string)
+	path := fmt.Sprintf("/_plugins/_security/api/internalusers/%s", username)
 
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method:           "DELETE",
-		Path:             path,
-		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-		Retrier: elastic7.NewBackoffRetrier(
-			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-		),
-	})
 
-	return err
+	// Build request
+	req, err := http.NewRequest("DELETE", client.config.rawUrl+path, nil)
+	if err != nil {
+		return fmt.Errorf("error building DELETE request: %w", err)
+	}
+
+	// Execute request with retry logic
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil && resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusInternalServerError {
+			break
+		}
+
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("error deleting user: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for successful deletion (2xx status codes)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	return fmt.Errorf("error deleting user: received status code %d", resp.StatusCode)
 }
 
 func resourceOpensearchGetOpenDistroUser(userID string, m interface{}) (UserBody, error) {
 	var err error
 	user := new(UserBody)
-	path, err := uritemplates.Expand("/_plugins/_security/api/internalusers/{name}", map[string]string{
-		"name": userID,
-	})
+	path := fmt.Sprintf("/_plugins/_security/api/internalusers/%s", userID)
+
 	log.Printf("The resourceOpensearchGetOpenDistroUser path is %s", path)
+
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
-		return *user, fmt.Errorf("Error building URL path for user: %+v", err)
+		return *user, err
 	}
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	// Build request
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 	if err != nil {
-		return *user, err
+		return *user, fmt.Errorf("error building GET request: %w", err)
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
-	log.Printf("The resourceOpensearchGetOpenDistroUser res is %s", string(res.Body))
-	log.Printf("The resourceOpensearchGetOpenDistroUser res StatusCode is %d", res.StatusCode)
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
 	if err != nil {
-		return *user, err
+		return *user, fmt.Errorf("error getting user: %w", err)
 	}
-	body = res.Body
+	defer resp.Body.Close()
+
+	log.Printf("The resourceOpensearchGetOpenDistroUser res StatusCode is %d", resp.StatusCode)
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return *user, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	log.Printf("The resourceOpensearchGetOpenDistroUser res is %s", string(body))
+
+	// Check status code
+	if resp.StatusCode == http.StatusNotFound {
+		return *user, fmt.Errorf("user not found: %s", userID)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return *user, fmt.Errorf("error getting user: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	var userDefinition map[string]UserBody
 
@@ -194,45 +230,64 @@ func resourceOpensearchPutOpenDistroUser(d *schema.ResourceData, m interface{}) 
 		return response, fmt.Errorf("Body Error : %s", userJSON)
 	}
 
-	path, err := uritemplates.Expand("/_plugins/_security/api/internalusers/{name}", map[string]string{
-		"name": d.Get("username").(string),
-	})
-	if err != nil {
-		return response, fmt.Errorf("Error building URL path for user: %+v", err)
-	}
+	username := d.Get("username").(string)
+	path := fmt.Sprintf("/_plugins/_security/api/internalusers/%s", username)
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
+
 	log.Printf("[INFO] put opendistro user: %+v", userDefinition)
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   path,
-		Body:   string(userJSON),
-		// see https://github.com/opendistro-for-
-		// elasticsearch/security/issues/1095, this should return a 409, but
-		// retry on the 500 as well. We can't parse the message to only retry on
-		// the conlict exception becaues the client doesn't directly
-		// expose the error response body
-		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-		Retrier: elastic7.NewBackoffRetrier(
-			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-		),
-	})
-	if err != nil {
-		e, ok := err.(*elastic7.Error)
-		if !ok {
-			log.Printf("[INFO] expected error to be of type *elastic.Error")
-		} else {
-			log.Printf("[INFO] error creating user: %v %v %v", res, res.Body, e)
+
+	// Execute request with retry logic
+	// see https://github.com/opendistro-for-elasticsearch/security/issues/1095
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
 		}
-		return response, err
+
+		// Build request (must recreate for each attempt as body can't be reused)
+		req, err := http.NewRequest("PUT", client.config.rawUrl+path, strings.NewReader(string(userJSON)))
+		if err != nil {
+			return response, fmt.Errorf("error building PUT request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil {
+			// Check if we should retry
+			if resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusInternalServerError {
+				break
+			}
+			resp.Body.Close()
+		} else {
+			// Request failed, will retry
+			if attempt < maxRetries-1 {
+				continue
+			}
+		}
 	}
 
-	body = res.Body
+	if err != nil {
+		log.Printf("[INFO] error creating user: %v", err)
+		return response, err
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Check status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error creating user: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("Error unmarshalling user body: %+v: %+v", err, body)

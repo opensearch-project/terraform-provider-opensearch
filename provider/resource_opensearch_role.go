@@ -1,17 +1,15 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/olivere/elastic/uritemplates"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var openDistroRoleSchema = map[string]*schema.Schema{
@@ -142,7 +140,7 @@ func resourceOpensearchOpenDistroRoleRead(d *schema.ResourceData, m interface{})
 	res, err := resourceOpensearchGetOpenDistroRole(d.Id(), m)
 
 	if err != nil {
-		if elastic7.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] OpenDistroRole (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
@@ -178,55 +176,87 @@ func resourceOpensearchOpenDistroRoleUpdate(d *schema.ResourceData, m interface{
 }
 
 func resourceOpensearchOpenDistroRoleDelete(d *schema.ResourceData, m interface{}) error {
-	path, err := uritemplates.Expand("/_plugins/_security/api/roles/{name}", map[string]string{
-		"name": d.Get("role_name").(string),
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for role: %+v", err)
-	}
+	roleName := d.Get("role_name").(string)
+	path := fmt.Sprintf("/_plugins/_security/api/roles/%s", roleName)
 
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method:           "DELETE",
-		Path:             path,
-		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-		Retrier: elastic7.NewBackoffRetrier(
-			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-		),
-	})
 
-	return err
+	req, err := http.NewRequest("DELETE", client.config.rawUrl+path, nil)
+	if err != nil {
+		return fmt.Errorf("error building DELETE request: %w", err)
+	}
+
+	// Execute request with retry logic
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil && resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusInternalServerError {
+			break
+		}
+
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("error deleting role: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for successful deletion (2xx status codes)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	return fmt.Errorf("error deleting role: received status code %d", resp.StatusCode)
 }
 
 func resourceOpensearchGetOpenDistroRole(roleID string, m interface{}) (RoleBody, error) {
 	var err error
 	role := new(RoleBody)
+	path := fmt.Sprintf("/_plugins/_security/api/roles/%s", roleID)
 
-	path, err := uritemplates.Expand("/_plugins/_security/api/roles/{name}", map[string]string{
-		"name": roleID,
-	})
-
-	if err != nil {
-		return *role, fmt.Errorf("error building URL path for role: %+v", err)
-	}
-
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return *role, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
+
+	// Build request
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 	if err != nil {
-		return *role, err
+		return *role, fmt.Errorf("error building GET request: %w", err)
 	}
-	body = res.Body
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return *role, fmt.Errorf("error getting role: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return *role, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Check status code
+	if resp.StatusCode == http.StatusNotFound {
+		return *role, fmt.Errorf("role not found: %s", roleID)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return *role, fmt.Errorf("error getting role: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	var roleDefinition map[string]RoleBody
 
@@ -283,37 +313,61 @@ func resourceOpensearchPutOpenDistroRole(d *schema.ResourceData, m interface{}) 
 		return response, fmt.Errorf("Body Error : %s", roleJSON)
 	}
 
-	path, err := uritemplates.Expand("/_plugins/_security/api/roles/{name}", map[string]string{
-		"name": d.Get("role_name").(string),
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for role: %+v", err)
-	}
+	roleName := d.Get("role_name").(string)
+	path := fmt.Sprintf("/_plugins/_security/api/roles/%s", roleName)
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   path,
-		Body:   string(roleJSON),
-		// see https://github.com/opendistro-for-
-		// elasticsearch/security/issues/1095, this should return a 409, but
-		// retry on the 500 as well. We can't parse the message to only retry on
-		// the conlict exception becaues the client doesn't directly
-		// expose the error response body
-		RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
-		Retrier: elastic7.NewBackoffRetrier(
-			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-		),
-	})
+
+	// Build request
+	req, err := http.NewRequest("PUT", client.config.rawUrl+path, strings.NewReader(string(roleJSON)))
+	if err != nil {
+		return response, fmt.Errorf("error building PUT request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request with retry logic
+	// see https://github.com/opendistro-for-elasticsearch/security/issues/1095
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil {
+			// Check if we should retry
+			if resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusInternalServerError {
+				break
+			}
+			resp.Body.Close()
+		} else {
+			// Request failed, will retry
+			if attempt < maxRetries-1 {
+				continue
+			}
+		}
+	}
+
 	if err != nil {
 		return response, err
 	}
-	body = res.Body
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Check status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error creating role: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling role body: %+v: %+v", err, body)

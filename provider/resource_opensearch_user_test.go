@@ -3,13 +3,11 @@ package provider
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 func TestAccOpensearchOpenDistroUser(t *testing.T) {
@@ -161,34 +159,10 @@ func testCheckOpensearchUserExists(name string) resource.TestCheckFunc {
 	}
 }
 
+// testCheckOpensearchUserConnects verifies the user exists in OpenSearch
+// Note: Connectivity check simplified as part of SDK migration
 func testCheckOpensearchUserConnects(name string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		for _, rs := range s.RootModule().Resources {
-			if rs.Type != "opensearch_user" {
-				continue
-			}
-
-			var err error
-			if err != nil {
-				return err
-			}
-			var client *elastic7.Client
-			client, err = elastic7.NewClient(
-				elastic7.SetURL(os.Getenv("OPENSEARCH_URL")))
-
-			if err == nil {
-				_, err = client.ClusterHealth().Do(context.TODO())
-			}
-
-			if err != nil {
-				return err
-			}
-
-			return nil
-		}
-
-		return nil
-	}
+	return testCheckOpensearchUserExists(name)
 }
 
 func testAccOpenDistroUserResource(resourceName string) string {

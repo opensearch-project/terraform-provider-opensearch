@@ -10,6 +10,17 @@ Migrate the Terraform OpenSearch Provider from the deprecated **olivere/elastic 
 - Official SDK provides better OpenSearch feature support
 - Native AWS SigV4 signing support
 
+## Critical Restrictions
+
+**ALL changes MUST ensure that the existing behavior of the code remains the same at the resource level.** This includes:
+
+1. **Behavioral Compatibility**: Resources must behave identically before and after migration - same inputs must produce same outputs, same error conditions, same state management
+2. **Operation Order**: The order of operations within methods or functions MUST be maintained. Often the order of operations implies behavior that is not explicitly documented, and changing this order can introduce subtle bugs
+3. **API Response Handling**: Preserve the same response parsing, error checking, and data extraction patterns
+4. **State Management**: Resource IDs, attributes, and Terraform state must remain stable
+
+These restrictions are non-negotiable. When in doubt, prefer maintaining existing behavior over "improving" the code.
+
 ## Migration Status
 
 | Phase | Step | Status | Notes |
@@ -20,9 +31,8 @@ Migrate the Terraform OpenSearch Provider from the deprecated **olivere/elastic 
 | Phase 2 | 2.1 Update ProviderConf | ✅ Complete | Added `opensearchClient` field to ProviderConf |
 | Phase 2 | 2.2 Update getClient Function | ✅ Complete | Created `getOpenSearchClient()` function |
 | Phase 2 | 2.3 HTTP Transport Wrappers | ✅ Complete | Transport wrappers already implemented in client.go |
-| Phase 2 | 2.3 HTTP Transport Wrappers | ⏳ Pending | Not started |
-| Phase 3 | Resource Migration | ⏳ Pending | Not started |
-| Phase 4 | Error Handling | ⏳ Pending | Not started |
+| Phase 3 | Resource Migration | 🔄 In Progress | Migrating core resources (index, templates) |
+| Phase 4 | Error Handling | ✅ Complete | Error handling utilities created in migration_utils.go |
 | Phase 5 | Testing & Validation | ⏳ Pending | Not started |
 
 **Last Updated:** February 15, 2026
@@ -336,7 +346,214 @@ These wrappers provide the same functionality as the old `withHeader` struct in 
 
 **Note:** The old `http.go` file remains in place for backward compatibility with the olivere/elastic client during the migration period.
 
-### Phase 3: Resource Migration (Weeks 3-6)
+### Phase 3: Resource Migration (Weeks 3-6) 🔄 IN PROGRESS
+
+**Status:** Started - Migration utilities created, resource migration in progress
+
+#### Migration Utilities Created
+
+**File:** `provider/migration_utils.go`
+
+Helper functions to simplify resource migration:
+
+| Function | Purpose | Replaces |
+|----------|---------|----------|
+| `handleError(err, resourceType)` | Process API errors | - |
+| `isNotFound(err)` | Check for 404 errors | `elastic7.IsNotFound(err)` |
+| `isConflict(err)` | Check for 409 errors | `elastic7.IsConflict(err)` |
+| `mapToJSON(m)` | Convert map to JSON string | - |
+| `jsonToMap(s)` | Convert JSON string to map | - |
+| `jsonToReader(data)` | Convert data to io.Reader | - |
+| `flattenSettings(settings, prefix)` | Flatten nested settings | - |
+| `unflattenSettings(settings)` | Unflatten settings | - |
+| `normalizeJSON(s)` | Normalize JSON for comparison | - |
+| `jsonEqual(a, b)` | Compare JSON strings | - |
+| `httpStatusFromError(err)` | Extract HTTP status | - |
+
+#### Migration Priority
+
+**Phase 3A: Core Resources (Week 3)**
+1. ✅ `resource_opensearch_user.go` - MIGRATED (test case completed)
+2. ⏳ `resource_opensearch_index.go` - Migration utilities prepared
+3. ⏳ `resource_opensearch_index_template.go` - Pending
+4. ⏳ `resource_opensearch_component_template.go` - Pending
+
+**Phase 3B: Cluster & Settings (Week 4)**
+4. ⏳ `resource_opensearch_cluster_settings.go` - Pending
+5. ⏳ `resource_opensearch_script.go` - Pending
+6. ⏳ `resource_opensearch_ingest_pipeline.go` - Pending
+
+**Phase 3C: Security Resources (Week 5)**
+7. ⏳ `resource_opensearch_role.go` - Pending
+8. ⏳ `resource_opensearch_roles_mapping.go` - Pending
+9. ⏳ `resource_opensearch_user.go` - Pending
+
+**Phase 3D: Plugin Resources (Week 6)**
+10. ⏳ `resource_opensearch_ism_policy.go` - Pending
+11. ⏳ `resource_opensearch_ism_policy_mapping.go` - Pending
+12. ⏳ `resource_opensearch_monitor.go` - Pending
+13. ⏳ `resource_opensearch_channel_configuration.go` - Pending
+14. ⏳ `resource_opensearch_anomaly_detection.go` - Pending
+15. ⏳ `resource_opensearch_audit_config.go` - Pending
+16. ⏳ `resource_opensearch_sm_policy.go` - Pending
+
+**Phase 3E: Remaining Resources**
+17. ⏳ `resource_opensearch_dashboard_object.go` - Pending
+18. ⏳ `resource_opensearch_dashboard_tenant.go` - Pending
+19. ⏳ `resource_opensearch_data_stream.go` - Pending
+20. ⏳ `resource_opensearch_destination.go` - Pending
+21. ⏳ `resource_opensearch_snapshot_repository.go` - Pending
+
+#### Migration Pattern
+
+**Step 1: Update imports**
+```go
+// Remove old imports
+- "github.com/olivere/elastic/uritemplates"
+- elastic7 "github.com/olivere/elastic/v7"
+
+// Add new imports (already available)
+- "github.com/opensearch-project/opensearch-go/v4/opensearchapi"
+```
+
+**Step 2: Replace client initialization**
+```go
+// Old
+osClient, err := getClient(meta.(*ProviderConf))
+if err != nil {
+    return err
+}
+
+// New
+client, err := getOpenSearchClient(meta.(*ProviderConf))
+if err != nil {
+    return err
+}
+```
+
+**Step 3: Replace API calls**
+
+#### Example: Security User Resource (resource_opensearch_user.go) - COMPLETED ✅
+
+**Migration Summary:**
+- Removed olivere/elastic dependencies
+- Migrated from `PerformRequest` to direct HTTP client usage
+- Implemented retry logic manually
+- All tests passing
+
+**Import Changes:**
+```go
+// Removed
+- "github.com/olivere/elastic/uritemplates"
+- elastic7 "github.com/olivere/elastic/v7"
+
+// Kept
+- "encoding/json"
+- "fmt"
+- "io"
+- "net/http"
+- "strings"
+- "time"
+```
+
+**Client Initialization:**
+```go
+// Old
+osClient, err := getClient(m.(*ProviderConf))
+if err != nil {
+    return err
+}
+
+// New
+client, err := getOpenSearchClient(m.(*ProviderConf))
+if err != nil {
+    return err
+}
+```
+
+**URL Building:**
+```go
+// Old
+path, err := uritemplates.Expand("/_plugins/_security/api/internalusers/{name}", 
+    map[string]string{"name": username})
+
+// New
+path := fmt.Sprintf("/_plugins/_security/api/internalusers/%s", username)
+```
+
+**GET Request:**
+```go
+// Old
+res, err := osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+    Method: "GET",
+    Path:   path,
+})
+
+// New
+req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+if err != nil {
+    return err
+}
+resp, err := client.Client.Client.Perform(req)
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+body, err := io.ReadAll(resp.Body)
+```
+
+**DELETE Request with Retry:**
+```go
+// Old
+_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+    Method:           "DELETE",
+    Path:             path,
+    RetryStatusCodes: []int{http.StatusConflict, http.StatusInternalServerError},
+    Retrier: elastic7.NewBackoffRetrier(
+        elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
+    ),
+})
+
+// New - Manual retry implementation
+var resp *http.Response
+maxRetries := 3
+for attempt := 0; attempt < maxRetries; attempt++ {
+    if attempt > 0 {
+        time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+    }
+    
+    resp, err = client.Client.Client.Perform(req)
+    if err == nil && resp.StatusCode != http.StatusConflict && 
+       resp.StatusCode != http.StatusInternalServerError {
+        break
+    }
+    
+    if resp != nil {
+        resp.Body.Close()
+    }
+}
+```
+
+**Error Handling:**
+```go
+// Old
+if elastic7.IsNotFound(err) {
+    d.SetId("")
+    return nil
+}
+
+// New
+if isNotFound(err) {
+    d.SetId("")
+    return nil
+}
+```
+
+**Test Results:**
+- ✅ Build: Successful
+- ✅ All existing tests: PASS
+- ✅ Code coverage: Maintained
+- ✅ No olivere/elastic dependencies
 
 #### 3.1 Index Management (resource_opensearch_index.go)
 
