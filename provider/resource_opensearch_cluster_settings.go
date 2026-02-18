@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,8 +12,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 var (
@@ -334,9 +334,7 @@ func resourceOpensearchClusterSettingsCreate(d *schema.ResourceData, meta interf
 }
 
 func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface{}) error {
-	var err error
-
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -348,17 +346,14 @@ func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface
 		return err
 	}
 
-	// client doesn't support PUTing settings: https://github.com/olivere/elastic/issues/1274
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   "/_cluster/settings",
-		Body:   string(body),
+	_, err = client.Client.Cluster.PutSettings(context.TODO(), opensearchapi.ClusterPutSettingsReq{
+		Body: bytes.NewReader(body),
 	})
 	if err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func resourceOpensearchClusterSettingsRead(d *schema.ResourceData, meta interface{}) error {
@@ -387,36 +382,28 @@ func resourceOpensearchClusterSettingsDelete(d *schema.ResourceData, meta interf
 }
 
 func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interface{}, error) {
-	var err error
 	var settings map[string]interface{}
-	var response *json.RawMessage
 
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return settings, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   "/_cluster/settings?flat_settings=true",
-	})
+
+	res, err := client.Client.Cluster.GetSettings(context.TODO(), &opensearchapi.ClusterGetSettingsReq{})
 	if err != nil {
 		return settings, err
 	}
-	response = &res.Body
 
-	err = json.Unmarshal(*response, &settings)
+	err = json.Unmarshal(res.Persistent, &settings)
 	if err != nil {
 		return settings, fmt.Errorf("fail to unmarshal: %v", err)
 	}
 
-	return settings, err
+	return settings, nil
 }
 
 func clearAllSettings(meta interface{}) error {
-	var err error
-
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -432,16 +419,14 @@ func clearAllSettings(meta interface{}) error {
 		}
 	  }`
 
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   "/_cluster/settings",
-		Body:   body,
+	_, err = client.Client.Cluster.PutSettings(context.TODO(), opensearchapi.ClusterPutSettingsReq{
+		Body: strings.NewReader(body),
 	})
 	if err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func clusterSettingsFromResourceData(d *schema.ResourceData) map[string]interface{} {

@@ -50,11 +50,11 @@ func testCheckOpensearchDataStreamExists(name string) resource.TestCheckFunc {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		err = elastic7GetDataStream(osClient, rs.Primary.ID)
+		err = getDataStream(client, rs.Primary.ID)
 
 		if err != nil {
 			return err
@@ -73,11 +73,11 @@ func testCheckOpensearchDataStreamDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		err = elastic7GetDataStream(osClient, rs.Primary.ID)
+		err = getDataStream(client, rs.Primary.ID)
 
 		if err != nil {
 			return nil // should be not found error

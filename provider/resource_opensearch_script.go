@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 var scriptSchema = map[string]*schema.Schema{
@@ -72,7 +72,7 @@ func resourceOpensearchScriptCreate(d *schema.ResourceData, m interface{}) error
 	if err == nil {
 		log.Printf("[INFO] script exists: %+v", err)
 		return fmt.Errorf("script already exists with ID: %v", scriptID)
-	} else if err != nil && !elastic7.IsNotFound(err) {
+	} else if err != nil && !isNotFound(err) {
 		return err
 	}
 
@@ -92,7 +92,7 @@ func resourceOpensearchScriptCreate(d *schema.ResourceData, m interface{}) error
 func resourceOpensearchScriptRead(d *schema.ResourceData, m interface{}) error {
 	scriptBody, err := resourceOpensearchGetScript(d.Id(), m)
 
-	if elastic7.IsNotFound(err) {
+	if isNotFound(err) {
 		log.Printf("[WARN] Script (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -121,37 +121,34 @@ func resourceOpensearchScriptUpdate(d *schema.ResourceData, m interface{}) error
 }
 
 func resourceOpensearchScriptDelete(d *schema.ResourceData, m interface{}) error {
-	var err error
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.DeleteScript().Id(d.Id()).Do(context.TODO())
+	_, err = client.Client.Script.Delete(context.TODO(), opensearchapi.ScriptDeleteReq{
+		ScriptID: d.Id(),
+	})
 
 	return err
 }
 
 func resourceOpensearchGetScript(scriptID string, m interface{}) (ScriptBody, error) {
-	var scriptBody json.RawMessage
-	var err error
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return ScriptBody{}, err
 	}
-	var res *elastic7.GetScriptResponse
-	res, err = osClient.GetScript().Id(scriptID).Do(context.TODO())
+	res, err := client.Client.Script.Get(context.TODO(), opensearchapi.ScriptGetReq{
+		ScriptID: scriptID,
+	})
 	if err != nil {
 		return ScriptBody{}, err
 	}
-	scriptBody = res.Script
 
 	var script ScriptBody
+	script.Language = res.Script.Lang
+	script.Source = res.Script.Source
 
-	if err := json.Unmarshal(scriptBody, &script); err != nil {
-		return ScriptBody{}, fmt.Errorf("error unmarshalling destination body: %+v: %+v", err, scriptBody)
-	}
-
-	return script, err
+	return script, nil
 }
 
 func resourceOpensearchPutScript(d *schema.ResourceData, m interface{}) (string, error) {
@@ -163,14 +160,14 @@ func resourceOpensearchPutScript(d *schema.ResourceData, m interface{}) (string,
 		return "", err
 	}
 
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return "", err
 	}
-	_, err = osClient.PutScript().
-		Id(scriptID).
-		BodyJson(scriptBody).
-		Do(context.TODO())
+	_, err = client.Client.Script.Put(context.TODO(), opensearchapi.ScriptPutReq{
+		ScriptID: scriptID,
+		Body:     strings.NewReader(scriptBody),
+	})
 
 	if err != nil {
 		return "", err

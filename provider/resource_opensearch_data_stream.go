@@ -2,13 +2,10 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
-	"github.com/olivere/elastic/uritemplates"
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func resourceOpensearchDataStream() *schema.Resource {
@@ -44,13 +41,13 @@ func resourceOpensearchDataStreamRead(d *schema.ResourceData, meta interface{}) 
 	id := d.Id()
 
 	providerConf := meta.(*ProviderConf)
-	osClient, err := getClient(providerConf)
+	client, err := getOpenSearchClient(providerConf)
 	if err != nil {
 		return err
 	}
-	err = elastic7GetDataStream(osClient, id)
+	err = getDataStream(client, id)
 	if err != nil {
-		if elastic7.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] data stream (%s) not found, removing from state", id)
 			d.SetId("")
 			return nil
@@ -67,12 +64,14 @@ func resourceOpensearchDataStreamRead(d *schema.ResourceData, meta interface{}) 
 func resourceOpensearchDataStreamDelete(d *schema.ResourceData, meta interface{}) error {
 	id := d.Id()
 	providerConf := meta.(*ProviderConf)
-	osClient, err := getClient(providerConf)
+	client, err := getOpenSearchClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	err = elastic7DeleteDataStream(osClient, id)
+	_, err = client.Client.DataStream.Delete(context.TODO(), opensearchapi.DataStreamDeleteReq{
+		DataStream: id,
+	})
 
 	if err != nil {
 		return err
@@ -85,57 +84,21 @@ func resourceOpensearchPutDataStream(d *schema.ResourceData, meta interface{}) e
 	name := d.Get("name").(string)
 
 	providerConf := meta.(*ProviderConf)
-	osClient, err := getClient(providerConf)
+	client, err := getOpenSearchClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	err = elastic7PutDataStream(osClient, name)
+	_, err = client.Client.DataStream.Create(context.TODO(), opensearchapi.DataStreamCreateReq{
+		DataStream: name,
+	})
 
 	return err
 }
 
-func elastic7GetDataStream(client *elastic7.Client, id string) error {
-	path, err := uritemplates.Expand("/_data_stream/{id}", map[string]string{
-		"id": id,
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for data stream: %+v", err)
-	}
-
-	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
-	return err
-}
-
-func elastic7DeleteDataStream(client *elastic7.Client, id string) error {
-	path, err := uritemplates.Expand("/_data_stream/{id}", map[string]string{
-		"id": id,
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for data stream: %+v", err)
-	}
-
-	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "DELETE",
-		Path:   path,
-	})
-	return err
-}
-
-func elastic7PutDataStream(client *elastic7.Client, id string) error {
-	path, err := uritemplates.Expand("/_data_stream/{id}", map[string]string{
-		"id": id,
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for data stream: %+v", err)
-	}
-
-	_, err = client.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   path,
+func getDataStream(client *OpenSearchClient, id string) error {
+	_, err := client.Client.DataStream.Get(context.TODO(), &opensearchapi.DataStreamGetReq{
+		DataStreams: []string{id},
 	})
 	return err
 }

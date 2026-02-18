@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func resourceOpensearchComponentTemplate() *schema.Resource {
@@ -34,7 +35,7 @@ func resourceOpensearchComponentTemplate() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
-		Description: "Component templates are building blocks for constructing index templates that specify index mappings, settings, and aliases. You cannot directly apply a component template to a data stream or index. To be applied, a component template must be included in an index template’s `composed_of` list.",
+		Description: "Component templates are building blocks for constructing index templates that specify index mappings, settings, and aliases. You cannot directly apply a component template to a data stream or index. To be applied, a component template must be included in an index template's `composed_of` list.",
 	}
 }
 
@@ -53,15 +54,15 @@ func resourceOpensearchComponentTemplateRead(d *schema.ResourceData, meta interf
 	var result string
 
 	providerConf := meta.(*ProviderConf)
-	osClient, err := getClient(providerConf)
+	client, err := getOpenSearchClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	result, err = elastic7GetComponentTemplate(osClient, id)
+	result, err = getComponentTemplate(client, id)
 	if err != nil {
-		if elastic7.IsNotFound(err) {
-			log.Printf("[WARN] Index template (%s) not found, removing from state", id)
+		if isNotFound(err) {
+			log.Printf("[WARN] Component template (%s) not found, removing from state", id)
 			d.SetId("")
 			return nil
 		}
@@ -75,14 +76,20 @@ func resourceOpensearchComponentTemplateRead(d *schema.ResourceData, meta interf
 	return ds.err
 }
 
-func elastic7GetComponentTemplate(client *elastic7.Client, id string) (string, error) {
-	res, err := client.IndexGetComponentTemplate(id).Do(context.TODO())
+func getComponentTemplate(client *OpenSearchClient, id string) (string, error) {
+	res, err := client.Client.ComponentTemplate.Get(context.TODO(), &opensearchapi.ComponentTemplateGetReq{
+		ComponentTemplate: id,
+	})
 	if err != nil {
 		return "", err
 	}
 
-	// No more than 1 element is expected, if the index template is not found, previous call should
+	// No more than 1 element is expected, if the component template is not found, previous call should
 	// return a 404 error
+	if len(res.ComponentTemplates) == 0 {
+		return "", nil
+	}
+
 	t := res.ComponentTemplates[0].ComponentTemplate
 	tj, err := json.Marshal(t)
 	if err != nil {
@@ -99,12 +106,14 @@ func resourceOpensearchComponentTemplateDelete(d *schema.ResourceData, meta inte
 	id := d.Id()
 
 	providerConf := meta.(*ProviderConf)
-	osClient, err := getClient(providerConf)
+	client, err := getOpenSearchClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	err = elastic7DeleteComponentTemplate(osClient, id)
+	_, err = client.Client.ComponentTemplate.Delete(context.TODO(), opensearchapi.ComponentTemplateDeleteReq{
+		ComponentTemplate: id,
+	})
 
 	if err != nil {
 		return err
@@ -113,27 +122,20 @@ func resourceOpensearchComponentTemplateDelete(d *schema.ResourceData, meta inte
 	return nil
 }
 
-func elastic7DeleteComponentTemplate(client *elastic7.Client, id string) error {
-	_, err := client.IndexDeleteComponentTemplate(id).Do(context.TODO())
-	return err
-}
-
 func resourceOpensearchPutComponentTemplate(d *schema.ResourceData, meta interface{}, create bool) error {
 	name := d.Get("name").(string)
 	body := d.Get("body").(string)
 
 	providerConf := meta.(*ProviderConf)
-	osClient, err := getClient(providerConf)
+	client, err := getOpenSearchClient(providerConf)
 	if err != nil {
 		return err
 	}
 
-	err = elastic7PutComponentTemplate(osClient, name, body, create)
+	_, err = client.Client.ComponentTemplate.Create(context.TODO(), opensearchapi.ComponentTemplateCreateReq{
+		ComponentTemplate: name,
+		Body:              strings.NewReader(body),
+	})
 
-	return err
-}
-
-func elastic7PutComponentTemplate(client *elastic7.Client, name string, body string, create bool) error {
-	_, err := client.IndexPutComponentTemplate(name).BodyString(body).Create(create).Do(context.TODO())
 	return err
 }

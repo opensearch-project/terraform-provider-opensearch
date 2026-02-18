@@ -75,11 +75,11 @@ func testCheckOpensearchIngestPipelineExists(name string) resource.TestCheckFunc
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
+		_, err = getIngestPipeline(client, rs.Primary.ID)
 
 		if err != nil {
 			return err
@@ -98,11 +98,11 @@ func testCheckOpensearchIngestPipelineDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
+		_, err = getIngestPipeline(client, rs.Primary.ID)
 
 		if err != nil {
 			return nil // should be not found error

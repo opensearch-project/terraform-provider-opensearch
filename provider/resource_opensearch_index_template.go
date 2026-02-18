@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	elastic7 "github.com/olivere/elastic/v7"
-	elastic6 "gopkg.in/olivere/elastic.v6"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func resourceOpensearchIndexTemplate() *schema.Resource {
@@ -53,13 +53,13 @@ func resourceOpensearchIndexTemplateRead(d *schema.ResourceData, meta interface{
 
 	var result string
 	var err error
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	result, err = elastic7IndexGetTemplate(osClient, id)
+	result, err = getLegacyIndexTemplate(client, id)
 	if err != nil {
-		if elastic7.IsNotFound(err) || elastic6.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] Index template (%s) not found, removing from state", id)
 			d.SetId("")
 			return nil
@@ -74,8 +74,10 @@ func resourceOpensearchIndexTemplateRead(d *schema.ResourceData, meta interface{
 	return ds.err
 }
 
-func elastic7IndexGetTemplate(client *elastic7.Client, id string) (string, error) {
-	res, err := client.IndexGetIndexTemplate(id).Do(context.TODO())
+func getLegacyIndexTemplate(client *OpenSearchClient, id string) (string, error) {
+	res, err := client.Client.Template.Get(context.TODO(), &opensearchapi.TemplateGetReq{
+		Templates: []string{id},
+	})
 	log.Printf("[INFO] Index template %+v %+v", res, err)
 	if err != nil {
 		return "", err
@@ -83,7 +85,11 @@ func elastic7IndexGetTemplate(client *elastic7.Client, id string) (string, error
 
 	// No more than 1 element is expected, if the index template is not found, previous call should
 	// return a 404 error
-	t := res.IndexTemplates[0].IndexTemplate
+	t, ok := res.Templates[id]
+	if !ok {
+		return "", nil
+	}
+
 	tj, err := json.Marshal(t)
 	if err != nil {
 		return "", err
@@ -99,11 +105,13 @@ func resourceOpensearchIndexTemplateDelete(d *schema.ResourceData, meta interfac
 	id := d.Id()
 	log.Printf("[WARN] Index template (%s) will be deleted", id)
 	var err error
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	err = elastic7IndexDeleteTemplate(osClient, id)
+	_, err = client.Client.Template.Delete(context.TODO(), opensearchapi.TemplateDeleteReq{
+		Template: id,
+	})
 
 	if err != nil {
 		return err
@@ -112,27 +120,19 @@ func resourceOpensearchIndexTemplateDelete(d *schema.ResourceData, meta interfac
 	return nil
 }
 
-func elastic7IndexDeleteTemplate(client *elastic7.Client, id string) error {
-	_, err := client.IndexDeleteIndexTemplate(id).Do(context.TODO())
-	return err
-}
-
 func resourceOpensearchPutIndexTemplate(d *schema.ResourceData, meta interface{}, create bool) error {
 	name := d.Get("name").(string)
 	body := d.Get("body").(string)
 
 	var err error
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	err = elastic7IndexPutTemplate(osClient, name, body, create)
-
-	return err
-}
-
-func elastic7IndexPutTemplate(client *elastic7.Client, name string, body string, create bool) error {
-	_, err := client.IndexPutIndexTemplate(name).BodyString(body).Create(create).Do(context.TODO())
+	_, err = client.Client.Template.Create(context.TODO(), opensearchapi.TemplateCreateReq{
+		Template: name,
+		Body:     strings.NewReader(body),
+	})
 
 	return err
 }
