@@ -1,17 +1,16 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/olivere/elastic/uritemplates"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var openDistroMonitorSchema = map[string]*schema.Schema{
@@ -62,7 +61,7 @@ func resourceOpensearchOpenDistroMonitorCreate(d *schema.ResourceData, m interfa
 func resourceOpensearchOpenDistroMonitorRead(d *schema.ResourceData, m interface{}) error {
 	res, err := resourceOpensearchOpenDistroGetMonitor(d.Id(), m)
 
-	if elastic7.IsNotFound(err) {
+	if isNotFound(err) {
 		log.Printf("[WARN] Monitor (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -99,50 +98,71 @@ func resourceOpensearchOpenDistroMonitorUpdate(d *schema.ResourceData, m interfa
 func resourceOpensearchOpenDistroMonitorDelete(d *schema.ResourceData, m interface{}) error {
 	var err error
 
-	path, err := uritemplates.Expand("/_plugins/_alerting/monitors/{id}", map[string]string{
-		"id": d.Id(),
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for monitor: %+v", err)
-	}
+	path := fmt.Sprintf("/_plugins/_alerting/monitors/%s", d.Id())
 
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "DELETE",
-		Path:   path,
-	})
 
-	return err
+	// Build request
+	req, err := http.NewRequest("DELETE", client.config.rawUrl+path, nil)
+	if err != nil {
+		return fmt.Errorf("error building DELETE request: %w", err)
+	}
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return fmt.Errorf("error deleting monitor: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for successful deletion (2xx status codes)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	return fmt.Errorf("error deleting monitor: received status code %d", resp.StatusCode)
 }
 
 func resourceOpensearchOpenDistroGetMonitor(monitorID string, m interface{}) (*monitorResponse, error) {
 	var err error
 	response := new(monitorResponse)
 
-	path, err := uritemplates.Expand("/_plugins/_alerting/monitors/{id}", map[string]string{
-		"id": monitorID,
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for monitor: %+v", err)
-	}
+	path := fmt.Sprintf("/_plugins/_alerting/monitors/%s", monitorID)
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
+
+	// Build request
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building GET request: %w", err)
 	}
-	body = res.Body
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error getting monitor: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return response, fmt.Errorf("monitor not found: %s", monitorID)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return response, fmt.Errorf("error getting monitor: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling monitor body: %+v: %+v", err, body)
@@ -157,26 +177,37 @@ func resourceOpensearchOpenDistroGetMonitor(monitorID string, m interface{}) (*m
 func resourceOpensearchOpenDistroPostMonitor(d *schema.ResourceData, m interface{}) (*monitorResponse, error) {
 	monitorJSON := d.Get("body").(string)
 
-	var err error
 	response := new(monitorResponse)
-
 	path := "/_plugins/_alerting/monitors/"
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "POST",
-		Path:   path,
-		Body:   monitorJSON,
-	})
+
+	// Build request
+	req, err := http.NewRequest("POST", client.config.rawUrl+path, strings.NewReader(monitorJSON))
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building POST request: %w", err)
 	}
-	body = res.Body
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error posting monitor: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error posting monitor: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling monitor body: %+v: %+v", err, body)
@@ -188,31 +219,37 @@ func resourceOpensearchOpenDistroPostMonitor(d *schema.ResourceData, m interface
 func resourceOpensearchOpenDistroPutMonitor(d *schema.ResourceData, m interface{}) (*monitorResponse, error) {
 	monitorJSON := d.Get("body").(string)
 
-	var err error
 	response := new(monitorResponse)
+	path := fmt.Sprintf("/_plugins/_alerting/monitors/%s", d.Id())
 
-	path, err := uritemplates.Expand("/_plugins/_alerting/monitors/{id}", map[string]string{
-		"id": d.Id(),
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for monitor: %+v", err)
-	}
-
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   path,
-		Body:   monitorJSON,
-	})
+
+	// Build request
+	req, err := http.NewRequest("PUT", client.config.rawUrl+path, strings.NewReader(monitorJSON))
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building PUT request: %w", err)
 	}
-	body = res.Body
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error putting monitor: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error putting monitor: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling monitor body: %+v: %+v", err, body)

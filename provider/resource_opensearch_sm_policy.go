@@ -4,18 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
-	"github.com/olivere/elastic/uritemplates"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var openSearchSMPolicySchema = map[string]*schema.Schema{
@@ -87,7 +86,7 @@ func resourceOpensearchSMPolicyRead(d *schema.ResourceData, m interface{}) error
 	policyResponse, err := resourceOpensearchGetSMPolicy(d.Get("policy_name").(string), m)
 
 	if err != nil {
-		if elastic7.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] OpenSearch Policy (%s) not found, removing from state", d.Get("policy_name").(string))
 			d.SetId("")
 			return nil
@@ -127,72 +126,95 @@ func resourceOpensearchSMPolicyUpdate(d *schema.ResourceData, m interface{}) err
 }
 
 func resourceOpensearchSMPolicyDelete(d *schema.ResourceData, m interface{}) error {
-	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_name}", map[string]string{
-		"policy_name": d.Get("policy_name").(string),
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for policy: %+v", err)
-	}
+	path := fmt.Sprintf("/_plugins/_sm/policies/%s", d.Get("policy_name").(string))
 
-	osclient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osclient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method:           "DELETE",
-		Path:             path,
-		RetryStatusCodes: []int{http.StatusConflict},
-		Retrier: elastic7.NewBackoffRetrier(
-			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-		),
-	})
+
+	// Execute request with retry logic
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+
+		// Build request
+		req, err := http.NewRequest("DELETE", client.config.rawUrl+path, nil)
+		if err != nil {
+			return fmt.Errorf("error building DELETE request: %w", err)
+		}
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil {
+			// Check if we should retry on conflict
+			if resp.StatusCode != http.StatusConflict {
+				break
+			}
+			resp.Body.Close()
+		}
+	}
 
 	if err != nil {
 		return fmt.Errorf("error deleting policy: %+v : %+v", path, err)
 	}
+	defer resp.Body.Close()
 
-	return err
+	// Check for successful deletion (2xx status codes)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	return fmt.Errorf("error deleting policy: received status code %d", resp.StatusCode)
 }
 
 func resourceOpensearchGetSMPolicy(policyName string, m interface{}) (SMPolicyResponse, error) {
-	var err error
 	response := new(SMPolicyResponse)
 
-	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_name}", map[string]string{
-		"policy_name": policyName,
-	})
+	path := fmt.Sprintf("/_plugins/_sm/policies/%s", policyName)
 
-	if err != nil {
-		return *response, fmt.Errorf("error building URL path for policy: %+v", err)
-	}
-
-	var body *json.RawMessage
-	osclient, err := getClient(m.(*ProviderConf))
-	if err != nil {
-		return *response, err
-	}
-	var res *elastic7.Response
-	res, err = osclient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
-
-	if err != nil {
-		return *response, fmt.Errorf("error getting policy: %+v : %+v", path, err)
-	}
-	body = &res.Body
-
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return *response, err
 	}
 
-	if err := json.Unmarshal(*body, &response); err != nil {
+	// Build request
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+	if err != nil {
+		return *response, fmt.Errorf("error building GET request: %w", err)
+	}
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return *response, fmt.Errorf("error getting policy: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return *response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return *response, fmt.Errorf("policy not found: %s", policyName)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return *response, fmt.Errorf("error getting policy: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
 		return *response, fmt.Errorf("error unmarshalling policy body: %+v: %+v", err, body)
 	}
 
 	normalizePolicy(response.Policy)
 
-	return *response, err
+	return *response, nil
 }
 
 func resourceOpensearchPostPutSMPolicy(d *schema.ResourceData, m interface{}, method string) (*SMPolicyResponse, error) {
@@ -207,39 +229,56 @@ func resourceOpensearchPostPutSMPolicy(d *schema.ResourceData, m interface{}, me
 		params.Set("if_primary_term", strconv.Itoa(primTerm))
 	}
 
-	path, err := uritemplates.Expand("/_plugins/_sm/policies/{policy_name}", map[string]string{
-		"policy_name": d.Get("policy_name").(string),
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for policy: %+v", err)
-	}
+	path := fmt.Sprintf("/_plugins/_sm/policies/%s?%s", d.Get("policy_name").(string), params.Encode())
 
-	var body *json.RawMessage
-	osclient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osclient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method:           method,
-		Path:             path,
-		Params:           params,
-		Body:             string(policyJSON),
-		RetryStatusCodes: []int{http.StatusConflict},
-		Retrier: elastic7.NewBackoffRetrier(
-			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-		),
-	})
-	if err != nil {
-		return response, fmt.Errorf("error posting policy: %+v : %+v : %+v", path, policyJSON, err)
+
+	// Execute request with retry logic
+	var resp *http.Response
+	var body []byte
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+
+		// Build request (must recreate for each attempt as body can't be reused)
+		req, err := http.NewRequest(method, client.config.rawUrl+path, strings.NewReader(policyJSON))
+		if err != nil {
+			return response, fmt.Errorf("error building %s request: %w", method, err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil {
+			// Read response body
+			body, err = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				return response, fmt.Errorf("error reading response body: %w", err)
+			}
+
+			// Check if we should retry on conflict
+			if resp.StatusCode != http.StatusConflict {
+				break
+			}
+		}
 	}
-	body = &res.Body
 
 	if err != nil {
-		return response, fmt.Errorf("error creating policy mapping: %+v", err)
+		return response, fmt.Errorf("error %s policy: %+v : %+v", method, path, err)
 	}
 
-	if err := json.Unmarshal(*body, response); err != nil {
+	// Check status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error %s policy: received status code %d, body: %s", method, resp.StatusCode, string(body))
+	}
+
+	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling policy body: %+v: %+v", err, body)
 	}
 

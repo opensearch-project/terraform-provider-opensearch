@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/olivere/elastic/uritemplates"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var openDistroISMPolicyMappingSchema = map[string]*schema.Schema{
@@ -164,7 +164,7 @@ func resourceOpensearchOpenDistroISMPolicyMappingRead(d *schema.ResourceData, m 
 
 func resourceOpensearchOpenDistroISMPolicyMappingUpdate(d *schema.ResourceData, m interface{}) error {
 	if _, err := resourceOpensearchPostOpendistroPolicyMapping(d, m, "change_policy"); err != nil {
-		if elastic7.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] OpendistroPolicyMapping (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
@@ -220,35 +220,55 @@ func resourceOpensearchPostOpendistroPolicyMapping(d *schema.ResourceData, m int
 
 	}
 
-	path, err := uritemplates.Expand("/_plugins/_ism/{action}/{indexes}", map[string]string{
-		"indexes": d.Get("indexes").(string),
-		"action":  action,
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for policy: %+v", err)
-	}
+	path := fmt.Sprintf("/_plugins/_ism/%s/%s", action, d.Get("indexes").(string))
 
-	var body *json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "POST",
-		Path:   path,
-		Body:   requestBody,
-	})
-	if err != nil {
-		return response, fmt.Errorf("error posting policy attachment: %+v : %+v : %+v", path, requestBody, err)
+
+	// Execute request with retry logic
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+
+		// Build request
+		req, err := http.NewRequest("POST", client.config.rawUrl+path, strings.NewReader(requestBody))
+		if err != nil {
+			return response, fmt.Errorf("error building POST request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil && resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusInternalServerError {
+			break
+		}
+
+		if resp != nil {
+			resp.Body.Close()
+		}
 	}
-	body = &res.Body
 
 	if err != nil {
-		return response, fmt.Errorf("error creating policy mapping: %+v", err)
+		return response, fmt.Errorf("error posting policy attachment: %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
 	}
 
-	if err := json.Unmarshal(*body, response); err != nil {
+	// Check status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error posting policy attachment: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling policy body: %+v: %+v", err, body)
 	}
 
@@ -257,33 +277,59 @@ func resourceOpensearchPostOpendistroPolicyMapping(d *schema.ResourceData, m int
 
 func resourceOpensearchGetOpendistroPolicyMapping(indexPattern string, m interface{}) (map[string]interface{}, error) {
 	response := new(map[string]interface{})
-	path, err := uritemplates.Expand("/_plugins/_ism/explain/{index_pattern}", map[string]string{
-		"index_pattern": indexPattern,
-	})
+
+	path := fmt.Sprintf("/_plugins/_ism/explain/%s", indexPattern)
+
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
-		return *response, fmt.Errorf("error building URL path for policy mapping: %+v", err)
+		return *response, err
 	}
 
-	var body *json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
-	if err != nil {
-		return nil, err
+	// Execute request with retry logic
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+		}
+
+		// Build request
+		req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+		if err != nil {
+			return *response, fmt.Errorf("error building GET request: %w", err)
+		}
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil && resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusInternalServerError {
+			break
+		}
+
+		if resp != nil {
+			resp.Body.Close()
+		}
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
-	if err != nil {
-		return *response, fmt.Errorf("error getting policy attachment: %+v, %w", path, err)
-	}
-	body = &res.Body
 
 	if err != nil {
-		return *response, fmt.Errorf("error creating policy mapping: %+v", err)
+		return *response, fmt.Errorf("error getting policy attachment: %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return *response, fmt.Errorf("error reading response body: %w", err)
 	}
 
-	if err := json.Unmarshal(*body, response); err != nil {
+	// Check status code
+	if resp.StatusCode == http.StatusNotFound {
+		return *response, fmt.Errorf("policy mapping not found: %s", indexPattern)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return *response, fmt.Errorf("error getting policy mapping: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	if err := json.Unmarshal(body, response); err != nil {
 		return *response, fmt.Errorf("error unmarshalling policy explain body: %+v: %+v", err, body)
 	}
 

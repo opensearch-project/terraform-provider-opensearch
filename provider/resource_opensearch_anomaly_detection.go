@@ -1,16 +1,16 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/olivere/elastic/uritemplates"
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var anomalyDetectionSchema = map[string]*schema.Schema{
@@ -58,7 +58,7 @@ func resourceOpensearchAnomalyDetectionCreate(d *schema.ResourceData, m interfac
 func resourceOpensearchAnomalyDetectionRead(d *schema.ResourceData, m interface{}) error {
 	res, err := resourceOpensearchAnomalyDetectionGet(d.Id(), m)
 
-	if elastic7.IsNotFound(err) {
+	if isNotFound(err) {
 		log.Printf("[WARN] Anomaly Detector (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -93,30 +93,41 @@ func resourceOpensearchAnomalyDetectionUpdate(d *schema.ResourceData, m interfac
 }
 
 func resourceOpensearchAnomalyDetectionGet(anomalyDetectionID string, m interface{}) (*anomalyDetectionResponse, error) {
-	var err error
 	response := new(anomalyDetectionResponse)
 
-	path, err := uritemplates.Expand("/_plugins/_anomaly_detection/detectors/{id}", map[string]string{
-		"id": anomalyDetectionID,
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for anomaly detector: %+v", err)
-	}
+	path := fmt.Sprintf("/_plugins/_anomaly_detection/detectors/%s", anomalyDetectionID)
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
+
+	// Build request
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building GET request: %w", err)
 	}
-	body = res.Body
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error getting anomaly detector: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return response, fmt.Errorf("anomaly detector not found: %s", anomalyDetectionID)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return response, fmt.Errorf("error getting anomaly detector: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling anomaly detector body: %+v: %+v", err, body)
@@ -125,32 +136,43 @@ func resourceOpensearchAnomalyDetectionGet(anomalyDetectionID string, m interfac
 	normalizeAnomalyDetection(response.AnomalyDetector)
 	log.Printf("[INFO] Response: %+v", response)
 	log.Printf("The version %v", response.Version)
-	return response, err
+	return response, nil
 }
 
 func resourceOpensearchPostAnomalyDetection(d *schema.ResourceData, m interface{}) (*anomalyDetectionResponse, error) {
 	anomalyDetectionJSON := d.Get("body").(string)
 
-	var err error
 	response := new(anomalyDetectionResponse)
-
 	path := "/_plugins/_anomaly_detection/detectors/"
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "POST",
-		Path:   path,
-		Body:   anomalyDetectionJSON,
-	})
+
+	// Build request
+	req, err := http.NewRequest("POST", client.config.rawUrl+path, strings.NewReader(anomalyDetectionJSON))
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building POST request: %w", err)
 	}
-	body = res.Body
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error posting anomaly detector: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error posting anomaly detector: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling anomaly detector body: %+v: %+v", err, body)
@@ -162,31 +184,37 @@ func resourceOpensearchPostAnomalyDetection(d *schema.ResourceData, m interface{
 func resourceOpensearchPutAnomalyDetection(d *schema.ResourceData, m interface{}) (*anomalyDetectionResponse, error) {
 	anomalyDetectionJSON := d.Get("body").(string)
 
-	var err error
 	response := new(anomalyDetectionResponse)
+	path := fmt.Sprintf("/_plugins/_anomaly_detection/detectors/%s", d.Id())
 
-	path, err := uritemplates.Expand("/_plugins/_anomaly_detection/detectors/{id}", map[string]string{
-		"id": d.Id(),
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for anomaly detector: %+v", err)
-	}
-
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   path,
-		Body:   anomalyDetectionJSON,
-	})
+
+	// Build request
+	req, err := http.NewRequest("PUT", client.config.rawUrl+path, strings.NewReader(anomalyDetectionJSON))
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building PUT request: %w", err)
 	}
-	body = res.Body
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error putting anomaly detector: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error putting anomaly detector: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling anomaly detector body: %+v: %+v", err, body)
@@ -196,25 +224,32 @@ func resourceOpensearchPutAnomalyDetection(d *schema.ResourceData, m interface{}
 }
 
 func resourceOpensearchAnomalyDetectionDelete(d *schema.ResourceData, m interface{}) error {
-	var err error
+	path := fmt.Sprintf("/_plugins/_anomaly_detection/detectors/%s", d.Id())
 
-	path, err := uritemplates.Expand("/_plugins/_anomaly_detection/detectors/{id}", map[string]string{
-		"id": d.Id(),
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for anomaly detector: %+v", err)
-	}
-
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "DELETE",
-		Path:   path,
-	})
 
-	return err
+	// Build request
+	req, err := http.NewRequest("DELETE", client.config.rawUrl+path, nil)
+	if err != nil {
+		return fmt.Errorf("error building DELETE request: %w", err)
+	}
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return fmt.Errorf("error deleting anomaly detector: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for successful deletion (2xx status codes)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	return fmt.Errorf("error deleting anomaly detector: received status code %d", resp.StatusCode)
 }
 
 type anomalyDetectionResponse struct {

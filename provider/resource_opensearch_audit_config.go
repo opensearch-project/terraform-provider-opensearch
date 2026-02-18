@@ -1,16 +1,15 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var auditConfigSchema = map[string]*schema.Schema{
@@ -200,7 +199,7 @@ func resourceOpensearchAuditConfigRead(d *schema.ResourceData, m interface{}) er
 
 	res, err := resourceOpensearchGetAuditConfig(m)
 	if err != nil {
-		if elastic7.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] audit config (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
@@ -284,29 +283,45 @@ func resourceOpensearchAuditConfigDelete(d *schema.ResourceData, m interface{}) 
 }
 
 func resourceOpensearchGetAuditConfig(m interface{}) (getAuditConfigResponse, error) {
-	var err error
 	audit := new(getAuditConfigResponse)
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return *audit, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   "/_plugins/_security/api/audit",
-	})
+
+	// Build request
+	req, err := http.NewRequest("GET", client.config.rawUrl+"/_plugins/_security/api/audit", nil)
 	if err != nil {
-		return *audit, err
+		return *audit, fmt.Errorf("error building GET request: %w", err)
 	}
-	body = res.Body
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return *audit, fmt.Errorf("error getting audit config: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return *audit, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return *audit, fmt.Errorf("audit config not found")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return *audit, fmt.Errorf("error getting audit config: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, &audit); err != nil {
 		return *audit, fmt.Errorf("Error unmarshalling user body: %+v: %+v", err, body)
 	}
 	log.Printf("[INFO] get audit config response: %+v", *audit)
-	return *audit, err
+	return *audit, nil
 }
 
 func expandAudit(d *schema.ResourceData) auditConfig_audit {
@@ -392,33 +407,58 @@ func resourceOpensearchPutAuditConfig(d *schema.ResourceData, m interface{}) (*p
 		return response, fmt.Errorf("body Error : %s", auditConfigJSON)
 	}
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
+
 	log.Printf("[INFO] put audit config: %+v", auditConfig)
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method:           "PUT",
-		Path:             "/_plugins/_security/api/audit/config",
-		Body:             string(auditConfigJSON),
-		RetryStatusCodes: []int{http.StatusInternalServerError},
-		Retrier: elastic7.NewBackoffRetrier(
-			elastic7.NewExponentialBackoff(100*time.Millisecond, 30*time.Second),
-		),
-	})
-	if err != nil {
-		e, ok := err.(*elastic7.Error)
-		if !ok {
-			log.Printf("[ERROR] expected error to be of type *elastic.Error")
-		} else {
-			log.Printf("[ERROR] error creating audit config: %v %v %v", res, res.Body, e)
+
+	// Build request
+	path := "/_plugins/_security/api/audit/config"
+
+	// Execute request with retry logic
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff
+			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
 		}
-		return response, err
+
+		// Build request (must recreate for each attempt as body can't be reused)
+		req, err := http.NewRequest("PUT", client.config.rawUrl+path, strings.NewReader(string(auditConfigJSON)))
+		if err != nil {
+			return response, fmt.Errorf("error building PUT request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err = client.Client.Client.Perform(req)
+		if err == nil {
+			// Check if we should retry on 500 errors
+			if resp.StatusCode != http.StatusInternalServerError {
+				break
+			}
+			resp.Body.Close()
+		}
 	}
 
-	body = res.Body
+	if err != nil {
+		log.Printf("[ERROR] error creating audit config: %v", err)
+		return response, err
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Check status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error putting audit config: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("failed to unmarshal audit config body: %+v: %+v", err, body)

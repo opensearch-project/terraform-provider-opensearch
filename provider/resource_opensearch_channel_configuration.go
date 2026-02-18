@@ -1,17 +1,16 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-	"github.com/olivere/elastic/uritemplates"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 var openDistroChannelConfigurationSchema = map[string]*schema.Schema{
@@ -59,7 +58,7 @@ func resourceOpensearchOpenDistroChannelConfigurationCreate(d *schema.ResourceDa
 func resourceOpensearchOpenDistroChannelConfigurationRead(d *schema.ResourceData, m interface{}) error {
 	res, err := resourceOpensearchOpenDistroGetChannelConfiguration(d.Id(), m)
 
-	if elastic7.IsNotFound(err) {
+	if isNotFound(err) {
 		log.Printf("[WARN] Channel configuration (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
@@ -94,52 +93,70 @@ func resourceOpensearchOpenDistroChannelConfigurationUpdate(d *schema.ResourceDa
 }
 
 func resourceOpensearchOpenDistroChannelConfigurationDelete(d *schema.ResourceData, m interface{}) error {
-	var err error
+	path := fmt.Sprintf("/_plugins/_notifications/configs/%s", d.Id())
 
-	path, err := uritemplates.Expand("/_plugins/_notifications/configs/{id}", map[string]string{
-		"id": d.Id(),
-	})
-	if err != nil {
-		return fmt.Errorf("error building URL path for channel configuration: %+v", err)
-	}
-
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "DELETE",
-		Path:   path,
-	})
 
-	return err
+	// Build request
+	req, err := http.NewRequest("DELETE", client.config.rawUrl+path, nil)
+	if err != nil {
+		return fmt.Errorf("error building DELETE request: %w", err)
+	}
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return fmt.Errorf("error deleting channel configuration: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for successful deletion (2xx status codes)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+
+	return fmt.Errorf("error deleting channel configuration: received status code %d", resp.StatusCode)
 }
 
 func resourceOpensearchOpenDistroGetChannelConfiguration(channelConfigurationID string, m interface{}) (*channelConfigurationReadResponse, error) {
-	var err error
 	response := new(channelConfigurationReadResponse)
 
-	path, err := uritemplates.Expand("/_plugins/_notifications/configs/{id}", map[string]string{
-		"id": channelConfigurationID,
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for channel configuration: %+v", err)
-	}
+	path := fmt.Sprintf("/_plugins/_notifications/configs/%s", channelConfigurationID)
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
+
+	// Build request
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building GET request: %w", err)
 	}
-	body = res.Body
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error getting channel configuration: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return response, fmt.Errorf("channel configuration not found: %s", channelConfigurationID)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return response, fmt.Errorf("error getting channel configuration: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling channel configuration body: %+v: %+v", err, body)
@@ -147,32 +164,43 @@ func resourceOpensearchOpenDistroGetChannelConfiguration(channelConfigurationID 
 
 	normalizeChannelConfiguration(response.ChannelConfigurationInfos[0])
 
-	return response, err
+	return response, nil
 }
 
 func resourceOpensearchOpenDistroPostChannelConfiguration(d *schema.ResourceData, m interface{}) (*channelConfigurationCreationResponse, error) {
 	channelConfigurationJSON := d.Get("body").(string)
 
-	var err error
 	response := new(channelConfigurationCreationResponse)
-
 	path := "/_plugins/_notifications/configs/"
 
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "POST",
-		Path:   path,
-		Body:   channelConfigurationJSON,
-	})
+
+	// Build request
+	req, err := http.NewRequest("POST", client.config.rawUrl+path, strings.NewReader(channelConfigurationJSON))
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building POST request: %w", err)
 	}
-	body = res.Body
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error posting channel configuration: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error posting channel configuration: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling channel configuration body: %+v: %+v", err, body)
@@ -183,31 +211,37 @@ func resourceOpensearchOpenDistroPostChannelConfiguration(d *schema.ResourceData
 func resourceOpensearchOpenDistroPutChannelConfiguration(d *schema.ResourceData, m interface{}) (*channelConfigurationCreationResponse, error) {
 	channelConfigurationJSON := d.Get("body").(string)
 
-	var err error
 	response := new(channelConfigurationCreationResponse)
+	path := fmt.Sprintf("/_plugins/_notifications/configs/%s", d.Id())
 
-	path, err := uritemplates.Expand("/_plugins/_notifications/configs/{id}", map[string]string{
-		"id": d.Id(),
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for channel configuration: %+v", err)
-	}
-
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
+	client, err := getOpenSearchClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   path,
-		Body:   channelConfigurationJSON,
-	})
+
+	// Build request
+	req, err := http.NewRequest("PUT", client.config.rawUrl+path, strings.NewReader(channelConfigurationJSON))
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("error building PUT request: %w", err)
 	}
-	body = res.Body
+	req.Header.Set("Content-Type", "application/json")
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return response, fmt.Errorf("error putting channel configuration: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return response, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return response, fmt.Errorf("error putting channel configuration: received status code %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling channel configuration body: %+v: %+v", err, body)
