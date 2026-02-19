@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchIndexTemplate(t *testing.T) {
@@ -74,11 +75,13 @@ func testCheckOpensearchIndexTemplateExists(name string) resource.TestCheckFunc 
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.Template.Get(context.TODO(), &opensearchapi.TemplateGetReq{
+			Templates: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return err
@@ -97,11 +100,13 @@ func testCheckOpensearchIndexTemplateDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.Template.Get(context.TODO(), &opensearchapi.TemplateGetReq{
+			Templates: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return nil // should be not found error

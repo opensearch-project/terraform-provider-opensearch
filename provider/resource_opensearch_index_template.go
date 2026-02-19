@@ -78,22 +78,72 @@ func getLegacyIndexTemplate(client *OpenSearchClient, id string) (string, error)
 	res, err := client.Client.Template.Get(context.TODO(), &opensearchapi.TemplateGetReq{
 		Templates: []string{id},
 	})
-	log.Printf("[INFO] Index template %+v %+v", res, err)
 	if err != nil {
 		return "", err
 	}
 
-	// No more than 1 element is expected, if the index template is not found, previous call should
-	// return a 404 error
+	// No more than 1 element is expected
 	t, ok := res.Templates[id]
 	if !ok {
 		return "", nil
 	}
 
-	tj, err := json.Marshal(t)
+	// For legacy templates, the API returns settings/mappings/aliases at top level
+	// But the test config expects them nested under "template" key
+	// We need to wrap them in a "template" section to match the expected format
+	tplMap := map[string]interface{}{
+		"index_patterns": t.IndexPatterns,
+	}
+
+	if t.Order != 0 {
+		tplMap["order"] = t.Order
+	}
+	if t.Version != 0 {
+		tplMap["version"] = t.Version
+	}
+
+	// Always include template section if any of settings/mappings/aliases exist
+	templateSection := map[string]interface{}{}
+	hasContent := false
+
+	// Check settings - API returns {} even if empty
+	if len(t.Settings) > 0 && string(t.Settings) != "{}" && string(t.Settings) != "null" {
+		var settings map[string]interface{}
+		if err := json.Unmarshal(t.Settings, &settings); err == nil && len(settings) > 0 {
+			templateSection["settings"] = settings
+			hasContent = true
+		}
+	}
+	// Check mappings
+	if len(t.Mappings) > 0 && string(t.Mappings) != "{}" && string(t.Mappings) != "null" {
+		var mappings map[string]interface{}
+		if err := json.Unmarshal(t.Mappings, &mappings); err == nil && len(mappings) > 0 {
+			templateSection["mappings"] = mappings
+			hasContent = true
+		}
+	}
+	// Check aliases
+	if len(t.Aliases) > 0 && string(t.Aliases) != "{}" && string(t.Aliases) != "null" {
+		var aliases map[string]interface{}
+		if err := json.Unmarshal(t.Aliases, &aliases); err == nil && len(aliases) > 0 {
+			templateSection["aliases"] = aliases
+			hasContent = true
+		}
+	}
+
+	// Always include template section if user provided one in config
+	// The diff suppression will handle empty vs non-empty comparisons
+	if hasContent {
+		tplMap["template"] = templateSection
+	}
+
+	normalizeIndexTemplate(tplMap)
+
+	tj, err := json.Marshal(tplMap)
 	if err != nil {
 		return "", err
 	}
+
 	return string(tj), nil
 }
 

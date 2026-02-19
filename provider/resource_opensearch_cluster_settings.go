@@ -382,24 +382,36 @@ func resourceOpensearchClusterSettingsDelete(d *schema.ResourceData, meta interf
 }
 
 func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interface{}, error) {
-	var settings map[string]interface{}
+	var persistentSettings map[string]interface{}
 
 	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
-		return settings, err
+		return nil, err
 	}
 
-	res, err := client.Client.Cluster.GetSettings(context.TODO(), &opensearchapi.ClusterGetSettingsReq{})
+	// Request flat settings to match expected format (dot notation keys)
+	flatSettings := true
+	res, err := client.Client.Cluster.GetSettings(context.TODO(), &opensearchapi.ClusterGetSettingsReq{
+		Params: opensearchapi.ClusterGetSettingsParams{
+			FlatSettings: &flatSettings,
+		},
+	})
 	if err != nil {
-		return settings, err
+		return nil, err
 	}
 
-	err = json.Unmarshal(res.Persistent, &settings)
+	// Unmarshal the persistent settings from the response
+	err = json.Unmarshal(res.Persistent, &persistentSettings)
 	if err != nil {
-		return settings, fmt.Errorf("fail to unmarshal: %v", err)
+		return nil, fmt.Errorf("fail to unmarshal persistent settings: %v", err)
 	}
 
-	return settings, nil
+	// Wrap in the expected structure with "persistent" key
+	result := map[string]interface{}{
+		"persistent": persistentSettings,
+	}
+
+	return result, nil
 }
 
 func clearAllSettings(meta interface{}) error {

@@ -95,6 +95,61 @@ func getIndexTemplate(client *OpenSearchClient, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	// Normalize the template to remove fields that shouldn't be in state
+	var tplMap map[string]interface{}
+	if err := json.Unmarshal(tj, &tplMap); err != nil {
+		return "", err
+	}
+
+	// Remove version (managed separately)
+	delete(tplMap, "version")
+
+	// Remove priority if it's 0 (default value)
+	if priority, ok := tplMap["priority"].(float64); ok && priority == 0 {
+		delete(tplMap, "priority")
+	}
+
+	// Remove composed_of if it's empty or null
+	if composedOf, ok := tplMap["composed_of"].([]interface{}); ok && len(composedOf) == 0 {
+		delete(tplMap, "composed_of")
+	}
+	if tplMap["composed_of"] == nil {
+		delete(tplMap, "composed_of")
+	}
+
+	// Normalize data_stream to only keep the "hidden" field
+	if dataStream, ok := tplMap["data_stream"].(map[string]interface{}); ok {
+		for k := range dataStream {
+			if k != "hidden" {
+				delete(dataStream, k)
+			}
+		}
+		// If data_stream is now empty or only has "hidden", keep it as-is
+		if len(dataStream) == 0 {
+			tplMap["data_stream"] = map[string]interface{}{}
+		}
+	}
+
+	// Normalize template section - remove null values
+	if template, ok := tplMap["template"].(map[string]interface{}); ok {
+		for k, v := range template {
+			if v == nil {
+				delete(template, k)
+			}
+		}
+		// Remove template section if it's empty
+		if len(template) == 0 {
+			delete(tplMap, "template")
+		}
+	}
+
+	// Re-marshal
+	tj, err = json.Marshal(tplMap)
+	if err != nil {
+		return "", err
+	}
+
 	return string(tj), nil
 }
 

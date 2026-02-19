@@ -1,18 +1,20 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-
-	"github.com/olivere/elastic/uritemplates"
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 var (
@@ -539,28 +541,39 @@ func resourceOpensearchIndexCreate(d *schema.ResourceData, meta interface{}) err
 
 	// Note: the CreateIndex call handles URL encoding under the hood to handle
 	// non-URL friendly characters and functionality like date math
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	put := osClient.CreateIndex(name)
-	if d.Get("include_type_name").(string) == "true" {
-		put = put.IncludeTypeName(true)
-	} else if d.Get("include_type_name").(string) == "false" {
-		put = put.IncludeTypeName(false)
-	}
-	resp, requestErr := put.BodyJson(body).Do(ctx)
-	err = requestErr
-	if err == nil {
-		resolvedName = resp.Index
+
+	// Marshal body to JSON
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal index body: %v", err)
 	}
 
-	if err == nil {
-		// Let terraform know the resource was created
-		d.SetId(resolvedName)
-		return resourceOpensearchIndexRead(d, meta)
+	// Build create request
+	// Note: URL-encode the index name to handle date math expressions like <index-{now/d}>
+	// which contain special characters that need encoding
+	createReq := opensearchapi.IndicesCreateReq{
+		Index: url.PathEscape(name),
+		Body:  bytes.NewReader(bodyBytes),
 	}
-	return err
+
+	resp, err := client.Client.Indices.Create(ctx, createReq)
+	if err != nil {
+		return fmt.Errorf("failed to create index: %v", err)
+	}
+
+	if !resp.Acknowledged {
+		return fmt.Errorf("failed to create index: creation not acknowledged")
+	}
+
+	resolvedName = resp.Index
+
+	// Let terraform know the resource was created
+	d.SetId(resolvedName)
+	return resourceOpensearchIndexRead(d, meta)
 }
 
 func settingsFromIndexResourceData(d *schema.ResourceData) map[string]interface{} {
@@ -609,7 +622,6 @@ func indexResourceDataFromSettings(settings map[string]interface{}, d *schema.Re
 func resourceOpensearchIndexDelete(d *schema.ResourceData, meta interface{}) error {
 	var (
 		name = d.Id()
-		ctx  = context.Background()
 		err  error
 	)
 
@@ -623,11 +635,15 @@ func resourceOpensearchIndexDelete(d *schema.ResourceData, meta interface{}) err
 		return fmt.Errorf("There are documents in the index (or the index could not be , set force_destroy to true to allow destroying.")
 	}
 
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.DeleteIndex(name).Do(ctx)
+
+	deleteReq := opensearchapi.IndicesDeleteReq{
+		Indices: []string{name},
+	}
+	_, err = client.Client.Indices.Delete(context.Background(), deleteReq)
 
 	return err
 }
@@ -635,23 +651,22 @@ func resourceOpensearchIndexDelete(d *schema.ResourceData, meta interface{}) err
 func allowIndexDestroy(indexName string, d *schema.ResourceData, meta interface{}) bool {
 	force := d.Get("force_destroy").(bool)
 
-	var (
-		ctx   = context.Background()
-		count int64
-		err   error
-	)
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return false
 	}
-	count, err = osClient.Count(indexName).Do(ctx)
+
+	countReq := opensearchapi.IndicesCountReq{
+		Indices: []string{indexName},
+	}
+	countResp, err := client.Client.Indices.Count(context.Background(), &countReq)
 
 	if err != nil {
 		log.Printf("[INFO] allowIndexDestroy: %+v", err)
 		return false
 	}
 
-	if count > 0 && !force {
+	if countResp.Count > 0 && !force {
 		return false
 	}
 	return true
@@ -696,7 +711,6 @@ func resourceOpensearchIndexUpdate(d *schema.ResourceData, meta interface{}) err
 
 	var (
 		name = d.Id()
-		ctx  = context.Background()
 		err  error
 	)
 
@@ -704,36 +718,69 @@ func resourceOpensearchIndexUpdate(d *schema.ResourceData, meta interface{}) err
 		name = getWriteIndexByAlias(alias.(string), d, meta)
 	}
 
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	_, err = osClient.IndexPutSettings(name).BodyJson(body).Do(ctx)
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal settings body: %v", err)
+	}
+
+	settingsReq := opensearchapi.SettingsPutReq{
+		Indices: []string{name},
+		Body:    bytes.NewReader(bodyBytes),
+	}
+	_, err = client.Client.Indices.Settings.Put(context.Background(), settingsReq)
 
 	if err == nil {
-		return resourceOpensearchIndexRead(d, meta.(*ProviderConf))
+		return resourceOpensearchIndexRead(d, meta)
 	}
 	return err
 }
 
 func getWriteIndexByAlias(alias string, d *schema.ResourceData, meta interface{}) string {
-	var (
-		index   = d.Id()
-		ctx     = context.Background()
-		columns = []string{"index", "is_write_index"}
-	)
+	index := d.Id()
 
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
 		return index
 	}
-	r, err := osClient.CatAliases().Alias(alias).Columns(columns...).Do(ctx)
+
+	// Use _cat/aliases API via direct HTTP request
+	path := fmt.Sprintf("/_cat/aliases/%s?h=index,is_write_index&format=json", alias)
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 	if err != nil {
 		log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
 		return index
 	}
-	for _, column := range r {
+
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
+		return index
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
+		return index
+	}
+
+	// Parse JSON response
+	var aliases []struct {
+		Index        string `json:"index"`
+		IsWriteIndex string `json:"is_write_index"`
+	}
+	if err := json.Unmarshal(body, &aliases); err != nil {
+		log.Printf("[INFO] getWriteIndexByAlias: %+v", err)
+		return index
+	}
+
+	for _, column := range aliases {
 		if column.IsWriteIndex == "true" {
 			return column.Index
 		}
@@ -745,7 +792,6 @@ func getWriteIndexByAlias(alias string, d *schema.ResourceData, meta interface{}
 func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error {
 	var (
 		index    = d.Id()
-		ctx      = context.Background()
 		settings map[string]interface{}
 	)
 
@@ -753,24 +799,43 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 		index = getWriteIndexByAlias(alias.(string), d, meta)
 	}
 
-	// The logic is repeated strictly because of the types
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	r, err := osClient.IndexGetSettings(index).FlatSettings(true).Do(ctx)
+
+	// Get index settings using direct HTTP request to get flat settings
+	settingsPath := fmt.Sprintf("/%s/_settings?flat_settings=true", index)
+	settingsReq, err := http.NewRequest("GET", client.config.rawUrl+settingsPath, nil)
 	if err != nil {
-		if elastic7.IsNotFound(err) {
+		return fmt.Errorf("error building settings request: %w", err)
+	}
+
+	settingsResp, err := client.Client.Client.Perform(settingsReq)
+	if err != nil {
+		if isNotFound(err) {
 			log.Printf("[WARN] Index (%s) not found, removing from state", index)
 			d.SetId("")
 			return nil
 		}
-
 		return err
 	}
+	defer settingsResp.Body.Close()
 
-	if resp, ok := r[index]; ok {
-		settings = resp.Settings
+	settingsBody, err := io.ReadAll(settingsResp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading settings response: %w", err)
+	}
+
+	var settingsResponse map[string]interface{}
+	if err := json.Unmarshal(settingsBody, &settingsResponse); err != nil {
+		return fmt.Errorf("error unmarshaling settings: %w", err)
+	}
+
+	if indexData, ok := settingsResponse[index].(map[string]interface{}); ok {
+		if indexSettings, ok := indexData["settings"].(map[string]interface{}); ok {
+			settings = indexSettings
+		}
 	}
 
 	// Don't override name otherwise it will force a replacement
@@ -805,54 +870,51 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 
 	indexResourceDataFromSettings(settings, d)
 
-	var response *json.RawMessage
-	var res *elastic7.Response
+	// Get mappings using direct HTTP request
+	path := fmt.Sprintf("/%s/_mapping", index)
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+	if err != nil {
+		return fmt.Errorf("error building mappings request: %w", err)
+	}
+
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return fmt.Errorf("error getting mappings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading mappings response: %w", err)
+	}
+
 	var mappingsResponse map[string]interface{}
-	path, err := uritemplates.Expand("/{index}/_mapping", map[string]string{
-		"index": index,
-	})
+	err = json.Unmarshal(body, &mappingsResponse)
 	if err != nil {
-		return err
-	}
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
-	if err != nil {
-		return err
-	}
-	response = &res.Body
-
-	err = json.Unmarshal(*response, &mappingsResponse)
-
-	if err != nil {
-		return fmt.Errorf("fail to unmarshal: %v", err)
+		return fmt.Errorf("fail to unmarshal mappings: %v", err)
 	}
 
-	lenMappings := len(mappingsResponse[index].(map[string]interface{})["mappings"].(map[string]interface{}))
-
-	if lenMappings == 0 {
-		return nil
-	}
-
-	jsonString, err := json.Marshal(mappingsResponse[index].(map[string]interface{})["mappings"])
-	if err != nil {
-		return fmt.Errorf("fail to marshal: %v", err)
-	}
-
-	err = d.Set("mappings", string(jsonString))
-
-	if err != nil {
-		return err
+	if indexData, ok := mappingsResponse[index].(map[string]interface{}); ok {
+		if mappings, ok := indexData["mappings"].(map[string]interface{}); ok {
+			if len(mappings) == 0 {
+				return nil
+			}
+			jsonString, err := json.Marshal(mappings)
+			if err != nil {
+				return fmt.Errorf("fail to marshal mappings: %v", err)
+			}
+			err = d.Set("mappings", string(jsonString))
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
 }
 
 func updateAliases(index string, oldAliases, newAliases map[string]interface{}, meta interface{}) error {
-	ctx := context.Background()
-
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -862,14 +924,16 @@ func updateAliases(index string, oldAliases, newAliases map[string]interface{}, 
 		if _, exists := newAliases[aliasName]; !exists {
 			aliasDeletePath := fmt.Sprintf("/%s/_alias/%s", index, aliasName)
 
-			_, err := osClient.PerformRequest(ctx, elastic7.PerformRequestOptions{
-				Method: "DELETE",
-				Path:   aliasDeletePath,
-			})
+			req, err := http.NewRequest("DELETE", client.config.rawUrl+aliasDeletePath, nil)
+			if err != nil {
+				return fmt.Errorf("error building DELETE request for alias %s: %v", aliasName, err)
+			}
 
+			resp, err := client.Client.Client.Perform(req)
 			if err != nil {
 				return fmt.Errorf("error removing alias %s: %v", aliasName, err)
 			}
+			resp.Body.Close()
 		}
 	}
 
@@ -877,15 +941,22 @@ func updateAliases(index string, oldAliases, newAliases map[string]interface{}, 
 	for aliasName, aliasConfig := range newAliases {
 		aliasUpdatePath := fmt.Sprintf("/%s/_alias/%s", index, aliasName)
 
-		_, err := osClient.PerformRequest(ctx, elastic7.PerformRequestOptions{
-			Method: "PUT",
-			Path:   aliasUpdatePath,
-			Body:   aliasConfig,
-		})
+		aliasJSON, err := json.Marshal(aliasConfig)
+		if err != nil {
+			return fmt.Errorf("error marshaling alias config for %s: %v", aliasName, err)
+		}
 
+		req, err := http.NewRequest("PUT", client.config.rawUrl+aliasUpdatePath, bytes.NewReader(aliasJSON))
+		if err != nil {
+			return fmt.Errorf("error building PUT request for alias %s: %v", aliasName, err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Client.Client.Perform(req)
 		if err != nil {
 			return fmt.Errorf("error adding/updating alias %s: %v", aliasName, err)
 		}
+		resp.Body.Close()
 	}
 
 	return nil
