@@ -167,7 +167,15 @@ func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interfac
 
 	stateObject := []map[string]interface{}{make(map[string]interface{})}
 	for _, k := range originalKeys {
-		stateObject[0][k] = source[k]
+		if k == "_id" {
+			// _id is returned separately in the response, not in _source
+			stateObject[0][k] = result.Id
+		} else if k == "_source" {
+			// The entire source is the _source content
+			stateObject[0][k] = source
+		} else {
+			stateObject[0][k] = source[k]
+		}
 	}
 	bodyBytes, err := json.Marshal(stateObject)
 	if err != nil {

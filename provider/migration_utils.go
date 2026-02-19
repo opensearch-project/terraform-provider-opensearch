@@ -47,7 +47,9 @@ func isNotFound(err error) bool {
 	errStr := err.Error()
 	return strings.Contains(errStr, "404") ||
 		strings.Contains(errStr, "not found") ||
-		strings.Contains(errStr, "Not Found")
+		strings.Contains(errStr, "Not Found") ||
+		// ISM policy mapping returns 400 with "no documents to get" when index doesn't exist
+		(strings.Contains(errStr, "400") && strings.Contains(errStr, "no documents to get"))
 }
 
 // isConflict checks if an error represents a "conflict" response

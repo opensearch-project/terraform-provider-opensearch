@@ -3,7 +3,10 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -75,76 +78,60 @@ func resourceOpensearchIndexTemplateRead(d *schema.ResourceData, meta interface{
 }
 
 func getLegacyIndexTemplate(client *OpenSearchClient, id string) (string, error) {
-	res, err := client.Client.Template.Get(context.TODO(), &opensearchapi.TemplateGetReq{
-		Templates: []string{id},
-	})
+	// Use direct HTTP request to get raw template data
+	path := fmt.Sprintf("/_template/%s", id)
+
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+	if err != nil {
+		return "", fmt.Errorf("error building GET request: %w", err)
+	}
+
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 
-	// No more than 1 element is expected
-	t, ok := res.Templates[id]
+	if resp.StatusCode == http.StatusNotFound {
+		return "", nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("error getting template: %d, %s", resp.StatusCode, string(body))
+	}
+
+	// Parse the response
+	var templateResponse map[string]json.RawMessage
+	if err := json.Unmarshal(body, &templateResponse); err != nil {
+		return "", err
+	}
+
+	// Extract the template data
+	templateData, ok := templateResponse[id]
 	if !ok {
 		return "", nil
 	}
 
-	// For legacy templates, the API returns settings/mappings/aliases at top level
-	// But the test config expects them nested under "template" key
-	// We need to wrap them in a "template" section to match the expected format
-	tplMap := map[string]interface{}{
-		"index_patterns": t.IndexPatterns,
+	// Parse the template
+	var tplMap map[string]interface{}
+	if err := json.Unmarshal(templateData, &tplMap); err != nil {
+		return "", err
 	}
 
-	if t.Order != 0 {
-		tplMap["order"] = t.Order
-	}
-	if t.Version != 0 {
-		tplMap["version"] = t.Version
-	}
-
-	// Always include template section if any of settings/mappings/aliases exist
-	templateSection := map[string]interface{}{}
-	hasContent := false
-
-	// Check settings - API returns {} even if empty
-	if len(t.Settings) > 0 && string(t.Settings) != "{}" && string(t.Settings) != "null" {
-		var settings map[string]interface{}
-		if err := json.Unmarshal(t.Settings, &settings); err == nil && len(settings) > 0 {
-			templateSection["settings"] = settings
-			hasContent = true
-		}
-	}
-	// Check mappings
-	if len(t.Mappings) > 0 && string(t.Mappings) != "{}" && string(t.Mappings) != "null" {
-		var mappings map[string]interface{}
-		if err := json.Unmarshal(t.Mappings, &mappings); err == nil && len(mappings) > 0 {
-			templateSection["mappings"] = mappings
-			hasContent = true
-		}
-	}
-	// Check aliases
-	if len(t.Aliases) > 0 && string(t.Aliases) != "{}" && string(t.Aliases) != "null" {
-		var aliases map[string]interface{}
-		if err := json.Unmarshal(t.Aliases, &aliases); err == nil && len(aliases) > 0 {
-			templateSection["aliases"] = aliases
-			hasContent = true
-		}
-	}
-
-	// Always include template section if user provided one in config
-	// The diff suppression will handle empty vs non-empty comparisons
-	if hasContent {
-		tplMap["template"] = templateSection
-	}
-
+	// Normalize and return
 	normalizeIndexTemplate(tplMap)
 
-	tj, err := json.Marshal(tplMap)
+	result, err := json.Marshal(tplMap)
 	if err != nil {
 		return "", err
 	}
 
-	return string(tj), nil
+	return string(result), nil
 }
 
 func resourceOpensearchIndexTemplateUpdate(d *schema.ResourceData, meta interface{}) error {

@@ -838,6 +838,9 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 		}
 	}
 
+	// Debug: log all settings to see what keys are present
+	log.Printf("[DEBUG] Index settings for rollover check: %+v", settings)
+
 	// Don't override name otherwise it will force a replacement
 	if _, ok := d.GetOk("name"); !ok {
 		name := index
@@ -850,18 +853,22 @@ func resourceOpensearchIndexRead(d *schema.ResourceData, meta interface{}) error
 		}
 	}
 
+	// Debug: log all settings to see what keys are present
+	log.Printf("[DEBUG] Index settings for rollover check: %+v", settings)
+
 	// If index is managed by ILM or ISM set rollover_alias
-	if alias, ok := settings["index.lifecycle.rollover_alias"].(string); ok {
+	// Check for various flattened setting keys that OpenSearch uses
+	if alias, ok := settings["index.lifecycle.rollover_alias"].(string); ok && alias != "" {
 		err := d.Set("rollover_alias", alias)
 		if err != nil {
 			return err
 		}
-	} else if alias, ok := settings["index.plugins.index_state_management.rollover_alias"].(string); ok {
+	} else if alias, ok := settings["index.plugins.index_state_management.rollover_alias"].(string); ok && alias != "" {
 		err := d.Set("rollover_alias", alias)
 		if err != nil {
 			return err
 		}
-	} else if alias, ok := settings["plugins.index_state_management.rollover_alias"].(string); ok {
+	} else if alias, ok := settings["plugins.index_state_management.rollover_alias"].(string); ok && alias != "" {
 		err := d.Set("rollover_alias", alias)
 		if err != nil {
 			return err

@@ -325,6 +325,12 @@ func resourceOpensearchGetOpendistroPolicyMapping(indexPattern string, m interfa
 		return *response, fmt.Errorf("policy mapping not found: %s", indexPattern)
 	}
 
+	// Handle 400 error - "no documents to get" means no indices match the pattern
+	// This is effectively a "not found" for the policy mapping
+	if resp.StatusCode == http.StatusBadRequest {
+		return *response, fmt.Errorf("policy mapping not found: %s - %s", indexPattern, string(body))
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return *response, fmt.Errorf("error getting policy mapping: received status code %d, body: %s", resp.StatusCode, string(body))
 	}

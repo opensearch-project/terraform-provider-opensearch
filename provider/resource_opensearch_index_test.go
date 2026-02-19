@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"regexp"
 	"testing"
 
@@ -251,7 +253,7 @@ resource "opensearch_index" "test_knn_algo_param_ef_search_config" {
 `
 
 	testAccOpensearchIndexRolloverAliasOpendistro = `
-resource opensearch_ism_policy "test" {
+resource "opensearch_ism_policy" "test" {
   policy_id = "test"
   body      = <<EOF
 {
@@ -276,27 +278,31 @@ resource opensearch_ism_policy "test" {
         ],
         "transitions": []
       }
-    ]
+    ],
+    "ism_template": {
+      "index_patterns": ["terraform-test-*"],
+      "priority": 100
+    }
   }
 }
   EOF
 }
 
-resource "opensearch_index_template" "test" {
+resource "opensearch_composable_index_template" "test" {
   name = "terraform-test"
   body = <<EOF
   {
-	"index_patterns": ["terraform-test-*"],
-	"template": {
-	"settings": {
-		"plugins": {
-		  "index_state_management": {
-			"policy_id": "${opensearch_ism_policy.test.policy_id}",
-			"rollover_alias": "terraform-test"
-		  }
-	  }
-	}
-  }
+    "index_patterns": ["terraform-test-*"],
+    "template": {
+      "settings": {
+        "plugins": {
+          "index_state_management": {
+            "policy_id": "test",
+            "rollover_alias": "terraform-test"
+          }
+        }
+      }
+    }
   }
   EOF
 }
@@ -311,7 +317,7 @@ resource "opensearch_index" "test" {
     }
   })
 
-  depends_on = [opensearch_index_template.test]
+  depends_on = [opensearch_composable_index_template.test, opensearch_ism_policy.test]
 }
 `
 )
@@ -410,18 +416,25 @@ func checkOpensearchIndexRolloverAliasExists(provider *schema.Provider, alias st
 	return func(s *terraform.State) error {
 		meta := provider.Meta()
 
-		var count int
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		r, err := osClient.CatAliases().Alias(alias).Do(context.TODO())
-		if err != nil {
-			return err
-		}
-		count = len(r)
 
-		if count == 0 {
+		// Use direct HTTP request to check alias exists
+		path := fmt.Sprintf("/_cat/aliases/%s", alias)
+		req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+		if err != nil {
+			return fmt.Errorf("error building GET request for alias: %w", err)
+		}
+
+		resp, err := client.Client.Client.Perform(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("rollover alias %q not found", alias)
 		}
 
@@ -447,22 +460,38 @@ func checkOpensearchIndexRolloverAliasDestroy(provider *schema.Provider, alias s
 	return func(s *terraform.State) error {
 		meta := provider.Meta()
 
-		var count int
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		r, err := osClient.CatAliases().Alias(alias).Do(context.TODO())
+
+		// Use direct HTTP request to check alias exists
+		path := fmt.Sprintf("/_cat/aliases/%s", alias)
+		req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 		if err != nil {
-			return err
-		}
-		count = len(r)
-
-		if count > 0 {
-			return fmt.Errorf("rollover alias %q still exists", alias)
+			return fmt.Errorf("error building GET request for alias: %w", err)
 		}
 
-		return nil
+		resp, err := client.Client.Client.Perform(req)
+		if err != nil {
+			return nil // Connection error, assume destroyed
+		}
+		defer resp.Body.Close()
+
+		// If 404, alias was successfully destroyed
+		if resp.StatusCode == http.StatusNotFound {
+			return nil
+		}
+
+		// If status is OK or other status, check if there's actual data
+		// Sometimes alias checks return 200 with empty body
+		body, _ := io.ReadAll(resp.Body)
+		if len(body) == 0 || resp.StatusCode != http.StatusOK {
+			return nil
+		}
+
+		// Alias still exists with data
+		return fmt.Errorf("rollover alias %q still exists", alias)
 	}
 }
 

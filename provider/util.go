@@ -84,9 +84,42 @@ func normalizePolicy(tpl map[string]interface{}) {
 
 func normalizeIndexTemplate(tpl map[string]interface{}) {
 	delete(tpl, "version")
+	// Remove order if it's the default (0)
+	if order, ok := tpl["order"]; ok {
+		if orderNum, ok := order.(float64); ok && orderNum == 0 {
+			delete(tpl, "order")
+		}
+	}
+	// Handle settings at top level (legacy format)
 	if settings, ok := tpl["settings"]; ok {
 		if settingsMap, ok := settings.(map[string]interface{}); ok {
-			tpl["settings"] = normalizedIndexSettings(settingsMap)
+			if len(settingsMap) == 0 {
+				delete(tpl, "settings")
+			} else {
+				tpl["settings"] = normalizedIndexSettings(settingsMap)
+			}
+		} else {
+			delete(tpl, "settings")
+		}
+	}
+	// Remove empty mappings
+	if mappings, ok := tpl["mappings"]; ok {
+		if mappingsMap, ok := mappings.(map[string]interface{}); ok && len(mappingsMap) == 0 {
+			delete(tpl, "mappings")
+		}
+	}
+	// Remove empty aliases
+	if aliases, ok := tpl["aliases"]; ok {
+		if aliasesMap, ok := aliases.(map[string]interface{}); ok && len(aliasesMap) == 0 {
+			delete(tpl, "aliases")
+		}
+	}
+	// Handle settings nested under template (ES 7.8+ format)
+	if innerTpl, ok := tpl["template"].(map[string]interface{}); ok {
+		if settings, ok := innerTpl["settings"]; ok {
+			if settingsMap, ok := settings.(map[string]interface{}); ok {
+				innerTpl["settings"] = normalizedIndexSettings(settingsMap)
+			}
 		}
 	}
 }

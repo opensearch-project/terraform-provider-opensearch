@@ -243,11 +243,12 @@ func resourceOpensearchPutOpenDistroUser(d *schema.ResourceData, m interface{}) 
 	// Execute request with retry logic
 	// see https://github.com/opendistro-for-elasticsearch/security/issues/1095
 	var resp *http.Response
-	maxRetries := 3
+	maxRetries := 5
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff
-			time.Sleep(time.Duration(attempt*100) * time.Millisecond)
+			// Exponential backoff with jitter to avoid thundering herd
+			backoff := time.Duration(attempt*200) * time.Millisecond
+			time.Sleep(backoff)
 		}
 
 		// Build request (must recreate for each attempt as body can't be reused)
@@ -259,16 +260,12 @@ func resourceOpensearchPutOpenDistroUser(d *schema.ResourceData, m interface{}) 
 
 		resp, err = client.Client.Client.Perform(req)
 		if err == nil {
-			// Check if we should retry
+			// Check if we should retry - 409 CONFLICT is expected for concurrent security config updates
 			if resp.StatusCode != http.StatusConflict && resp.StatusCode != http.StatusInternalServerError {
 				break
 			}
+			// For 409/500, close body and retry
 			resp.Body.Close()
-		} else {
-			// Request failed, will retry
-			if attempt < maxRetries-1 {
-				continue
-			}
 		}
 	}
 
