@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/setup-go@v5
       with:
-        go-version: 1.22.1
+        go-version: '1.24'
     - uses: actions/checkout@v4
       with:
         # we depend on full git history for linters
@@ -26,7 +26,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.22.1]
+        go-version: ['1.24']
         os: [ubuntu-latest]
         os-major-version:
           - "2-opensearch"
@@ -116,7 +116,7 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.1
+        go-version: '1.24'
     - name: Load secret
       uses: 1password/load-secrets-action@v2
       with:

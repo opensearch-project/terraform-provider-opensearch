@@ -1,11 +1,15 @@
 run:
-  go: "1.22.1"
+  go: "1.24"
 linters:
   enable:
     - gofmt
 
 issues:
   exclude-rules:
+    # aws-sdk-go v1 is deprecated; migration to v2 is tracked separately
+    - linters:
+        - staticcheck
+      text: "SA1019:.*aws-sdk-go"
     - linters:
         - staticcheck
       text: "SA1019:"
