@@ -3,7 +3,6 @@ module github.com/opensearch-project/terraform-provider-opensearch
 go 1.24
 
 require (
-	github.com/aws/aws-sdk-go v1.55.8
 	github.com/aws/aws-sdk-go-v2/config v1.32.6
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.6
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.5
