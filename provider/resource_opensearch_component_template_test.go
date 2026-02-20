@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchComponentTemplate(t *testing.T) {
@@ -77,12 +78,14 @@ func testCheckOpensearchComponentTemplateExists(name string) resource.TestCheckF
 
 		meta := testAccProvider.Meta()
 
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		_, err = osClient.IndexGetComponentTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.ComponentTemplate.Get(context.TODO(), &opensearchapi.ComponentTemplateGetReq{
+			ComponentTemplate: rs.Primary.ID,
+		})
 
 		if err != nil {
 			return err
@@ -100,12 +103,14 @@ func testCheckOpensearchComponentTemplateDestroy(s *terraform.State) error {
 
 		meta := testAccProvider.Meta()
 
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		_, err = osClient.IndexGetComponentTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.ComponentTemplate.Get(context.TODO(), &opensearchapi.ComponentTemplateGetReq{
+			ComponentTemplate: rs.Primary.ID,
+		})
 
 		if err != nil {
 			return nil // should be not found error

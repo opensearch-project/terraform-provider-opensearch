@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -693,13 +694,33 @@ func checkOpensearchIndexExists(name string) resource.TestCheckFunc {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
 
-		return err
+		// Use direct HTTP request to get index settings
+		settingsPath := fmt.Sprintf("/%s/_settings", rs.Primary.ID)
+		settingsReq, err := http.NewRequest("GET", client.config.rawUrl+settingsPath, nil)
+		if err != nil {
+			return fmt.Errorf("error building settings request: %w", err)
+		}
+
+		settingsResp, err := client.Client.Client.Perform(settingsReq)
+		if err != nil {
+			return err
+		}
+		defer settingsResp.Body.Close()
+
+		if settingsResp.StatusCode == http.StatusNotFound {
+			return fmt.Errorf("index %s not found", rs.Primary.ID)
+		}
+
+		if settingsResp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status code: %d", settingsResp.StatusCode)
+		}
+
+		return nil
 	}
 }
 
@@ -714,22 +735,63 @@ func checkOpensearchIndexUpdated(name string) resource.TestCheckFunc {
 		}
 
 		meta := testAccProvider.Meta()
-		var settings map[string]interface{}
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		resp, err := osClient.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
-		if err != nil {
-			return err
-		}
-		settings = resp[rs.Primary.ID].Settings["index"].(map[string]interface{})
 
-		r, ok := settings["number_of_replicas"]
+		// Use direct HTTP request to get index settings
+		settingsPath := fmt.Sprintf("/%s/_settings", rs.Primary.ID)
+		settingsReq, err := http.NewRequest("GET", client.config.rawUrl+settingsPath, nil)
+		if err != nil {
+			return fmt.Errorf("error building settings request: %w", err)
+		}
+
+		settingsResp, err := client.Client.Client.Perform(settingsReq)
+		if err != nil {
+			return err
+		}
+		defer settingsResp.Body.Close()
+
+		if settingsResp.StatusCode == http.StatusNotFound {
+			return fmt.Errorf("index %s not found", rs.Primary.ID)
+		}
+
+		if settingsResp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status code: %d", settingsResp.StatusCode)
+		}
+
+		body, err := io.ReadAll(settingsResp.Body)
+		if err != nil {
+			return err
+		}
+
+		var settingsRespData map[string]interface{}
+		if err := json.Unmarshal(body, &settingsRespData); err != nil {
+			return err
+		}
+
+		// Extract number_of_replicas from the response
+		indexData, ok := settingsRespData[rs.Primary.ID].(map[string]interface{})
+		if !ok {
+			return errors.New("field not found")
+		}
+
+		settings, ok := indexData["settings"].(map[string]interface{})
+		if !ok {
+			return errors.New("field not found")
+		}
+
+		indexSettings, ok := settings["index"].(map[string]interface{})
+		if !ok {
+			return errors.New("field not found")
+		}
+
+		r, ok := indexSettings["number_of_replicas"]
 		if ok {
-			if ir := r.(string); ir != "2" {
+			if ir, ok := r.(string); ok && ir != "2" {
 				return fmt.Errorf("expected 2 got %s", ir)
 			}
 			return nil
@@ -748,17 +810,33 @@ func checkOpensearchIndexDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.IndexGetSettings(rs.Primary.ID).Do(context.TODO())
 
+		// Use direct HTTP request to get index settings
+		settingsPath := fmt.Sprintf("/%s/_settings", rs.Primary.ID)
+		settingsReq, err := http.NewRequest("GET", client.config.rawUrl+settingsPath, nil)
+		if err != nil {
+			return fmt.Errorf("error building settings request: %w", err)
+		}
+
+		settingsResp, err := client.Client.Client.Perform(settingsReq)
 		if err != nil {
 			return nil // should be not found error
 		}
+		defer settingsResp.Body.Close()
 
-		return fmt.Errorf("index %q still exists", rs.Primary.ID)
+		if settingsResp.StatusCode == http.StatusNotFound {
+			return nil // index doesn't exist, good
+		}
+
+		if settingsResp.StatusCode == http.StatusOK {
+			return fmt.Errorf("index %q still exists", rs.Primary.ID)
+		}
+
+		return fmt.Errorf("unexpected status code: %d", settingsResp.StatusCode)
 	}
 
 	return nil
@@ -796,14 +874,38 @@ func TestAccOpensearchIndexWithAlias(t *testing.T) {
 
 func checkOpensearchAliasExists(indexName, aliasName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		osClient, err := getClient(testAccProvider.Meta().(*ProviderConf))
+		client, err := getOpenSearchClient(testAccProvider.Meta().(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		// Check if the alias exists for the index
-		aliases, err := osClient.CatAliases().Alias(aliasName).Do(context.TODO())
+		// Use _cat/aliases API via direct HTTP request
+		path := fmt.Sprintf("/_cat/aliases/%s?h=index,alias&format=json", aliasName)
+		req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 		if err != nil {
+			return err
+		}
+
+		resp, err := client.Client.Client.Perform(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		var aliases []struct {
+			Index string `json:"index"`
+			Alias string `json:"alias"`
+		}
+		if err := json.Unmarshal(body, &aliases); err != nil {
 			return err
 		}
 
@@ -811,7 +913,14 @@ func checkOpensearchAliasExists(indexName, aliasName string) resource.TestCheckF
 			return fmt.Errorf("alias %q not found for index %q", aliasName, indexName)
 		}
 
-		return nil
+		// Check if the alias points to our index
+		for _, a := range aliases {
+			if a.Index == indexName && a.Alias == aliasName {
+				return nil
+			}
+		}
+
+		return fmt.Errorf("alias %q not found for index %q", aliasName, indexName)
 	}
 }
 
@@ -894,19 +1003,50 @@ func TestAccOpensearchIndexWithAliasAndDelete(t *testing.T) {
 
 func checkOpensearchAliasDeleted(indexName, aliasName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		osClient, err := getClient(testAccProvider.Meta().(*ProviderConf))
+		client, err := getOpenSearchClient(testAccProvider.Meta().(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		// Check if the alias no longer exists for the index
-		aliases, err := osClient.CatAliases().Alias(aliasName).Do(context.TODO())
+		// Use _cat/aliases API via direct HTTP request
+		path := fmt.Sprintf("/_cat/aliases/%s?h=index,alias&format=json", aliasName)
+		req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 		if err != nil {
 			return err
 		}
 
-		if len(aliases) > 0 {
-			return fmt.Errorf("alias %q still exists for index %q", aliasName, indexName)
+		resp, err := client.Client.Client.Perform(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusNotFound {
+			return nil // alias doesn't exist, good
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		var aliases []struct {
+			Index string `json:"index"`
+			Alias string `json:"alias"`
+		}
+		if err := json.Unmarshal(body, &aliases); err != nil {
+			return err
+		}
+
+		// Check if the alias still points to our index
+		for _, a := range aliases {
+			if a.Index == indexName && a.Alias == aliasName {
+				return fmt.Errorf("alias %q still exists for index %q", aliasName, indexName)
+			}
 		}
 
 		return nil

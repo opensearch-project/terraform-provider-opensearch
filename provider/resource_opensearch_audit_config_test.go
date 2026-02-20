@@ -2,10 +2,8 @@ package provider
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"testing"
-
-	elastic7 "github.com/olivere/elastic/v7"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -161,24 +159,16 @@ func testCheckOpensearchSecurityAuditConfigConnects(name string) resource.TestCh
 				continue
 			}
 
-			username := rs.Primary.Attributes["username"]
-			password := rs.Primary.Attributes["password"]
-
-			var err error
+			meta := testAccOpendistroProvider.Meta()
+			client, err := getOpenSearchClient(meta.(*ProviderConf))
 			if err != nil {
 				return err
 			}
-			var client *elastic7.Client
-			client, err = elastic7.NewClient(
-				elastic7.SetURL(os.Getenv("OPENSEARCH_URL")),
-				elastic7.SetBasicAuth(username, password))
 
-			if err == nil {
-				_, err = client.ClusterHealth().Do(context.TODO())
-			}
-
+			// Use the new client's Cluster.Health method
+			_, err = client.Client.Cluster.Health(context.TODO(), nil)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to check cluster health: %w", err)
 			}
 
 			return nil

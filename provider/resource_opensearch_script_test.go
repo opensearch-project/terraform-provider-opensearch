@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchScript(t *testing.T) {
@@ -40,11 +41,13 @@ func testCheckOpensearchScriptExists(name string) resource.TestCheckFunc {
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.GetScript().Id("my_script").Do(context.TODO())
+		_, err = client.Client.Script.Get(context.TODO(), opensearchapi.ScriptGetReq{
+			ScriptID: "my_script",
+		})
 
 		if err != nil {
 			return err
@@ -63,11 +66,13 @@ func testCheckOpensearchScriptDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.GetScript().Id("my_script").Do(context.TODO())
+		_, err = client.Client.Script.Get(context.TODO(), opensearchapi.ScriptGetReq{
+			ScriptID: "my_script",
+		})
 
 		if err != nil {
 			return nil // should be not found error

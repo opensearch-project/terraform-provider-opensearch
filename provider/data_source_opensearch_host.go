@@ -1,8 +1,6 @@
 package provider
 
 import (
-	"reflect"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -27,23 +25,10 @@ func dataSourceOpensearchHost() *schema.Resource {
 }
 
 func dataSourceOpensearchHostRead(d *schema.ResourceData, m interface{}) error {
+	// Get the URL directly from the provider configuration
+	conf := m.(*ProviderConf)
+	url := conf.rawUrl
 
-	// The upstream client does not export the property for the urls
-	// it's using. Presumably the URLS would be available where the client is
-	// intantiated, but in terraform, that's not always practicable.
-	var err error
-	osClient, err := getClient(m.(*ProviderConf))
-	if err != nil {
-		return err
-	}
-
-	var url string
-	urls := reflect.ValueOf(osClient).Elem().FieldByName("urls")
-	if urls.Len() > 0 {
-		url = urls.Index(0).String()
-	}
 	d.SetId(url)
-	err = d.Set("url", url)
-
-	return err
+	return d.Set("url", url)
 }
