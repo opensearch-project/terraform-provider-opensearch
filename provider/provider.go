@@ -142,7 +142,7 @@ func Provider() *schema.Provider {
 			"ping_timeout_seconds": {
 				Type:        schema.TypeInt,
 				Optional:    true,
-				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PING_TIMEOUT", 15),
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PING_TIMEOUT", 5),
 				Description: "Timeout for OpenSearch pings in seconds",
 			},
 			"version_ping_timeout": {
@@ -285,7 +285,7 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 		cacertFile:              d.Get("cacert_file").(string),
 		signAWSRequests:         d.Get("sign_aws_requests").(bool),
 		osVersion:               d.Get("opensearch_version").(string),
-		pingTimeoutSeconds:      resolveIntField(d, "ping_timeout_seconds", "version_ping_timeout", 15),
+		pingTimeoutSeconds:      resolveIntField(d, "ping_timeout_seconds", "version_ping_timeout", 5),
 		awsRegion:               d.Get("aws_region").(string),
 		awsAssumeRoleArn:        d.Get("aws_assume_role_arn").(string),
 		awsAssumeRoleExternalID: d.Get("aws_assume_role_external_id").(string),
