@@ -118,13 +118,13 @@ func Provider() *schema.Provider {
 			"client_cert_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_CLIENT_CERT_PATH", nil),
+				DefaultFunc: envFallbackDefault("OPENSEARCH_CLIENT_CERT_PATH", "OS_CLIENT_CERTIFICATE_PATH"),
 				Description: "Path to a client certificate file",
 			},
 			"client_key_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_CLIENT_KEY_PATH", nil),
+				DefaultFunc: envFallbackDefault("OPENSEARCH_CLIENT_KEY_PATH", "OS_CLIENT_KEY_PATH"),
 				Description: "Path to a client key file",
 			},
 			"sign_aws_requests": {
@@ -145,11 +145,25 @@ func Provider() *schema.Provider {
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PING_TIMEOUT", 15),
 				Description: "Timeout for OpenSearch pings in seconds",
 			},
+			"version_ping_timeout": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PING_TIMEOUT", nil),
+				Description: "Version ping timeout in seconds. Deprecated: use ping_timeout_seconds instead.",
+				Deprecated:  "Use ping_timeout_seconds instead",
+			},
 			"aws_region": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("AWS_REGION", nil),
 				Description: "AWS region for request signing",
+			},
+			"aws_signature_service": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_AWS_SIGNATURE_SERVICE", nil),
+				Description: "AWS service name used in the credential scope of signed requests. Deprecated: AWS service is now auto-detected from the URL. Use 'aoss' for OpenSearch Serverless.",
+				Deprecated:  "AWS service is now auto-detected from the URL. Set opensearch_version for Serverless.",
 			},
 			"aws_assume_role_arn": {
 				Type:        schema.TypeString,
@@ -180,6 +194,13 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("AWS_SESSION_TOKEN", nil),
 				Description: "AWS session token for request signing",
+			},
+			"aws_token": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_SESSION_TOKEN", nil),
+				Description: "AWS session token for request signing. Deprecated: use aws_session_token instead.",
+				Deprecated:  "Use aws_session_token instead",
 			},
 			"aws_profile": {
 				Type:        schema.TypeString,
@@ -264,13 +285,14 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 		cacertFile:              d.Get("cacert_file").(string),
 		signAWSRequests:         d.Get("sign_aws_requests").(bool),
 		osVersion:               d.Get("opensearch_version").(string),
-		pingTimeoutSeconds:      d.Get("ping_timeout_seconds").(int),
+		pingTimeoutSeconds:      resolveIntField(d, "ping_timeout_seconds", "version_ping_timeout", 15),
 		awsRegion:               d.Get("aws_region").(string),
 		awsAssumeRoleArn:        d.Get("aws_assume_role_arn").(string),
 		awsAssumeRoleExternalID: d.Get("aws_assume_role_external_id").(string),
 		awsAccessKeyId:          d.Get("aws_access_key").(string),
 		awsSecretAccessKey:      d.Get("aws_secret_key").(string),
-		awsSessionToken:         d.Get("aws_session_token").(string),
+		awsSessionToken:         resolveStringField(d, "aws_session_token", "aws_token"),
+		awsSig4Service:          d.Get("aws_signature_service").(string),
 		awsProfile:              d.Get("aws_profile").(string),
 		certPemPath:             d.Get("client_cert_path").(string),
 		keyPemPath:              d.Get("client_key_path").(string),
@@ -326,4 +348,39 @@ func getOpenSearchClient(conf *ProviderConf) (*OpenSearchClient, error) {
 	// Store client in config for reuse
 	conf.opensearchClient = client
 	return client, nil
+}
+
+// resolveStringField returns the value of newField if non-empty, otherwise falls back to oldField.
+// This supports backward compatibility when provider fields are renamed.
+func resolveStringField(d *schema.ResourceData, newField, oldField string) string {
+	if v := d.Get(newField).(string); v != "" {
+		return v
+	}
+	return d.Get(oldField).(string)
+}
+
+// resolveIntField returns the value of newField if non-zero, otherwise falls back to oldField.
+// If both are zero, returns the provided default value.
+func resolveIntField(d *schema.ResourceData, newField, oldField string, defaultVal int) int {
+	if v := d.Get(newField).(int); v != 0 {
+		return v
+	}
+	if v := d.Get(oldField).(int); v != 0 {
+		return v
+	}
+	return defaultVal
+}
+
+// envFallbackDefault returns a DefaultFunc that checks the primary env var first,
+// then falls back to the legacy env var. If neither is set, returns nil (no default).
+func envFallbackDefault(primaryEnvVar, legacyEnvVar string) schema.SchemaDefaultFunc {
+	return func() (interface{}, error) {
+		if v := os.Getenv(primaryEnvVar); v != "" {
+			return v, nil
+		}
+		if v := os.Getenv(legacyEnvVar); v != "" {
+			return v, nil
+		}
+		return nil, nil
+	}
 }
