@@ -29,7 +29,7 @@ var anomalyDetectionSchema = map[string]*schema.Schema{
 
 func resourceOpenSearchAnomalyDetection() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch anonaly detection. Please refer to the OpenSearch anomaly detection documentation for details.",
+		Description: "Provides an OpenSearch anomaly detection. Please refer to the OpenSearch anomaly detection documentation for details.",
 		Create:      resourceOpensearchAnomalyDetectionCreate,
 		Read:        resourceOpensearchAnomalyDetectionRead,
 		Update:      resourceOpensearchAnomalyDetectionUpdate,

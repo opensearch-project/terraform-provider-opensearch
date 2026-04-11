@@ -90,7 +90,7 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 			"cluster_max_shards_per_node_frozen": {
 				Type:        schema.TypeInt,
 				Optional:    true,
-				Description: "The total number of primary and replica frozen shards, for the cluster; Ssards for closed indices do not count toward this limit, a cluster with no frozen data nodes is unlimited.",
+				Description: "The total number of primary and replica frozen shards, for the cluster; Shards for closed indices do not count toward this limit, a cluster with no frozen data nodes is unlimited.",
 			},
 			"cluster_persistent_tasks_allocation_enable": {
 				Type:        schema.TypeString,

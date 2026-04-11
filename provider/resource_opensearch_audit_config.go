@@ -14,8 +14,9 @@ import (
 
 var auditConfigSchema = map[string]*schema.Schema{
 	"enabled": {
-		Type:     schema.TypeBool,
-		Required: true,
+		Type:        schema.TypeBool,
+		Required:    true,
+		Description: "Enable or disable audit logging",
 	},
 	"audit": {
 		Type:     schema.TypeSet,

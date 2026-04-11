@@ -26,8 +26,9 @@ var openSearchDashboardTenantSchema = map[string]*schema.Schema{
 		Description: "Description of the tenant.",
 	},
 	"index": {
-		Type:     schema.TypeString,
-		Computed: true,
+		Type:        schema.TypeString,
+		Computed:    true,
+		Description: "The index associated with this tenant",
 	},
 }
 

@@ -67,7 +67,7 @@ resource "opensearch_audit_config" "test" {
 
 ### Required
 
-- `enabled` (Boolean)
+- `enabled` (Boolean) Enable or disable audit logging
 
 ### Optional
 
@@ -123,7 +123,9 @@ Required:
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
-# Import by name
-terraform import opensearch_audit_config.test_config my-config
+# Import the audit config (uses fixed ID 'audit_config')
+terraform import opensearch_audit_config.test_config audit_config
 ```

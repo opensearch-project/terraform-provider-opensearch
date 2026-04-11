@@ -378,11 +378,9 @@ var (
 			},
 		},
 		"aliases": {
-			Type:        schema.TypeString,
-			Description: "A JSON string describing a set of aliases. The index aliases API allows aliasing an index with a name, with all APIs automatically converting the alias name to the actual index name. An alias can also be mapped to more than one index, and when specifying it, the alias will automatically expand to the aliased indices.",
-			Optional:    true,
-			// In order to not handle the separate endpoint of alias updates, updates
-			// are not allowed via this provider currently.
+			Type:         schema.TypeString,
+			Description:  "A JSON string describing a set of aliases. The index aliases API allows aliasing an index with a name, with all APIs automatically converting the alias name to the actual index name. An alias can also be mapped to more than one index, and when specifying it, the alias will automatically expand to the aliased indices. Updates to aliases are supported without recreating the index.",
+			Optional:     true,
 			ValidateFunc: validation.StringIsJSON,
 		},
 		"analysis_analyzer": {
@@ -422,9 +420,10 @@ var (
 		},
 		// Computed attributes
 		"rollover_alias": {
-			Type:     schema.TypeString,
-			Optional: true,
-			Computed: true,
+			Type:        schema.TypeString,
+			Description: "The rollover alias for this index if managed by ILM or ISM policies",
+			Optional:    true,
+			Computed:    true,
 		},
 	}
 )

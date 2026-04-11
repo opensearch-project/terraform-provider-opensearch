@@ -66,29 +66,31 @@ EOF
 
 ### Optional
 
-- `aws_access_key` (String) The access key for use with AWS OpenSearch Service domains
-- `aws_assume_role_arn` (String) Amazon Resource Name of an IAM Role to assume prior to making AWS API calls.
-- `aws_assume_role_external_id` (String) External ID configured in the IAM policy of the IAM Role to assume prior to making AWS API calls.
-- `aws_profile` (String) The AWS profile for use with AWS OpenSearch Service domains
-- `aws_region` (String) The AWS region for use in signing of AWS OpenSearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.
-- `aws_secret_key` (String) The secret key for use with AWS OpenSearch Service domains
-- `aws_signature_service` (String) AWS service name used in the credential scope of signed requests to OpenSearch.
-- `aws_token` (String) The session token for use with AWS OpenSearch Service domains
-- `cacert_file` (String) A Custom CA certificate
-- `client_cert_path` (String) A X509 certificate to connect to OpenSearch
-- `client_key_path` (String) A X509 key to connect to OpenSearch
+- `aws_access_key` (String) AWS access key for request signing
+- `aws_assume_role_arn` (String) AWS IAM Role to assume for request signing
+- `aws_assume_role_external_id` (String) AWS IAM Role external ID for request signing
+- `aws_profile` (String) AWS profile for request signing
+- `aws_region` (String) AWS region for request signing
+- `aws_secret_key` (String) AWS secret key for request signing
+- `aws_session_token` (String) AWS session token for request signing
+- `aws_signature_service` (String, Deprecated) AWS service name used in the credential scope of signed requests. Deprecated: AWS service is now auto-detected from the URL. Use 'aoss' for OpenSearch Serverless.
+- `aws_token` (String, Deprecated) AWS session token for request signing. Deprecated: use aws_session_token instead.
+- `cacert_file` (String) Path to a CA certificate file to verify the server's certificate
+- `client_cert_path` (String) Path to a client certificate file
+- `client_key_path` (String) Path to a client key file
 - `healthcheck` (Boolean) Set the client healthcheck option for the OpenSearch client. Healthchecking is designed for direct access to the cluster.
-- `host_override` (String) If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to OpenSearch via an SSH tunnel.
-- `insecure` (Boolean) Disable SSL verification of API calls
-- `opensearch_version` (String) OpenSearch Version
-- `password` (String) Password to use to connect to OpenSearch using basic auth
-- `proxy` (String) Proxy URL to use for requests to OpenSearch.
-- `sign_aws_requests` (Boolean) Enable signing of AWS OpenSearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.
+- `host_override` (String) Override the host header for requests
+- `insecure` (Boolean) Disable SSL verification
+- `opensearch_version` (String) OpenSearch version
+- `password` (String) Password for OpenSearch basic auth
+- `ping_timeout_seconds` (Number) Timeout for OpenSearch pings in seconds
+- `proxy` (String) Proxy URL for requests
+- `sign_aws_requests` (Boolean) Enable AWS request signing
 - `sniff` (Boolean) Set the node sniffing option for the OpenSearch client. Client won't work with sniffing if nodes are not routable.
-- `token` (String) A bearer token or ApiKey for an Authorization header, e.g. Active Directory API key.
-- `token_name` (String) The type of token, usually ApiKey or Bearer
-- `username` (String) Username to use to connect to OpenSearch using basic auth
-- `version_ping_timeout` (Number) Version ping timeout in seconds
+- `token` (String) Authorization token for OpenSearch
+- `token_name` (String) Authorization token name for OpenSearch
+- `username` (String) Username for OpenSearch basic auth
+- `version_ping_timeout` (Number, Deprecated) Version ping timeout in seconds. Deprecated: use ping_timeout_seconds instead.
 
 ## Authentication
 

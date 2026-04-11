@@ -60,7 +60,7 @@ resource "opensearch_index" "index" {
 
 ### Optional
 
-- `aliases` (String) A JSON string describing a set of aliases. The index aliases API allows aliasing an index with a name, with all APIs automatically converting the alias name to the actual index name. An alias can also be mapped to more than one index, and when specifying it, the alias will automatically expand to the aliased indices.
+- `aliases` (String) A JSON string describing a set of aliases. The index aliases API allows aliasing an index with a name, with all APIs automatically converting the alias name to the actual index name. An alias can also be mapped to more than one index, and when specifying it, the alias will automatically expand to the aliased indices. Updates to aliases are supported without recreating the index.
 - `analysis_analyzer` (String) A JSON string describing the analyzers applied to the index.
 - `analysis_char_filter` (String) A JSON string describing the char_filters applied to the index.
 - `analysis_filter` (String) A JSON string describing the filters applied to the index.
@@ -104,7 +104,7 @@ resource "opensearch_index" "index" {
 - `number_of_routing_shards` (String) Value used with number_of_shards to route documents to a primary shard. A stringified number. This can be set only on creation.
 - `number_of_shards` (String) Number of shards for the index. This can be set only on creation.
 - `refresh_interval` (String) How often to perform a refresh operation, which makes recent changes to the index visible to search. Can be set to `-1` to disable refresh.
-- `rollover_alias` (String)
+- `rollover_alias` (String) The rollover alias for this index if managed by ILM or ISM policies
 - `routing_allocation_enable` (String) Controls shard allocation for this index. It can be set to: `all` , `primaries` , `new_primaries` , `none`.
 - `routing_partition_size` (String) The number of shards a custom routing value can go to. A stringified number. This can be set only on creation.
 - `routing_rebalance_enable` (String) Enables shard rebalancing for this index. It can be set to: `all`, `primaries` , `replicas` , `none`.
@@ -129,6 +129,8 @@ resource "opensearch_index" "index" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import by name

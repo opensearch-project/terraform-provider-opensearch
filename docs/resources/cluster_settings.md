@@ -31,7 +31,7 @@ resource "opensearch_cluster_settings" "global" {
 - `cluster_indices_close_enable` (Boolean) If false, you cannot close open indices
 - `cluster_info_update_interval` (String) A time string controlling how often OpenSearch should check on disk usage for each node in the cluster
 - `cluster_max_shards_per_node` (Number) The total number of primary and replica shards for the cluster, this number is multiplied by the number of non-frozen data nodes; shards for closed indices do not count toward this limit
-- `cluster_max_shards_per_node_frozen` (Number) The total number of primary and replica frozen shards, for the cluster; Ssards for closed indices do not count toward this limit, a cluster with no frozen data nodes is unlimited.
+- `cluster_max_shards_per_node_frozen` (Number) The total number of primary and replica frozen shards, for the cluster; Shards for closed indices do not count toward this limit, a cluster with no frozen data nodes is unlimited.
 - `cluster_no_master_block` (String) Specifies which operations are rejected when there is no active master in a cluster (all, write)
 - `cluster_persistent_tasks_allocation_enable` (String) Whether allocation for persistent tasks is active (all, none)
 - `cluster_persistent_tasks_allocation_recheck_interval` (String) A time string controling how often assignment checks are performed to react to whether persistent tasks can be assigned to nodes
@@ -74,3 +74,12 @@ resource "opensearch_cluster_settings" "global" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+
+## Import
+
+Import is supported using the following syntax:
+
+```shell
+# Import by name
+terraform import opensearch_cluster_settings.global global
+```
