@@ -92,6 +92,7 @@ func resourceOpensearchOpenDistroUserRead(d *schema.ResourceData, m interface{})
 	}
 
 	ds := &resourceDataSetter{d: d}
+	ds.set("username", d.Id())
 	ds.set("backend_roles", res.BackendRoles)
 	ds.set("attributes", res.Attributes)
 	ds.set("description", res.Description)

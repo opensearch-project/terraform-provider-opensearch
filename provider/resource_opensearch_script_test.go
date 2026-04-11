@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchScript(t *testing.T) {
+	scriptID := "test-script-" + acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -19,10 +21,46 @@ func TestAccOpensearchScript(t *testing.T) {
 		CheckDestroy: testCheckOpensearchScriptDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccOpensearchScript,
+				Config: testAccOpensearchScript(scriptID),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchScriptExists("opensearch_script.test_script"),
+					resource.TestCheckResourceAttr("opensearch_script.test_script", "script_id", scriptID),
+					resource.TestCheckResourceAttr("opensearch_script.test_script", "lang", "painless"),
+					resource.TestCheckResourceAttr("opensearch_script.test_script", "source", "Math.log(_score * 2) + params.my_modifier"),
+				),
+			},
+			{
+				Config: testAccOpensearchScriptUpdated(scriptID),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchScriptExists("opensearch_script.test_script"),
+					resource.TestCheckResourceAttr("opensearch_script.test_script", "script_id", scriptID),
+					resource.TestCheckResourceAttr("opensearch_script.test_script", "lang", "painless"),
+					resource.TestCheckResourceAttr("opensearch_script.test_script", "source", "Math.log(_score * 3) + params.new_modifier"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchScriptImport(t *testing.T) {
+	scriptID := "test-script-" + acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: testCheckOpensearchScriptDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchScript(scriptID),
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchScriptExists("opensearch_script.test_script"),
 				),
+			},
+			{
+				ResourceName:      "opensearch_script.test_script",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
@@ -46,7 +84,7 @@ func testCheckOpensearchScriptExists(name string) resource.TestCheckFunc {
 			return err
 		}
 		_, err = client.Client.Script.Get(context.TODO(), opensearchapi.ScriptGetReq{
-			ScriptID: "my_script",
+			ScriptID: rs.Primary.ID,
 		})
 
 		if err != nil {
@@ -71,7 +109,7 @@ func testCheckOpensearchScriptDestroy(s *terraform.State) error {
 			return err
 		}
 		_, err = client.Client.Script.Get(context.TODO(), opensearchapi.ScriptGetReq{
-			ScriptID: "my_script",
+			ScriptID: rs.Primary.ID,
 		})
 
 		if err != nil {
@@ -84,10 +122,22 @@ func testCheckOpensearchScriptDestroy(s *terraform.State) error {
 	return nil
 }
 
-var testAccOpensearchScript = `
+func testAccOpensearchScript(scriptID string) string {
+	return fmt.Sprintf(`
 resource "opensearch_script" "test_script" {
-  script_id = "my_script"
+  script_id = "%s"
   lang      = "painless"
   source    = "Math.log(_score * 2) + params.my_modifier"
 }
-`
+`, scriptID)
+}
+
+func testAccOpensearchScriptUpdated(scriptID string) string {
+	return fmt.Sprintf(`
+resource "opensearch_script" "test_script" {
+  script_id = "%s"
+  lang      = "painless"
+  source    = "Math.log(_score * 3) + params.new_modifier"
+}
+`, scriptID)
+}

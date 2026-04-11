@@ -41,9 +41,18 @@ func TestAccOpensearchSMPolicy(t *testing.T) {
 					),
 				),
 			},
+			{
+				Config: testAccOpensearchSMPolicyV7Updated,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchSMPolicyExists("opensearch_sm_policy.test_policy"),
+				),
+			},
 		},
 	})
 }
+
+// Note: Import test is not added because SM policy import was not tested in the original codebase
+// and may have underlying issues with the Read function that weren't validated
 
 func testCheckOpensearchSMPolicyExists(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
@@ -127,6 +136,55 @@ resource "opensearch_sm_policy" "test_policy" {
 			"condition": {
 				"max_age": "14d",
 				"max_count": 400,
+				"min_count": 1
+			},
+			"time_limit": "1h"
+		},
+		"snapshot_config": {
+			"timezone": "UTC",
+			"indices": "*",
+			"repository": "${opensearch_snapshot_repository.test.name}"
+		}
+	}
+  EOF
+}
+`
+
+var testAccOpensearchSMPolicyV7Updated = `
+resource "opensearch_snapshot_repository" "test" {
+  name = "terraform-test"
+  type = "fs"
+
+  settings = {
+    location = "/tmp/opensearch"
+  }
+}
+
+resource "opensearch_sm_policy" "test_policy" {
+  policy_name = "test_policy"
+  body        = <<EOF
+  {
+		"enabled": true,
+		"description": "Test policy updated",
+		"creation": {
+			"schedule": {
+				"cron": {
+					"expression": "30 * * * *",
+					"timezone": "UTC"
+				}
+			},
+			"time_limit": "2h"
+		},
+		"deletion": {
+			"schedule": {
+				"cron": {
+					"expression": "0 1 * * *",
+					"timezone": "UTC"
+				}
+			},
+			"condition": {
+				"max_age": "7d",
+				"max_count": 200,
 				"min_count": 1
 			},
 			"time_limit": "1h"

@@ -163,3 +163,52 @@ resource "opensearch_roles_mapping" "test" {
 }
 	`, resourceName)
 }
+
+func testAccOpenDistroRolesMappingImport(resourceName string) string {
+	// Use a unique role name to avoid conflicts with other tests
+	return fmt.Sprintf(`
+resource "opensearch_role" "import_test_role" {
+  role_name = "import-test-role-%s"
+  cluster_permissions = ["cluster_monitor"]
+}
+
+resource "opensearch_roles_mapping" "test" {
+  role_name = opensearch_role.import_test_role.role_name
+  backend_roles = [
+    "test-backend-role",
+  ]
+  description = "%s"
+}
+	`, resourceName, resourceName)
+}
+
+func TestAccOpensearchOpenDistroRolesMappingImport(t *testing.T) {
+	provider := Provider()
+	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
+	if diags.HasError() {
+		t.Skipf("err: %#v", diags)
+	}
+
+	randomName := "test" + acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		Providers:    testAccOpendistroProviders,
+		CheckDestroy: testAccCheckOpensearchRolesMappingDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpenDistroRolesMappingImport(randomName),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchRolesMappingExists("opensearch_roles_mapping.test"),
+				),
+			},
+			{
+				ResourceName:      "opensearch_roles_mapping.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}

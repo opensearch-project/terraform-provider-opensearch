@@ -68,9 +68,16 @@ func resourceOpensearchOpenDistroChannelConfigurationRead(d *schema.ResourceData
 		return err
 	}
 
-	d.SetId(res.ChannelConfigurationInfos[0]["config_id"].(string))
+	if len(res.ChannelConfigurationInfos) == 0 {
+		return fmt.Errorf("channel configuration response empty for ID: %s", d.Id())
+	}
 
-	channelConfigurationJson, err := json.Marshal(res.ChannelConfigurationInfos[0])
+	// Preserve the existing ID - the API response might not include config_id
+	// in the same format, so we keep using the ID we already have
+	// The body will be updated from the response
+	configInfo := res.ChannelConfigurationInfos[0]
+
+	channelConfigurationJson, err := json.Marshal(configInfo)
 	if err != nil {
 		return err
 	}
@@ -162,7 +169,18 @@ func resourceOpensearchOpenDistroGetChannelConfiguration(channelConfigurationID 
 		return response, fmt.Errorf("error unmarshalling channel configuration body: %+v: %+v", err, body)
 	}
 
-	normalizeChannelConfiguration(response.ChannelConfigurationInfos[0])
+	if len(response.ChannelConfigurationInfos) > 0 {
+		normalizeChannelConfiguration(response.ChannelConfigurationInfos[0])
+	} else {
+		// Handle case where response is a single config object
+		var singleConfig map[string]interface{}
+		if err := json.Unmarshal(body, &singleConfig); err == nil {
+			if _, ok := singleConfig["config"].(map[string]interface{}); ok {
+				response.ChannelConfigurationInfos = []map[string]interface{}{singleConfig}
+				normalizeChannelConfiguration(singleConfig)
+			}
+		}
+	}
 
 	return response, nil
 }

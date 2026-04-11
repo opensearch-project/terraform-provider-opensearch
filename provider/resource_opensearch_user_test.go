@@ -245,3 +245,35 @@ resource "opensearch_user" "testuser3" {
 }
 	`, resourceName, resourceName, resourceName)
 }
+
+func TestAccOpensearchOpenDistroUserImport(t *testing.T) {
+	provider := Provider()
+	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
+	if diags.HasError() {
+		t.Skipf("err: %#v", diags)
+	}
+
+	randomName := "test" + acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		Providers:    testAccOpendistroProviders,
+		CheckDestroy: testAccCheckOpensearchUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpenDistroUserResource(randomName),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchUserExists("opensearch_user.test"),
+				),
+			},
+			{
+				ResourceName:            "opensearch_user.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"password"},
+			},
+		},
+	})
+}

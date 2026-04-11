@@ -177,3 +177,7 @@ func testCheckOpensearchSecurityAuditConfigConnects(name string) resource.TestCh
 		return nil
 	}
 }
+
+// Note: Import test is skipped due to audit config being a singleton resource
+// with seqNo/primaryTerm concurrency issues. The resource has an Importer defined
+// but import requires special handling for version conflicts that is not yet implemented.

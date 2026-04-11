@@ -23,6 +23,8 @@ func TestAccOpensearchAnomalyDetection(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchAnomalyDetectionExists(fmt.Sprintf("opensearch_anomaly_detection.%s", randomName)),
 				),
+				// NOTE: This resource has complex drift issues with filter_query transformation
+				// The API transforms "gt": 1 to {"from": 1, "to": null, ...}
 				ExpectNonEmptyPlan: true,
 			},
 			{
@@ -35,6 +37,9 @@ func TestAccOpensearchAnomalyDetection(t *testing.T) {
 		},
 	})
 }
+
+// Note: Import test is not added for anomaly detection due to complex drift issues
+// with filter_query transformation that require significant normalization changes
 
 func testCheckOpensearchAnomalyDetectionExists(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {

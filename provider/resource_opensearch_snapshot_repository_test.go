@@ -22,6 +22,12 @@ func TestAccOpensearchSnapshotRepository(t *testing.T) {
 					testCheckOpensearchSnapshotRepositoryExists("opensearch_snapshot_repository.test"),
 				),
 			},
+			{
+				Config: testAccOpensearchSnapshotRepositoryUpdated,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchSnapshotRepositoryExists("opensearch_snapshot_repository.test"),
+				),
+			},
 		},
 	})
 }
@@ -107,6 +113,17 @@ resource "opensearch_snapshot_repository" "test" {
 
   settings = {
     location = "/tmp/opensearch"
+  }
+}
+`
+
+var testAccOpensearchSnapshotRepositoryUpdated = `
+resource "opensearch_snapshot_repository" "test" {
+  name = "terraform-test"
+  type = "fs"
+
+  settings = {
+    location = "/tmp/opensearch-updated"
   }
 }
 `

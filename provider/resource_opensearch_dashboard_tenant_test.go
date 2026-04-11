@@ -121,3 +121,38 @@ resource "opensearch_dashboard_tenant" "test" {
 }
 	`, resourceName)
 }
+
+func TestAccOpensearchOpenDistroDashboardTenantImport(t *testing.T) {
+	provider := Provider()
+	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
+	if diags.HasError() {
+		t.Skipf("err: %#v", diags)
+	}
+	var allowed bool = true
+
+	randomName := "test" + acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			if !allowed {
+				t.Skip("Allowed only for ES >= 7")
+			}
+		},
+		Providers:    testAccOpendistroProviders,
+		CheckDestroy: testAccCheckOpensearchDashboardTenantDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpenDistroDashboardTenantResource(randomName),
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchDashboardTenantExists("opensearch_dashboard_tenant.test"),
+				),
+			},
+			{
+				ResourceName:      "opensearch_dashboard_tenant.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}

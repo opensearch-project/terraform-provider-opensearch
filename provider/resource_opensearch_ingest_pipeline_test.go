@@ -30,6 +30,12 @@ func TestAccOpensearchIngestPipeline(t *testing.T) {
 					testCheckOpensearchIngestPipelineExists("opensearch_ingest_pipeline.test"),
 				),
 			},
+			{
+				Config: testAccOpensearchIngestPipelineV7Updated,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchIngestPipelineExists("opensearch_ingest_pipeline.test"),
+				),
+			},
 		},
 	})
 }
@@ -126,6 +132,26 @@ resource "opensearch_ingest_pipeline" "test" {
       "set" : {
         "field": "foo",
         "value": "bar"
+      }
+    }
+  ]
+}
+EOF
+}
+`
+
+var testAccOpensearchIngestPipelineV7Updated = `
+resource "opensearch_ingest_pipeline" "test" {
+  name = "terraform-test"
+  body = <<EOF
+{
+  "description" : "describe pipeline updated",
+  "version": 124,
+  "processors" : [
+    {
+      "set" : {
+        "field": "foo",
+        "value": "baz"
       }
     }
   ]
