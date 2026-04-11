@@ -249,10 +249,13 @@ func createDashboardIndexIfNotExists(client *OpenSearchClient, index string) err
 	}
 	existsResp, err := client.Client.Indices.Exists(context.TODO(), existsReq)
 	if err != nil {
-		return fmt.Errorf("failed to check index existence: %+v", err)
-	}
-
-	if existsResp.StatusCode == http.StatusOK {
+		// The new SDK returns an error for 404 (index not found)
+		// If it's a 404, we should proceed to create the index
+		if !isNotFound(err) {
+			return fmt.Errorf("failed to check index existence: %+v", err)
+		}
+		// Index doesn't exist, continue to create it
+	} else if existsResp.StatusCode == http.StatusOK {
 		// Index already exists
 		return nil
 	}
