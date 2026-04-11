@@ -114,12 +114,27 @@ Examples of resources can be found in the examples directory.
 
 ### Running tests locally
 
+The provider supports both OpenSearch 2.x and 3.x. You can test against either version by setting the `OSS_IMAGE` environment variable.
+
+#### Testing against OpenSearch 2.x
+
 ```sh
 export OSS_IMAGE="opensearchproject/opensearch:2"
 docker compose up -d
 docker compose ps -a  # Checks that the process is running
 # Before OS 2.12.0
 # export OPENSEARCH_URL=http://admin:admin@localhost:9200
+export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
+export TF_LOG=INFO
+TF_ACC=1 go test ./... -v -parallel 20 -cover -short
+```
+
+#### Testing against OpenSearch 3.x
+
+```sh
+export OSS_IMAGE="opensearchproject/opensearch:3"
+docker compose up -d
+docker compose ps -a  # Checks that the process is running
 export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
 export TF_LOG=INFO
 TF_ACC=1 go test ./... -v -parallel 20 -cover -short
