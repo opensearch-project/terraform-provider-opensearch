@@ -1,0 +1,1 @@
+terraform import opensearch_rule.moriya_rootkit ZaFv1IMBdLpXWBiBa1XI
