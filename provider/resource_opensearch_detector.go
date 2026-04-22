@@ -62,10 +62,6 @@ func detectorSchema() map[string]*schema.Schema {
 			Type:        schema.TypeString,
 			Required:    true,
 			Description: "The log type that defines the detector.",
-			ValidateFunc: validation.StringInSlice([]string{
-				"linux", "network", "windows", "ad_ldap", "apache_access",
-				"cloudtrail", "dns", "s3", "openstack_keystone_api",
-			}, false),
 		},
 		"enabled": {
 			Type:        schema.TypeBool,
