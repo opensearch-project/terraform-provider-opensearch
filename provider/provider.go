@@ -251,6 +251,7 @@ func Provider() *schema.Provider {
 
 		DataSourcesMap: map[string]*schema.Resource{
 			"opensearch_host": dataSourceOpensearchHost(),
+			"opensearch_rule": dataSourceOpensearchRule(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
