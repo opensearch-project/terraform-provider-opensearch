@@ -109,11 +109,11 @@ resource "opensearch_correlation_rule" "advanced_threat" {
 ### Required
 
 - `correlate` (Block List, Min: 2) List of correlation queries to correlate findings across log sources. (see [below for nested schema](#nestedblock--correlate))
+- `time_window` (Number) Time window in milliseconds within which correlations must occur.
 
 ### Optional
 
 - `name` (String) Name of the correlation rule.
-- `time_window` (Number) Time window in milliseconds within which correlations must occur.
 - `trigger` (Block List, Max: 1) Alert trigger configuration for the correlation rule. (see [below for nested schema](#nestedblock--trigger))
 
 ### Read-Only

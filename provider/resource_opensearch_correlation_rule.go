@@ -51,7 +51,7 @@ var opensearchCorrelationRuleSchema = map[string]*schema.Schema{
 	},
 	"time_window": {
 		Type:        schema.TypeInt,
-		Optional:    true,
+		Required:    true,
 		Description: "Time window in milliseconds within which correlations must occur.",
 	},
 	"trigger": {
