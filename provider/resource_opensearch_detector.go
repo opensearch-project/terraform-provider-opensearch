@@ -16,24 +16,44 @@ import (
 // validateSingleIndex ensures that exactly one index is provided in the indices field
 func validateSingleIndex(v interface{}, k string) (warnings []string, errors []error) {
 	indices := v.([]interface{})
-	
+
 	if len(indices) == 0 {
 		errors = append(errors, fmt.Errorf("%s must contain exactly one index, but got 0", k))
 		return warnings, errors
 	}
-	
+
 	if len(indices) > 1 {
 		errors = append(errors, fmt.Errorf("%s must contain exactly one index, but got %d. OpenSearch Security Analytics detectors currently support only one index per detector input", k, len(indices)))
 		return warnings, errors
 	}
-	
+
 	// Validate that the single index is not empty
 	if indices[0] == nil || indices[0].(string) == "" {
 		errors = append(errors, fmt.Errorf("%s cannot contain empty index names", k))
 		return warnings, errors
 	}
-	
+
 	return warnings, errors
+}
+
+// validateDetectorIndices validates the indices field in detector inputs
+func validateDetectorIndices(d *schema.ResourceData) error {
+	if v, ok := d.GetOk("inputs"); ok {
+		inputsList := v.([]interface{})
+		for i, inputRaw := range inputsList {
+			input := inputRaw.(map[string]interface{})
+			if detectorInputList, ok := input["detector_input"].([]interface{}); ok && len(detectorInputList) > 0 {
+				detectorInput := detectorInputList[0].(map[string]interface{})
+				if indices, ok := detectorInput["indices"]; ok {
+					_, errs := validateSingleIndex(indices, fmt.Sprintf("inputs.%d.detector_input.0.indices", i))
+					if len(errs) > 0 {
+						return errs[0]
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func resourceOpenSearchDetector() *schema.Resource {
@@ -124,7 +144,6 @@ func detectorSchema() map[string]*schema.Schema {
 									Type:        schema.TypeList,
 									Required:    true,
 									Description: "The log data source used for the detector. Currently only one index is supported.",
-									ValidateFunc: validateSingleIndex,
 									Elem: &schema.Schema{
 										Type: schema.TypeString,
 									},
@@ -351,6 +370,11 @@ func detectorSchema() map[string]*schema.Schema {
 }
 
 func resourceOpensearchDetectorCreate(d *schema.ResourceData, m interface{}) error {
+	// Validate indices before creating
+	if err := validateDetectorIndices(d); err != nil {
+		return err
+	}
+
 	res, err := resourceOpensearchPostDetector(d, m)
 
 	if err != nil {
@@ -378,13 +402,18 @@ func resourceOpensearchDetectorRead(d *schema.ResourceData, m interface{}) error
 	}
 
 	d.SetId(res.ID)
-	
+
 	flattenDetector(d, res.Detector)
 
 	return nil
 }
 
 func resourceOpensearchDetectorUpdate(d *schema.ResourceData, m interface{}) error {
+	// Validate indices before updating
+	if err := validateDetectorIndices(d); err != nil {
+		return err
+	}
+
 	_, err := resourceOpensearchPutDetector(d, m)
 
 	if err != nil {
@@ -406,7 +435,7 @@ func resourceOpensearchDetectorDelete(d *schema.ResourceData, m interface{}) err
 	if err != nil {
 		return err
 	}
-	
+
 	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
 		Method: "DELETE",
 		Path:   path,
@@ -431,7 +460,7 @@ func resourceOpensearchGetDetector(detectorID string, m interface{}) (*detectorR
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var res *elastic7.Response
 	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
 		Method: "GET",
@@ -445,7 +474,7 @@ func resourceOpensearchGetDetector(detectorID string, m interface{}) (*detectorR
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling detector body: %+v: %+v", err, body)
 	}
-	
+
 	log.Printf("[INFO] Detector response: %+v", response)
 	return response, err
 }
@@ -465,7 +494,7 @@ func resourceOpensearchPostDetector(d *schema.ResourceData, m interface{}) (*det
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var res *elastic7.Response
 	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
 		Method: "POST",
@@ -480,7 +509,7 @@ func resourceOpensearchPostDetector(d *schema.ResourceData, m interface{}) (*det
 	if err := json.Unmarshal(body, response); err != nil {
 		return response, fmt.Errorf("error unmarshalling detector body: %+v: %+v", err, body)
 	}
-	
+
 	return response, nil
 }
 
@@ -505,7 +534,7 @@ func resourceOpensearchPutDetector(d *schema.ResourceData, m interface{}) (*dete
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var res *elastic7.Response
 	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
 		Method: "PUT",
@@ -526,7 +555,7 @@ func resourceOpensearchPutDetector(d *schema.ResourceData, m interface{}) (*dete
 
 func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 	body := map[string]interface{}{
-		"name":         d.Get("name").(string),
+		"name":          d.Get("name").(string),
 		"detector_type": d.Get("detector_type").(string),
 		"enabled":       d.Get("enabled").(bool),
 		"type":          "detector",
@@ -554,19 +583,19 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 	if v, ok := d.GetOk("inputs"); ok {
 		inputsList := v.([]interface{})
 		inputs := make([]interface{}, len(inputsList))
-		
+
 		for i, inputRaw := range inputsList {
 			input := inputRaw.(map[string]interface{})
 			detectorInputList := input["detector_input"].([]interface{})
-			
+
 			if len(detectorInputList) > 0 {
 				detectorInput := detectorInputList[0].(map[string]interface{})
 				inputBody := map[string]interface{}{}
-				
+
 				if desc, ok := detectorInput["description"]; ok && desc.(string) != "" {
 					inputBody["description"] = desc.(string)
 				}
-				
+
 				// Indices
 				if indices, ok := detectorInput["indices"]; ok {
 					indicesList := indices.([]interface{})
@@ -575,7 +604,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 						inputBody["indices"].([]string)[j] = idx.(string)
 					}
 				}
-				
+
 				// Custom rules
 				if customRules, ok := detectorInput["custom_rules"]; ok {
 					customRulesList := customRules.([]interface{})
@@ -590,7 +619,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 						inputBody["custom_rules"] = rules
 					}
 				}
-				
+
 				// Pre-packaged rules
 				if prePackagedRules, ok := detectorInput["pre_packaged_rules"]; ok {
 					prePackagedRulesList := prePackagedRules.([]interface{})
@@ -605,7 +634,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 						inputBody["pre_packaged_rules"] = rules
 					}
 				}
-				
+
 				inputs[i] = map[string]interface{}{
 					"detector_input": inputBody,
 				}
@@ -618,14 +647,14 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 	if v, ok := d.GetOk("triggers"); ok {
 		triggersList := v.([]interface{})
 		triggers := make([]interface{}, len(triggersList))
-		
+
 		for i, triggerRaw := range triggersList {
 			trigger := triggerRaw.(map[string]interface{})
 			triggerBody := map[string]interface{}{
 				"name":     trigger["name"].(string),
 				"severity": trigger["severity"].(string),
 			}
-			
+
 			// Optional fields
 			if v, ok := trigger["types"]; ok {
 				types := v.([]interface{})
@@ -635,14 +664,14 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 					triggerBody["types"] = []interface{}{}
 				}
 			}
-			
+
 			if v, ok := trigger["ids"]; ok {
 				ids := v.([]interface{})
 				if len(ids) > 0 {
 					triggerBody["ids"] = ids
 				}
 			}
-			
+
 			if v, ok := trigger["sev_levels"]; ok {
 				sevLevels := v.([]interface{})
 				if len(sevLevels) > 0 {
@@ -651,14 +680,14 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 					triggerBody["sev_levels"] = []interface{}{}
 				}
 			}
-			
+
 			if v, ok := trigger["tags"]; ok {
 				tags := v.([]interface{})
 				if len(tags) > 0 {
 					triggerBody["tags"] = tags
 				}
 			}
-			
+
 			if v, ok := trigger["detection_types"]; ok {
 				detectionTypes := v.([]interface{})
 				if len(detectionTypes) > 0 {
@@ -671,7 +700,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 				// Set default detection_types to ["rules"] if not provided
 				triggerBody["detection_types"] = []interface{}{"rules"}
 			}
-			
+
 			// Actions
 			if v, ok := trigger["actions"]; ok {
 				actionsList := v.([]interface{})
@@ -680,12 +709,12 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 					for j, actionRaw := range actionsList {
 						action := actionRaw.(map[string]interface{})
 						actionBody := map[string]interface{}{
-							"id":             action["id"].(string),
-							"name":           action["name"].(string),
-							"destination_id": action["destination_id"].(string),
+							"id":               action["id"].(string),
+							"name":             action["name"].(string),
+							"destination_id":   action["destination_id"].(string),
 							"throttle_enabled": action["throttle_enabled"].(bool),
 						}
-						
+
 						// Subject template
 						if subjectTemplate, ok := action["subject_template"].([]interface{}); ok && len(subjectTemplate) > 0 {
 							st := subjectTemplate[0].(map[string]interface{})
@@ -694,7 +723,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 								"lang":   st["lang"].(string),
 							}
 						}
-						
+
 						// Message template
 						if messageTemplate, ok := action["message_template"].([]interface{}); ok && len(messageTemplate) > 0 {
 							mt := messageTemplate[0].(map[string]interface{})
@@ -703,7 +732,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 								"lang":   mt["lang"].(string),
 							}
 						}
-						
+
 						// Throttle
 						if throttle, ok := action["throttle"].([]interface{}); ok && len(throttle) > 0 {
 							t := throttle[0].(map[string]interface{})
@@ -712,7 +741,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 								"value": t["value"].(int),
 							}
 						}
-						
+
 						actions[j] = actionBody
 					}
 					triggerBody["actions"] = actions
@@ -720,7 +749,7 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 					triggerBody["actions"] = []interface{}{}
 				}
 			}
-			
+
 			triggers[i] = triggerBody
 		}
 		body["triggers"] = triggers
@@ -733,19 +762,19 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 	if name, ok := detector["name"].(string); ok {
 		d.Set("name", name)
 	}
-	
+
 	if detectorType, ok := detector["detector_type"].(string); ok {
 		d.Set("detector_type", detectorType)
 	}
-	
+
 	if enabled, ok := detector["enabled"].(bool); ok {
 		d.Set("enabled", enabled)
 	}
-	
+
 	if lastUpdateTime, ok := detector["last_update_time"].(string); ok {
 		d.Set("last_update_time", lastUpdateTime)
 	}
-	
+
 	if enabledTime, ok := detector["enabled_time"].(string); ok {
 		d.Set("enabled_time", enabledTime)
 	}
@@ -774,15 +803,15 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 			input := inputRaw.(map[string]interface{})
 			if detectorInput, ok := input["detector_input"].(map[string]interface{}); ok {
 				inputData := map[string]interface{}{}
-				
+
 				if desc, ok := detectorInput["description"].(string); ok {
 					inputData["description"] = desc
 				}
-				
+
 				if indices, ok := detectorInput["indices"].([]interface{}); ok {
 					inputData["indices"] = indices
 				}
-				
+
 				if customRules, ok := detectorInput["custom_rules"].([]interface{}); ok && len(customRules) > 0 {
 					rules := make([]interface{}, len(customRules))
 					for j, ruleRaw := range customRules {
@@ -793,7 +822,7 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 					}
 					inputData["custom_rules"] = rules
 				}
-				
+
 				if prePackagedRules, ok := detectorInput["pre_packaged_rules"].([]interface{}); ok && len(prePackagedRules) > 0 {
 					rules := make([]interface{}, len(prePackagedRules))
 					for j, ruleRaw := range prePackagedRules {
@@ -804,7 +833,7 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 					}
 					inputData["pre_packaged_rules"] = rules
 				}
-				
+
 				inputsList[i] = map[string]interface{}{
 					"detector_input": []interface{}{inputData},
 				}
@@ -822,34 +851,34 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 				"name":     trigger["name"].(string),
 				"severity": trigger["severity"].(string),
 			}
-			
+
 			if id, ok := trigger["id"].(string); ok {
 				triggerData["id"] = id
 			}
-			
+
 			if types, ok := trigger["types"].([]interface{}); ok {
 				triggerData["types"] = types
 			}
-			
+
 			if ids, ok := trigger["ids"].([]interface{}); ok {
 				triggerData["ids"] = ids
 			}
-			
+
 			if sevLevels, ok := trigger["sev_levels"].([]interface{}); ok {
 				triggerData["sev_levels"] = sevLevels
 			}
-			
+
 			if tags, ok := trigger["tags"].([]interface{}); ok {
 				triggerData["tags"] = tags
 			}
-			
+
 			if detectionTypes, ok := trigger["detection_types"].([]interface{}); ok {
 				triggerData["detection_types"] = detectionTypes
 			} else {
 				// Ensure detection_types is set to default if not present in API response
 				triggerData["detection_types"] = []interface{}{"rules"}
 			}
-			
+
 			// Actions
 			if actions, ok := trigger["actions"].([]interface{}); ok && len(actions) > 0 {
 				actionsList := make([]interface{}, len(actions))
@@ -861,7 +890,7 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 						"destination_id":   action["destination_id"].(string),
 						"throttle_enabled": action["throttle_enabled"].(bool),
 					}
-					
+
 					if subjectTemplate, ok := action["subject_template"].(map[string]interface{}); ok {
 						actionData["subject_template"] = []interface{}{
 							map[string]interface{}{
@@ -870,7 +899,7 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 							},
 						}
 					}
-					
+
 					if messageTemplate, ok := action["message_template"].(map[string]interface{}); ok {
 						actionData["message_template"] = []interface{}{
 							map[string]interface{}{
@@ -879,7 +908,7 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 							},
 						}
 					}
-					
+
 					if throttle, ok := action["throttle"].(map[string]interface{}); ok {
 						actionData["throttle"] = []interface{}{
 							map[string]interface{}{
@@ -888,12 +917,12 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 							},
 						}
 					}
-					
+
 					actionsList[j] = actionData
 				}
 				triggerData["actions"] = actionsList
 			}
-			
+
 			triggersList[i] = triggerData
 		}
 		d.Set("triggers", triggersList)
