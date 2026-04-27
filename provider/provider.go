@@ -246,10 +246,12 @@ func Provider() *schema.Provider {
 			"opensearch_channel_configuration":     resourceOpenSearchChannelConfiguration(),
 			"opensearch_anomaly_detection":         resourceOpenSearchAnomalyDetection(),
 			"opensearch_sm_policy":                 resourceOpenSearchSMPolicy(),
+			"opensearch_correlation_rule":          resourceOpenSearchCorrelationRule(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
-			"opensearch_host": dataSourceOpensearchHost(),
+			"opensearch_host":             dataSourceOpensearchHost(),
+			"opensearch_correlation_rule": dataSourceOpensearchCorrelationRule(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
