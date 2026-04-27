@@ -1,15 +1,9 @@
 package provider
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/olivere/elastic/uritemplates"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 func dataSourceOpensearchCorrelationRule() *schema.Resource {
@@ -186,35 +180,12 @@ func dataSourceOpensearchCorrelationRuleRead(d *schema.ResourceData, m interface
 }
 
 func dataSourceGetCorrelationRule(ruleID string, m interface{}) (*correlationRuleResponse, error) {
-	var err error
-	response := new(correlationRuleResponse)
-
-	path, err := uritemplates.Expand("/_plugins/_security_analytics/correlation/rules/{id}", map[string]string{
-		"id": ruleID,
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for correlation rule: %+v", err)
-	}
-
-	var body json.RawMessage
-	osClient, err := getClient(m.(*ProviderConf))
-	if err != nil {
-		return nil, err
-	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   path,
-	})
+	// Use the shared search-based retrieval function
+	response, err := getCorrelationRuleBySearch(ruleID, m)
 	if err != nil {
 		return response, err
 	}
-	body = res.Body
-
-	if err := json.Unmarshal(body, response); err != nil {
-		return response, fmt.Errorf("error unmarshalling correlation rule body: %+v: %+v", err, body)
-	}
 
 	log.Printf("[INFO] Retrieved correlation rule: %s", ruleID)
-	return response, err
+	return response, nil
 }

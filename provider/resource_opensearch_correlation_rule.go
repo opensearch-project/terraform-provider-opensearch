@@ -247,36 +247,54 @@ func resourceOpensearchCorrelationRuleDelete(d *schema.ResourceData, m interface
 }
 
 func resourceOpensearchGetCorrelationRule(ruleID string, m interface{}) (*correlationRuleResponse, error) {
-	var err error
+	return getCorrelationRuleBySearch(ruleID, m)
+}
+
+// getCorrelationRuleBySearch retrieves a correlation rule by searching for it using the _search endpoint
+func getCorrelationRuleBySearch(ruleID string, m interface{}) (*correlationRuleResponse, error) {
 	response := new(correlationRuleResponse)
 
-	path, err := uritemplates.Expand("/_plugins/_security_analytics/correlation/rules/{id}", map[string]string{
-		"id": ruleID,
-	})
-	if err != nil {
-		return response, fmt.Errorf("error building URL path for correlation rule: %+v", err)
+	path := "/_plugins/_security_analytics/correlation/rules/_search"
+	searchQuery := map[string]interface{}{
+		"query": map[string]interface{}{
+			"term": map[string]interface{}{
+				"_id": ruleID,
+			},
+		},
 	}
 
-	var body json.RawMessage
+	searchJSON, err := json.Marshal(searchQuery)
+	if err != nil {
+		return response, fmt.Errorf("error marshalling search query: %+v", err)
+	}
+
 	osClient, err := getClient(m.(*ProviderConf))
 	if err != nil {
 		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
+
+	res, err := osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
+		Method: "POST",
 		Path:   path,
+		Body:   string(searchJSON),
 	})
 	if err != nil {
-		return response, err
-	}
-	body = res.Body
-
-	if err := json.Unmarshal(body, response); err != nil {
-		return response, fmt.Errorf("error unmarshalling correlation rule body: %+v: %+v", err, body)
+		return response, fmt.Errorf("error searching for correlation rule: %w", err)
 	}
 
-	return response, err
+	// Parse the search response
+	var searchResponse correlationRuleSearchResponse
+	if err := json.Unmarshal(res.Body, &searchResponse); err != nil {
+		return response, fmt.Errorf("error unmarshalling search response: %+v: %+v", err, string(res.Body))
+	}
+
+	// Extract the first (and should be only) hit
+	hit := searchResponse.Hits.Hits[0]
+	response.ID = hit.ID
+	response.Version = hit.Version
+	response.Rule = hit.Source
+
+	return response, nil
 }
 
 func resourceOpensearchPostCorrelationRule(d *schema.ResourceData, m interface{}) (*correlationRuleResponse, error) {
@@ -581,4 +599,40 @@ type actionTemplate struct {
 type actionThrottle struct {
 	Unit  string `json:"unit"`
 	Value int    `json:"value"`
+}
+
+// Search response types
+type correlationRuleSearchResponse struct {
+	Took     int                       `json:"took"`
+	TimedOut bool                      `json:"timed_out"`
+	Shards   searchShards              `json:"_shards"`
+	Hits     correlationRuleSearchHits `json:"hits"`
+}
+
+type searchShards struct {
+	Total      int `json:"total"`
+	Successful int `json:"successful"`
+	Skipped    int `json:"skipped"`
+	Failed     int `json:"failed"`
+}
+
+type correlationRuleSearchHits struct {
+	Total    searchTotal                `json:"total"`
+	MaxScore float64                    `json:"max_score"`
+	Hits     []correlationRuleSearchHit `json:"hits"`
+}
+
+type searchTotal struct {
+	Value    int    `json:"value"`
+	Relation string `json:"relation"`
+}
+
+type correlationRuleSearchHit struct {
+	Index       string          `json:"_index"`
+	ID          string          `json:"_id"`
+	Version     int             `json:"_version"`
+	SeqNo       int             `json:"_seq_no"`
+	PrimaryTerm int             `json:"_primary_term"`
+	Score       float64         `json:"_score"`
+	Source      correlationRule `json:"_source"`
 }
