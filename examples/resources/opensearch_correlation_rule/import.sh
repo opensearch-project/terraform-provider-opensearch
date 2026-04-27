@@ -1,0 +1,1 @@
+terraform import opensearch_correlation_rule.example MLm_zZ0BghYda8SUa-hc
