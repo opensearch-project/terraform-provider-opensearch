@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
@@ -40,6 +42,7 @@ var (
 		"cluster.search.request.slowlog.threshold.info",
 		"cluster.search.request.slowlog.threshold.debug",
 		"cluster.search.request.slowlog.threshold.trace",
+		"search.concurrent_segment_search.mode",
 	}
 	intClusterSettings = []string{
 		"cluster.max_shards_per_node",
@@ -50,6 +53,7 @@ var (
 		"cluster.routing.allocation.node_concurrent_recoveries",
 		"cluster.routing.allocation.node_initial_primaries_recoveries",
 		"cluster.routing.allocation.total_shards_per_node",
+		"search.concurrent.max_slice_count",
 	}
 	floatClusterSettings = []string{
 		"cluster.routing.allocation.balance.index",
@@ -67,11 +71,19 @@ var (
 		"cluster.routing.allocation.disk.threshold_enabled",
 		"cluster.routing.allocation.same_shard.host",
 		"action.destructive_requires_name",
+		"search.concurrent_segment_search.enabled",
 	}
 	typeListClusterSettings = []string{
 		"cluster.routing.allocation.awareness.force.zone.values",
 	}
 	dynamicClusterSettings = concatStringSlice(stringClusterSettings, intClusterSettings, floatClusterSettings, boolClusterSettings, typeListClusterSettings)
+	
+	// Version requirements for cluster settings fields
+	versionRequirements = map[string]string{
+		"search_concurrent_segment_search_enabled": "2.12.0",
+		"search_concurrent_segment_search_mode":    "2.17.0",
+		"search_concurrent_max_slice_count":        "2.13.0",
+	}
 )
 
 func resourceOpensearchClusterSettings() *schema.Resource {
@@ -81,6 +93,7 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 		Read:        resourceOpensearchClusterSettingsRead,
 		Update:      resourceOpensearchClusterSettingsUpdate,
 		Delete:      resourceOpensearchClusterSettingsDelete,
+		CustomizeDiff: validateVersionRequirements,
 		Schema: map[string]*schema.Schema{
 			"cluster_max_shards_per_node": {
 				Type:        schema.TypeInt,
@@ -317,6 +330,22 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Optional:    true,
 				Description: "When set to true, you must specify the index name to delete an index and it is not possible to delete all indices with _all or use wildcards",
 			},
+			"search_concurrent_segment_search_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: "Enable or disable concurrent segment search. Requires OpenSearch 2.12+.",
+			},
+			"search_concurrent_segment_search_mode": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ValidateFunc: validation.StringInSlice([]string{"auto", "all", "none"}, false),
+				Description:  "Sets the concurrent segment search mode. Accepted values are `auto`, `all`, or `none`. Requires OpenSearch 2.17+.",
+			},
+			"search_concurrent_max_slice_count": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "Maximum number of slices for concurrent search requests. Use positive integer (2-8 recommended) or 0 for Lucene default mechanism. Requires OpenSearch 2.13+.",
+			},
 		},
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -340,6 +369,18 @@ func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface
 	if err != nil {
 		return err
 	}
+	
+	// Validate version requirements now that provider is configured
+	providerConf := meta.(*ProviderConf)
+	for fieldName, minVersion := range versionRequirements {
+		if _, ok := d.GetOk(fieldName); ok {
+			log.Printf("[INFO] resourceOpensearchPutClusterSettings: validating version requirement for %s (requires %s, current %s)", fieldName, minVersion, providerConf.osVersion)
+			if err := checkVersionRequirement(providerConf.osVersion, minVersion, fieldName); err != nil {
+				return err
+			}
+		}
+	}
+	
 	settings := make(map[string]interface{})
 	settings["persistent"] = clusterSettingsFromResourceData(d)
 
@@ -448,7 +489,14 @@ func clusterSettingsFromResourceData(d *schema.ResourceData) map[string]interfac
 	settings := make(map[string]interface{})
 	for _, key := range dynamicClusterSettings {
 		schemaName := strings.Replace(key, ".", "_", -1)
-		if raw, ok := d.GetOk(schemaName); ok {
+		
+		// Handle integer settings where 0 is a valid value
+		if containsString(intClusterSettings, key) {
+			// Use GetOkExists for integer fields where 0 is a valid value
+			if value, exists := d.GetOkExists(schemaName); exists {
+				settings[key] = value
+			}
+		} else if raw, ok := d.GetOk(schemaName); ok {
 			if isTypeListSetting(key) {
 				if list, ok := raw.([]interface{}); ok {
 					settings[key] = convertListToSlice(list)
@@ -514,4 +562,49 @@ func convertListToSlice(list []interface{}) []string {
 		}
 	}
 	return slice
+}
+
+func validateVersionRequirements(ctx context.Context, diff *schema.ResourceDiff, meta interface{}) error {
+	providerConf := meta.(*ProviderConf)
+	
+	// Check all fields with version requirements
+	for fieldName, minVersion := range versionRequirements {
+		if _, ok := diff.GetOk(fieldName); ok {
+			// Skip validation during plan phase if version is not available yet
+			// Validation will happen during apply phase when the version is available
+			if providerConf.osVersion == "" {
+				log.Printf("[INFO] validateVersionRequirements: skipping plan-time validation for %s (osVersion not yet available)", fieldName)
+				continue
+			}
+			log.Printf("[INFO] validateVersionRequirements: checking %s requires %s, current %s", fieldName, minVersion, providerConf.osVersion)
+			if err := checkVersionRequirement(providerConf.osVersion, minVersion, fieldName); err != nil {
+				return err
+			}
+		}
+	}
+	
+	return nil
+}
+
+func checkVersionRequirement(currentVersionStr, minVersionStr, fieldName string) error {
+	if currentVersionStr == "" {
+		return fmt.Errorf("unable to determine OpenSearch version for %s validation", fieldName)
+	}
+	
+	currentVersion, err := version.NewVersion(currentVersionStr)
+	if err != nil {
+		return fmt.Errorf("invalid current version %s: %v", currentVersionStr, err)
+	}
+	
+	minVersion, err := version.NewVersion(minVersionStr)
+	if err != nil {
+		return fmt.Errorf("invalid minimum version %s: %v", minVersionStr, err)
+	}
+	
+	if currentVersion.LessThan(minVersion) {
+		return fmt.Errorf("%s requires OpenSearch version %s or higher, current version is %s", 
+			fieldName, minVersionStr, currentVersionStr)
+	}
+	
+	return nil
 }

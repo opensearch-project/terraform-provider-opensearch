@@ -81,6 +81,9 @@ resource "opensearch_index" "index" {
 - `include_type_name` (String) A string that indicates if and what we should pass to include_type_name parameter. Set to `"false"` when trying to create an index on a v6 cluster without a doc type or set to `"true"` when trying to create an index on a v7 cluster with a doc type. Since mapping updates are not currently supported, this applies only on index create.
 - `index_knn` (Boolean) Indicates whether the index should build native library indices for the knn_vector fields. If set to false, the knn_vector fields will be stored in doc values, but Approximate k-NN search functionality will be disabled.
 - `index_knn_algo_param_ef_search` (String) The size of the dynamic list used during k-NN searches. Higher values lead to more accurate but slower searches. Only available for nmslib.
+- `index_search_concurrent_max_slice_count` (Number) Maximum number of slices for concurrent search requests for this index. Use positive integer (2-8 recommended) or 0 for Lucene default mechanism. Requires OpenSearch 2.13+.
+- `index_search_concurrent_segment_search_enabled` (Boolean) Enable or disable concurrent segment search for this index. Requires OpenSearch 2.12+.
+- `index_search_concurrent_segment_search_mode` (String) Sets the concurrent segment search mode for this index. Accepted values are `auto`, `all`, or `none`. Requires OpenSearch 2.17+.
 - `index_similarity_default` (String) A JSON string describing the default index similarity config.
 - `indexing_slowlog_level` (String) Set which logging level to use for the search slow log, can be: `warn`, `info`, `debug`, `trace`
 - `indexing_slowlog_source` (String) Set the number of characters of the `_source` to include in the slowlog lines, `false` or `0` will skip logging the source entirely and setting it to `true` will log the entire source regardless of size. The original `_source` is reformatted by default to make sure that it fits on a single log line.
@@ -129,6 +132,8 @@ resource "opensearch_index" "index" {
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import by name

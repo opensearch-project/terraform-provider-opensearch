@@ -883,3 +883,141 @@ func checkOpensearchAliasDeleted(indexName, aliasName string) resource.TestCheck
 		return nil
 	}
 }
+
+func TestAccOpensearchIndexConcurrentSegmentSearch(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, indexVersionRequirements["index_search_concurrent_segment_search_mode"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexConcurrentSegmentSearch,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_concurrent_search"),
+					resource.TestCheckResourceAttr("opensearch_index.test_concurrent_search", "index_search_concurrent_segment_search_enabled", "true"),
+					resource.TestCheckResourceAttr("opensearch_index.test_concurrent_search", "index_search_concurrent_segment_search_mode", "auto"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchIndexConcurrentSegmentSearchModeValidation(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, indexVersionRequirements["index_search_concurrent_segment_search_mode"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexConcurrentSegmentSearchModeAll,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_concurrent_search_mode"),
+					resource.TestCheckResourceAttr("opensearch_index.test_concurrent_search_mode", "index_search_concurrent_segment_search_mode", "all"),
+				),
+			},
+			{
+				Config: testAccOpensearchIndexConcurrentSegmentSearchModeNone,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_concurrent_search_mode"),
+					resource.TestCheckResourceAttr("opensearch_index.test_concurrent_search_mode", "index_search_concurrent_segment_search_mode", "none"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchIndexConcurrentMaxSliceCount(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, indexVersionRequirements["index_search_concurrent_max_slice_count"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexConcurrentMaxSliceCountZero,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_concurrent_slice_count"),
+					resource.TestCheckResourceAttr("opensearch_index.test_concurrent_slice_count", "index_search_concurrent_max_slice_count", "0"),
+				),
+			},
+			{
+				Config: testAccOpensearchIndexConcurrentMaxSliceCountEight,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_concurrent_slice_count"),
+					resource.TestCheckResourceAttr("opensearch_index.test_concurrent_slice_count", "index_search_concurrent_max_slice_count", "8"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchIndexConcurrentSegmentSearchEnabled(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, indexVersionRequirements["index_search_concurrent_segment_search_enabled"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchIndexDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchIndexConcurrentSegmentSearchEnabledOnly,
+				Check: resource.ComposeTestCheckFunc(
+					checkOpensearchIndexExists("opensearch_index.test_concurrent_search_enabled"),
+					resource.TestCheckResourceAttr("opensearch_index.test_concurrent_search_enabled", "index_search_concurrent_segment_search_enabled", "true"),
+				),
+			},
+		},
+	})
+}
+
+var testAccOpensearchIndexConcurrentSegmentSearch = `
+resource "opensearch_index" "test_concurrent_search" {
+  name                                            = "terraform-test-concurrent-search-full"
+  number_of_shards                                = 1
+  number_of_replicas                              = 1
+  index_search_concurrent_segment_search_enabled = true
+  index_search_concurrent_segment_search_mode     = "auto"
+}
+`
+
+var testAccOpensearchIndexConcurrentSegmentSearchEnabledOnly = `
+resource "opensearch_index" "test_concurrent_search_enabled" {
+  name                                            = "terraform-test-concurrent-search-enabled-only"
+  number_of_shards                                = 1
+  number_of_replicas                              = 1
+  index_search_concurrent_segment_search_enabled = true
+}
+`
+
+var testAccOpensearchIndexConcurrentSegmentSearchModeAll = `
+resource "opensearch_index" "test_concurrent_search_mode" {
+  name                                        = "terraform-test-concurrent-search-mode-all"
+  number_of_shards                            = 1
+  number_of_replicas                          = 1
+  index_search_concurrent_segment_search_mode = "all"
+}
+`
+
+var testAccOpensearchIndexConcurrentSegmentSearchModeNone = `
+resource "opensearch_index" "test_concurrent_search_mode" {
+  name                                        = "terraform-test-concurrent-search-mode-none"
+  number_of_shards                            = 1
+  number_of_replicas                          = 1
+  index_search_concurrent_segment_search_mode = "none"
+}
+`
+
+var testAccOpensearchIndexConcurrentMaxSliceCountZero = `
+resource "opensearch_index" "test_concurrent_slice_count" {
+  name                                = "terraform-test-concurrent-slice-count-zero"
+  number_of_shards                    = 1
+  number_of_replicas                  = 1
+  index_search_concurrent_max_slice_count = 0
+}
+`
+
+var testAccOpensearchIndexConcurrentMaxSliceCountEight = `
+resource "opensearch_index" "test_concurrent_slice_count" {
+  name                                = "terraform-test-concurrent-slice-count-eight"
+  number_of_shards                    = 1
+  number_of_replicas                  = 1
+  index_search_concurrent_max_slice_count = 8
+}
+`

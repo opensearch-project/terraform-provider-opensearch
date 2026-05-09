@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -67,6 +69,71 @@ func TestProvider_impl(t *testing.T) {
 func testAccPreCheck(t *testing.T) {
 	if v := os.Getenv("OPENSEARCH_URL"); v == "" {
 		t.Fatal("OPENSEARCH_URL must be set for acceptance tests")
+	}
+}
+
+// getOpenSearchVersionForTest queries OpenSearch directly to determine its version.
+// It does not rely on the provider being configured, so it is safe to call from PreCheck.
+func getOpenSearchVersionForTest(t *testing.T) *version.Version {
+	t.Helper()
+	rawURL := os.Getenv("OPENSEARCH_URL")
+
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		t.Skipf("could not parse OPENSEARCH_URL: %v", err)
+		return nil
+	}
+
+	req, _ := http.NewRequest("GET", rawURL, nil)
+	if parsedURL.User != nil {
+		password, _ := parsedURL.User.Password()
+		req.SetBasicAuth(parsedURL.User.Username(), password)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Skipf("could not connect to OpenSearch: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Skipf("could not parse OpenSearch response: %v", err)
+		return nil
+	}
+
+	versionInfo, ok := result["version"].(map[string]interface{})
+	if !ok {
+		t.Skip("could not find version in OpenSearch response")
+		return nil
+	}
+	versionStr, ok := versionInfo["number"].(string)
+	if !ok {
+		t.Skip("could not find version number in OpenSearch response")
+		return nil
+	}
+
+	v, err := version.NewVersion(versionStr)
+	if err != nil {
+		t.Skipf("could not parse OpenSearch version %q: %v", versionStr, err)
+		return nil
+	}
+	return v
+}
+
+// testAccPreCheckMinVersion skips the test if the running OpenSearch cluster is
+// older than minVersionStr. It also enforces that OPENSEARCH_URL is set.
+func testAccPreCheckMinVersion(t *testing.T, minVersionStr string) {
+	t.Helper()
+	testAccPreCheck(t)
+	current := getOpenSearchVersionForTest(t)
+	if current == nil {
+		return
+	}
+	min, _ := version.NewVersion(minVersionStr)
+	if current.LessThan(min) {
+		t.Skipf("skipping: requires OpenSearch >= %s, current version is %s", minVersionStr, current)
 	}
 }
 

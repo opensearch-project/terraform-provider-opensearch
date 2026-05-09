@@ -70,11 +70,24 @@ var (
 		"indexing.slowlog.level",
 		"indexing.slowlog.source",
 		"index.knn.algo_param.ef_search",
+		"index.search.concurrent_segment_search.enabled",
+		"index.search.concurrent_segment_search.mode",
+		"index.search.concurrent.max_slice_count",
 	}
 	settingsKeys = append(staticSettingsKeys, dynamicsSettingsKeys...)
 )
 
 var (
+	// Integer index settings that need special handling for zero values
+	integerIndexSettings = []string{
+		"index.search.concurrent.max_slice_count",
+	}
+	// Version requirements for index settings fields
+	indexVersionRequirements = map[string]string{
+		"index_search_concurrent_segment_search_enabled": "2.12.0",
+		"index_search_concurrent_segment_search_mode":    "2.17.0",
+		"index_search_concurrent_max_slice_count":        "2.17.0",
+	}
 	configSchema = map[string]*schema.Schema{
 		"name": {
 			Type:        schema.TypeString,
@@ -364,6 +377,22 @@ var (
 			Description: "The size of the dynamic list used during k-NN searches. Higher values lead to more accurate but slower searches. Only available for nmslib.",
 			Optional:    true,
 		},
+		"index_search_concurrent_segment_search_enabled": {
+			Type:        schema.TypeBool,
+			Description: "Enable or disable concurrent segment search for this index. Requires OpenSearch 2.12+.",
+			Optional:    true,
+		},
+		"index_search_concurrent_segment_search_mode": {
+			Type:         schema.TypeString,
+			Description:  "Sets the concurrent segment search mode for this index. Accepted values are `auto`, `all`, or `none`. Requires OpenSearch 2.17+.",
+			Optional:     true,
+			ValidateFunc: validation.StringInSlice([]string{"auto", "all", "none"}, false),
+		},
+		"index_search_concurrent_max_slice_count": {
+			Type:        schema.TypeInt,
+			Description: "Maximum number of slices for concurrent search requests for this index. Use positive integer (2-8 recommended) or 0 for Lucene default mechanism. Requires OpenSearch 2.13+.",
+			Optional:    true,
+		},
 		// Other attributes
 		"mappings": {
 			Type:         schema.TypeString,
@@ -435,6 +464,7 @@ func resourceOpensearchIndex() *schema.Resource {
 		Update:      resourceOpensearchIndexUpdate,
 		Delete:      resourceOpensearchIndexDelete,
 		Schema:      configSchema,
+		CustomizeDiff: validateIndexVersionRequirements,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
@@ -449,6 +479,27 @@ func resourceOpensearchIndexCreate(d *schema.ResourceData, meta interface{}) err
 		ctx      = context.Background()
 		err      error
 	)
+
+	// Ensure the client is initialised so osVersion is populated before validation.
+	providerConf := meta.(*ProviderConf)
+	if _, err = getClient(providerConf); err != nil {
+		return err
+	}
+
+	// Validate version requirements for index settings
+	for fieldName, minVersion := range indexVersionRequirements {
+		if _, ok := d.GetOk(fieldName); ok {
+			if providerConf.osVersion != "" {
+				log.Printf("[INFO] resourceOpensearchIndexCreate: validating version requirement for %s (requires %s, current %s)", fieldName, minVersion, providerConf.osVersion)
+				if err := checkVersionRequirement(providerConf.osVersion, minVersion, fieldName); err != nil {
+					return err
+				}
+			} else {
+				log.Printf("[INFO] resourceOpensearchIndexCreate: skipping version validation for %s (osVersion not yet available)", fieldName)
+			}
+		}
+	}
+
 	if len(settings) > 0 {
 		body["settings"] = settings
 	}
@@ -567,8 +618,16 @@ func settingsFromIndexResourceData(d *schema.ResourceData) map[string]interface{
 	settings := make(map[string]interface{})
 	for _, key := range settingsKeys {
 		schemaName := strings.Replace(key, ".", "_", -1)
-		if raw, ok := d.GetOk(schemaName); ok {
-			log.Printf("[INFO] settingsFromIndexResourceData: key:%+v schemaName:%+v value:%+v, %+v", key, schemaName, raw, settings)
+		
+		// Handle integer settings where 0 is a valid value
+		if containsString(integerIndexSettings, key) {
+			// Use GetOkExists for integer fields where 0 is a valid value
+			if value, exists := d.GetOkExists(schemaName); exists {
+				log.Printf("[INFO] settingsFromIndexResourceData: key:%+v schemaName:%+v value:%+v (integer)", key, schemaName, value)
+				settings[key] = value
+			}
+		} else if raw, ok := d.GetOk(schemaName); ok {
+			log.Printf("[INFO] settingsFromIndexResourceData: key:%+v schemaName:%+v value:%+v", key, schemaName, raw)
 			settings[key] = raw
 		}
 	}
@@ -594,6 +653,13 @@ func indexResourceDataFromSettings(settings map[string]interface{}, d *schema.Re
 		if configSchema[schemaName].Type == schema.TypeBool {
 			str := value.(string)
 			parsed, err := strconv.ParseBool(str)
+			if err == nil {
+				value = parsed
+			}
+		} else if configSchema[schemaName].Type == schema.TypeInt {
+			// Handle integer conversion from string (OpenSearch API returns numbers as strings)
+			str := value.(string)
+			parsed, err := strconv.Atoi(str)
 			if err == nil {
 				value = parsed
 			}
@@ -658,6 +724,29 @@ func allowIndexDestroy(indexName string, d *schema.ResourceData, meta interface{
 }
 
 func resourceOpensearchIndexUpdate(d *schema.ResourceData, meta interface{}) error {
+	// Ensure the client is initialised so osVersion is populated before validation.
+	providerConf := meta.(*ProviderConf)
+	if _, err := getClient(providerConf); err != nil {
+		return err
+	}
+
+	// Validate version requirements for index settings
+	for fieldName, minVersion := range indexVersionRequirements {
+		if _, ok := d.GetOk(fieldName); ok {
+			if d.HasChange(fieldName) {
+				// Only validate if version is available
+				if providerConf.osVersion != "" {
+					log.Printf("[INFO] resourceOpensearchIndexUpdate: validating version requirement for %s (requires %s, current %s)", fieldName, minVersion, providerConf.osVersion)
+					if err := checkVersionRequirement(providerConf.osVersion, minVersion, fieldName); err != nil {
+						return err
+					}
+				} else {
+					log.Printf("[INFO] resourceOpensearchIndexUpdate: skipping version validation for %s (osVersion not yet available)", fieldName)
+				}
+			}
+		}
+	}
+
 	settings := make(map[string]interface{})
 	for _, key := range settingsKeys {
 		schemaName := strings.Replace(key, ".", "_", -1)
@@ -890,3 +979,27 @@ func updateAliases(index string, oldAliases, newAliases map[string]interface{}, 
 
 	return nil
 }
+
+func validateIndexVersionRequirements(ctx context.Context, diff *schema.ResourceDiff, meta interface{}) error {
+	providerConf := meta.(*ProviderConf)
+	
+	// Check all fields with version requirements
+	for fieldName, minVersion := range indexVersionRequirements {
+		if _, ok := diff.GetOk(fieldName); ok {
+			// Skip validation during plan phase if version is not available yet
+			// Validation will happen during apply phase when the version is available
+			if providerConf.osVersion == "" {
+				log.Printf("[INFO] validateIndexVersionRequirements: skipping plan-time validation for %s (osVersion not yet available)", fieldName)
+				continue
+			}
+			log.Printf("[INFO] validateIndexVersionRequirements: checking %s requires %s, current %s", fieldName, minVersion, providerConf.osVersion)
+			if err := checkVersionRequirement(providerConf.osVersion, minVersion, fieldName); err != nil {
+				return err
+			}
+		}
+	}
+	
+	return nil
+}
+
+
