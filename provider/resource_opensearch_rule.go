@@ -34,10 +34,9 @@ var openSearchRuleSchema = map[string]*schema.Schema{
 		ValidateFunc:     validateSigmaRule,
 	},
 	"forced": {
-		Description: "Force the update/delete operation even if the rule is actively used by detectors.",
+		Description: "Force the update/delete operation even if the rule is actively used by detectors. This is a request-level parameter and is not stored in state.",
 		Type:        schema.TypeBool,
 		Optional:    true,
-		Default:     false,
 	},
 	"version": {
 		Description: "The version of the rule.",
@@ -54,6 +53,12 @@ func resourceOpenSearchRule() *schema.Resource {
 		Update:      resourceOpensearchRuleUpdate,
 		Delete:      resourceOpensearchRuleDelete,
 		Schema:      openSearchRuleSchema,
+		CustomizeDiff: func(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
+			if d.HasChange("forced") && !d.HasChange("rule") && !d.HasChange("category") {
+				return d.Clear("forced")
+			}
+			return nil
+		},
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},

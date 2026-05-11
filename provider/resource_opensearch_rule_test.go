@@ -28,7 +28,6 @@ func TestAccOpensearchRule(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchRuleExists("opensearch_rule.test"),
 					resource.TestCheckResourceAttr("opensearch_rule.test", "category", "windows"),
-					resource.TestCheckResourceAttr("opensearch_rule.test", "forced", "true"),
 				),
 			},
 		},

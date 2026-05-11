@@ -82,7 +82,7 @@ EOF
 
 ### Optional
 
-- `forced` (Boolean) Force the update/delete operation even if the rule is actively used by detectors.
+- `forced` (Boolean) Force the update/delete operation even if the rule is actively used by detectors. This is a request-level parameter and is not stored in state - it only affects the next update/delete operation.
 
 ### Read-Only
 
