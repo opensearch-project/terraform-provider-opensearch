@@ -77,29 +77,7 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 				},
 				StateFunc: func(v interface{}) string {
 					jsonStr, _ := structure.NormalizeJsonString(v)
-					var body []interface{}
-					if err := json.Unmarshal([]byte(jsonStr), &body); err != nil {
-						return jsonStr
-					}
-					for _, elem := range body {
-						obj, ok := elem.(map[string]interface{})
-						if !ok {
-							continue
-						}
-						source, ok := obj["_source"].(map[string]interface{})
-						if !ok {
-							continue
-						}
-						delete(source, "updated_at")
-						if ip, ok := source["index-pattern"].(map[string]interface{}); ok {
-							delete(ip, "fields")
-						}
-					}
-					result, err := json.Marshal(body)
-					if err != nil {
-						return jsonStr
-					}
-					return string(result)
+					return stripDashboardObjectServerFields(jsonStr)
 				},
 				Description: "The JSON body of the dashboard object.",
 			},
@@ -199,9 +177,11 @@ func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interfac
 	}
 
 	// update terraform state based on fetched data. Fields other than 'body' do
-	// not need to be updated as chanages in these fields result in 'NotFound'
+	// not need to be updated as changes in these fields result in 'NotFound'.
+	// Strip server-managed fields so state stays clean and does not perpetually
+	// diff against config (StateFunc is not applied on d.Set).
 	ds := &resourceDataSetter{d: d}
-	ds.set("body", string(bodyBytes))
+	ds.set("body", stripDashboardObjectServerFields(string(bodyBytes)))
 
 	return ds.err
 }
@@ -254,6 +234,40 @@ func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interf
 
 	// make delete api call
 	return elastic7DeleteDashboardObject(client, indexStr, d.Id(), tenantNameStr)
+}
+
+// stripDashboardObjectServerFields removes server-managed fields from a
+// serialized dashboard object body array that are not user-controlled:
+//   - _source.updated_at      – always overwritten by OpenSearch on every write
+//   - _source["index-pattern"].fields – a cached field list maintained by Dashboards
+//
+// This is called both from the StateFunc (to normalize the config value) and
+// from the Read function (to normalize the value written to state via d.Set,
+// since the SDK does not apply StateFunc during d.Set).
+func stripDashboardObjectServerFields(bodyStr string) string {
+	var body []interface{}
+	if err := json.Unmarshal([]byte(bodyStr), &body); err != nil {
+		return bodyStr
+	}
+	for _, elem := range body {
+		obj, ok := elem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		source, ok := obj["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		delete(source, "updated_at")
+		if ip, ok := source["index-pattern"].(map[string]interface{}); ok {
+			delete(ip, "fields")
+		}
+	}
+	result, err := json.Marshal(body)
+	if err != nil {
+		return bodyStr
+	}
+	return string(result)
 }
 
 func elastic7CreateIndexIfNotExists(client *elastic7.Client, index string) error {
