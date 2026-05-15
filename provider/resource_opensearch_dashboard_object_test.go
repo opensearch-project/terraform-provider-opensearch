@@ -39,6 +39,12 @@ func TestAccOpensearchDashboardObject(t *testing.T) {
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_pattern", "index-pattern:cloudwatch", ""),
 				),
 			},
+			{
+				// Verify that server-managed fields (index-pattern.fields, updated_at)
+				// do not cause a perpetual diff after the index pattern is created.
+				Config:   indexPatternConfig,
+				PlanOnly: true,
+			},
 		},
 	})
 }
@@ -70,6 +76,13 @@ func TestAccOpensearchDashboardObjectWithTenant(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_dashboard_tenant.tenant_test", "tenant_name", "tenant_test"),
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_pattern", "index-pattern:cloudwatch", "tenant_test"),
 				),
+			},
+			{
+				// Verify that server-managed fields (index-pattern.fields, updated_at)
+				// do not cause a perpetual diff after the index pattern is created.
+				Config:             indexPatternConfig,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})

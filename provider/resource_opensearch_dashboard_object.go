@@ -76,8 +76,30 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 					return warnings, errors
 				},
 				StateFunc: func(v interface{}) string {
-					json, _ := structure.NormalizeJsonString(v)
-					return json
+					jsonStr, _ := structure.NormalizeJsonString(v)
+					var body []interface{}
+					if err := json.Unmarshal([]byte(jsonStr), &body); err != nil {
+						return jsonStr
+					}
+					for _, elem := range body {
+						obj, ok := elem.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						source, ok := obj["_source"].(map[string]interface{})
+						if !ok {
+							continue
+						}
+						delete(source, "updated_at")
+						if ip, ok := source["index-pattern"].(map[string]interface{}); ok {
+							delete(ip, "fields")
+						}
+					}
+					result, err := json.Marshal(body)
+					if err != nil {
+						return jsonStr
+					}
+					return string(result)
 				},
 				Description: "The JSON body of the dashboard object.",
 			},
