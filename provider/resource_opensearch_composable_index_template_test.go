@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchComposableIndexTemplate(t *testing.T) {
@@ -29,6 +30,12 @@ func TestAccOpensearchComposableIndexTemplate(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchComposableIndexTemplate,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchComposableIndexTemplateExists("opensearch_composable_index_template.test"),
+				),
+			},
+			{
+				Config: testAccOpensearchComposableIndexTemplateUpdated,
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchComposableIndexTemplateExists("opensearch_composable_index_template.test"),
 				),
@@ -79,12 +86,14 @@ func testCheckOpensearchComposableIndexTemplateExists(name string) resource.Test
 
 		meta := testAccProvider.Meta()
 
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		_, err = osClient.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.IndexTemplate.Get(context.TODO(), &opensearchapi.IndexTemplateGetReq{
+			IndexTemplates: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return err
@@ -102,12 +111,14 @@ func testCheckOpensearchComposableIndexTemplateDestroy(s *terraform.State) error
 
 		meta := testAccProvider.Meta()
 
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		_, err = osClient.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.IndexTemplate.Get(context.TODO(), &opensearchapi.IndexTemplateGetReq{
+			IndexTemplates: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return nil // should be not found error
@@ -148,6 +159,41 @@ resource "opensearch_composable_index_template" "test" {
   },
   "priority": 200,
   "version": 3,
+  "data_stream": {}
+}
+EOF
+}
+`
+
+var testAccOpensearchComposableIndexTemplateUpdated = `
+resource "opensearch_composable_index_template" "test" {
+  name = "terraform-test"
+  body = <<EOF
+{
+  "index_patterns": ["te*", "bar*", "baz*"],
+  "template": {
+    "settings": {
+      "index": {
+        "number_of_shards": "2"
+      }
+    },
+    "mappings": {
+      "properties": {
+        "host_name": {
+          "type": "keyword"
+        },
+        "created_at": {
+          "type": "date",
+          "format": "EEE MMM dd HH:mm:ss Z yyyy"
+        }
+      }
+    },
+    "aliases": {
+      "mydata": { }
+    }
+  },
+  "priority": 300,
+  "version": 4,
   "data_stream": {}
 }
 EOF

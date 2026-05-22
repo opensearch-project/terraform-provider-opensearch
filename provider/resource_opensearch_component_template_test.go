@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchComponentTemplate(t *testing.T) {
@@ -28,6 +29,12 @@ func TestAccOpensearchComponentTemplate(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchComponentTemplate,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchComponentTemplateExists("opensearch_component_template.test"),
+				),
+			},
+			{
+				Config: testAccOpensearchComponentTemplateUpdated,
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchComponentTemplateExists("opensearch_component_template.test"),
 				),
@@ -77,12 +84,14 @@ func testCheckOpensearchComponentTemplateExists(name string) resource.TestCheckF
 
 		meta := testAccProvider.Meta()
 
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		_, err = osClient.IndexGetComponentTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.ComponentTemplate.Get(context.TODO(), &opensearchapi.ComponentTemplateGetReq{
+			ComponentTemplate: rs.Primary.ID,
+		})
 
 		if err != nil {
 			return err
@@ -100,12 +109,14 @@ func testCheckOpensearchComponentTemplateDestroy(s *terraform.State) error {
 
 		meta := testAccProvider.Meta()
 
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
 
-		_, err = osClient.IndexGetComponentTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.ComponentTemplate.Get(context.TODO(), &opensearchapi.ComponentTemplateGetReq{
+			ComponentTemplate: rs.Primary.ID,
+		})
 
 		if err != nil {
 			return nil // should be not found error
@@ -126,6 +137,37 @@ resource "opensearch_component_template" "test" {
     "settings": {
       "index": {
         "number_of_shards": 1
+      }
+    },
+    "mappings": {
+      "properties": {
+        "host_name": {
+          "type": "keyword"
+        },
+        "created_at": {
+          "type": "date",
+          "format": "EEE MMM dd HH:mm:ss Z yyyy"
+        }
+      }
+    },
+    "aliases": {
+      "mydata": { }
+    }
+  }
+}
+EOF
+}
+`
+
+var testAccOpensearchComponentTemplateUpdated = `
+resource "opensearch_component_template" "test" {
+  name = "terraform-test"
+  body = <<EOF
+{
+  "template": {
+    "settings": {
+      "index": {
+        "number_of_shards": 2
       }
     },
     "mappings": {

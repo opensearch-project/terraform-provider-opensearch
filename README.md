@@ -19,6 +19,78 @@
 
 This is a terraform provider to provision OpenSearch resources.
 
+### Upgrade Guide
+
+#### SDK Migration (v2.0.0)
+
+This version migrates the provider from the deprecated `olivere/elastic v7` library and AWS SDK v1 to the official `opensearch-go/v4` SDK and AWS SDK v2. Several provider configuration fields have been renamed for consistency. The old field names are still accepted but emit deprecation warnings.
+
+##### Renamed Provider Arguments
+
+| Old Argument | New Argument | Notes |
+|---|---|---|
+| `aws_token` | `aws_session_token` | Renamed for clarity |
+| `version_ping_timeout` | `ping_timeout_seconds` | Renamed for consistency; default changed from 5s to 15s |
+| `aws_signature_service` | *(auto-detected)* | Now auto-detected from URL (`es` for OpenSearch Service, `aoss` for Serverless). Set `opensearch_version` for Serverless instead. |
+
+##### Renamed Environment Variables
+
+| Old Environment Variable | New Environment Variable | Notes |
+|---|---|---|
+| `OS_CLIENT_CERTIFICATE_PATH` | `OPENSEARCH_CLIENT_CERT_PATH` | New name preferred; old name still works as fallback |
+| `OS_CLIENT_KEY_PATH` | `OPENSEARCH_CLIENT_KEY_PATH` | New name preferred; old name still works as fallback |
+
+New environment variables are also available for previously-hardcoded-default fields:
+
+| Environment Variable | Field | Default |
+|---|---|---|
+| `OPENSEARCH_INSECURE` | `insecure` | `false` |
+| `OPENSEARCH_CACERT` | `cacert_file` | *(empty)* |
+| `OPENSEARCH_TOKEN_NAME` | `token_name` | `ApiKey` |
+| `OPENSEARCH_SIGN_AWS` | `sign_aws_requests` | `true` |
+| `OPENSEARCH_VERSION` | `opensearch_version` | *(empty)* |
+| `OPENSEARCH_PING_TIMEOUT` | `ping_timeout_seconds` | `15` |
+| `OPENSEARCH_AWS_ASSUME_ROLE_ARN` | `aws_assume_role_arn` | *(empty)* |
+| `OPENSEARCH_AWS_ASSUME_ROLE_EXTERNAL_ID` | `aws_assume_role_external_id` | *(empty)* |
+| `OPENSEARCH_HOST_OVERRIDE` | `host_override` | *(empty)* |
+| `OPENSEARCH_PROXY` | `proxy` | *(empty)* |
+| `AWS_REGION` | `aws_region` | *(empty)* |
+| `AWS_ACCESS_KEY_ID` | `aws_access_key` | *(empty)* |
+| `AWS_SECRET_ACCESS_KEY` | `aws_secret_key` | *(empty)* |
+| `AWS_SESSION_TOKEN` | `aws_session_token` | *(empty)* |
+| `AWS_PROFILE` | `aws_profile` | *(empty)* |
+
+##### Default Value Changes
+
+- `ping_timeout_seconds`: default changed from **5** to **15** seconds. If you relied on the shorter timeout, set `ping_timeout_seconds = 5` explicitly.
+
+##### Migration Steps
+
+1. **No immediate action required** — old field names are still accepted with deprecation warnings.
+2. Update your provider block to use the new field names:
+
+```hcl
+# Before (still works, but deprecated)
+provider "opensearch" {
+  url                   = "https://example.com:9200"
+  aws_token             = "my-session-token"
+  version_ping_timeout  = 5
+  aws_signature_service = "es"
+}
+
+# After (recommended)
+provider "opensearch" {
+  url                  = "https://example.com:9200"
+  aws_session_token    = "my-session-token"
+  ping_timeout_seconds = 5
+  # aws_signature_service is no longer needed - auto-detected from URL
+}
+```
+
+3. If using environment variables, update `OS_CLIENT_CERTIFICATE_PATH` to `OPENSEARCH_CLIENT_CERT_PATH` and `OS_CLIENT_KEY_PATH` to `OPENSEARCH_CLIENT_KEY_PATH`.
+
+4. For AWS OpenSearch Serverless endpoints (`*.aoss.amazonaws.com`), the service name is now auto-detected. Remove `aws_signature_service = "aoss"` from your provider config and set `opensearch_version` if needed.
+
 ### Supported Functionalities 
 
 Examples of resources can be found in the examples directory.
@@ -42,12 +114,27 @@ Examples of resources can be found in the examples directory.
 
 ### Running tests locally
 
+The provider supports both OpenSearch 2.x and 3.x. You can test against either version by setting the `OSS_IMAGE` environment variable.
+
+#### Testing against OpenSearch 2.x
+
 ```sh
 export OSS_IMAGE="opensearchproject/opensearch:2"
 docker compose up -d
 docker compose ps -a  # Checks that the process is running
 # Before OS 2.12.0
 # export OPENSEARCH_URL=http://admin:admin@localhost:9200
+export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
+export TF_LOG=INFO
+TF_ACC=1 go test ./... -v -parallel 20 -cover -short
+```
+
+#### Testing against OpenSearch 3.x
+
+```sh
+export OSS_IMAGE="opensearchproject/opensearch:3"
+docker compose up -d
+docker compose ps -a  # Checks that the process is running
 export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
 export TF_LOG=INFO
 TF_ACC=1 go test ./... -v -parallel 20 -cover -short

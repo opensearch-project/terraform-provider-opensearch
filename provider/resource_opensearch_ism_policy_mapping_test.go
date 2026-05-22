@@ -2,11 +2,9 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"strings"
 	"testing"
-
-	elastic7 "github.com/olivere/elastic/v7"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -110,9 +108,8 @@ func testCheckOpensearchISMPolicyMappingDestroy(s *terraform.State) error {
 
 		// if the underlying index is deleted, it triggers a cascading delete for
 		// the mapping and the mapping explain endpoint returns a 400, so we know
-		// it's been cleaned up
-		var e *elastic7.Error
-		if err != nil && errors.As(err, &e) && e.Status == 400 {
+		// it's been cleaned up. Check for 400 status code in error message.
+		if err != nil && strings.Contains(err.Error(), "400") {
 			return nil
 		}
 

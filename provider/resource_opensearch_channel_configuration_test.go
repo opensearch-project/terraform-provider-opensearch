@@ -148,8 +148,8 @@ resource "opensearch_channel_configuration" "slack_channel_configuration" {
     "description": "Sample slack description",
     "config_type": "slack",
     "is_enabled": true,
-    "slack": {
-      "url": "https://www.example.com"
+      "slack": {
+      "url": "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
     }
   }
 }

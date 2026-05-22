@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchIndexTemplate(t *testing.T) {
@@ -25,6 +26,12 @@ func TestAccOpensearchIndexTemplate(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchIndexTemplateExists("opensearch_index_template.test"),
+				),
+			},
+			{
+				Config: testAccOpensearchIndexTemplateV7Updated,
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchIndexTemplateExists("opensearch_index_template.test"),
 				),
@@ -74,11 +81,13 @@ func testCheckOpensearchIndexTemplateExists(name string) resource.TestCheckFunc 
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.Template.Get(context.TODO(), &opensearchapi.TemplateGetReq{
+			Templates: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return err
@@ -97,11 +106,13 @@ func testCheckOpensearchIndexTemplateDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.IndexGetIndexTemplate(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.Template.Get(context.TODO(), &opensearchapi.TemplateGetReq{
+			Templates: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return nil // should be not found error
@@ -117,27 +128,53 @@ var testAccOpensearchIndexTemplateV7 = `
 resource "opensearch_index_template" "test" {
   name = "terraform-test"
   body = <<EOF
-  {
-	"index_patterns": [
-	  "logs-2020-01-*"
-	],
-	"template": {
-	  "aliases": {
-		"my_logs": {}
-	  },
-	  "mappings": {
-		"properties": {
-		  "timestamp": {
-			"type": "date",
-			"format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
-		  },
-		  "value": {
-			"type": "double"
-		  }
-		}
-	  }
-	}
+{
+  "index_patterns": [
+    "logs-2020-01-*"
+  ],
+  "aliases": {
+    "my_logs": {}
+  },
+  "mappings": {
+    "properties": {
+      "timestamp": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+      },
+      "value": {
+        "type": "double"
+      }
+    }
   }
+}
+EOF
+}
+`
+
+var testAccOpensearchIndexTemplateV7Updated = `
+resource "opensearch_index_template" "test" {
+  name = "terraform-test"
+  body = <<EOF
+{
+  "index_patterns": [
+    "logs-2020-01-*",
+    "logs-2020-02-*"
+  ],
+  "aliases": {
+    "my_logs": {}
+  },
+  "mappings": {
+    "properties": {
+      "timestamp": {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+      },
+      "value": {
+        "type": "double"
+      }
+    }
+  }
+}
 EOF
 }
 `

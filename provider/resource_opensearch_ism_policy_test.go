@@ -15,16 +15,12 @@ func TestAccOpensearchISMPolicy(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var allowed bool
 
 	config := testAccOpensearchISMPolicyV7
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			if !allowed {
-				t.Skip("OpenSearch ISMPolicies only supported on ES 6.")
-			}
 		},
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: testCheckOpensearchISMPolicyDestroy,
@@ -39,6 +35,48 @@ func TestAccOpensearchISMPolicy(t *testing.T) {
 						"test_policy",
 					),
 				),
+			},
+			{
+				Config: testAccOpensearchISMPolicyV7Updated,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchISMPolicyExists("opensearch_ism_policy.test_policy"),
+					resource.TestCheckResourceAttr(
+						"opensearch_ism_policy.test_policy",
+						"policy_id",
+						"test_policy",
+					),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchISMPolicyImport(t *testing.T) {
+	provider := Provider()
+	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
+	if diags.HasError() {
+		t.Skipf("err: %#v", diags)
+	}
+
+	config := testAccOpensearchISMPolicyV7
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		Providers:    testAccOpendistroProviders,
+		CheckDestroy: testCheckOpensearchISMPolicyDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchISMPolicyExists("opensearch_ism_policy.test_policy"),
+				),
+			},
+			{
+				ResourceName:      "opensearch_ism_policy.test_policy",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
@@ -133,6 +171,65 @@ resource "opensearch_ism_policy" "test_policy" {
 					  "state_name": "delete",
 					  "conditions": {
 						"min_index_age": "5m"
+					  }
+					}]
+				},
+				{
+				  "name": "delete",
+				  "actions": [{
+					  "delete": {}
+					}],
+				  "transitions": []
+				}
+			]
+		}
+	}
+  EOF
+}
+`
+
+var testAccOpensearchISMPolicyV7Updated = `
+resource "opensearch_ism_policy" "test_policy" {
+  policy_id = "test_policy"
+  body      = <<EOF
+  {
+		"policy": {
+		  "description": "ingesting logs updated",
+		  "default_state": "ingest",
+      "ism_template": [{
+        "index_patterns": ["bar-*"],
+        "priority": 1
+			}],
+		  "error_notification": {
+        "destination": {
+          "slack": {
+            "url": "https://webhook.slack.example.com"
+          }
+        },
+        "message_template": {
+          "lang": "mustache",
+          "source": "The index *{{ctx.index}}* failed to rollover."
+        }
+      },
+		  "states": [
+				{
+				  "name": "ingest",
+				  "actions": [{
+					  "rollover": {
+						"min_doc_count": 10
+					  }
+					}],
+				  "transitions": [{
+					  "state_name": "search"
+					}]
+				},
+				{
+				  "name": "search",
+				  "actions": [],
+				  "transitions": [{
+					  "state_name": "delete",
+					  "conditions": {
+						"min_index_age": "10m"
 					  }
 					}]
 				},

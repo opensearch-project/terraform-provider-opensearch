@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,8 +12,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 var (
@@ -90,7 +90,7 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 			"cluster_max_shards_per_node_frozen": {
 				Type:        schema.TypeInt,
 				Optional:    true,
-				Description: "The total number of primary and replica frozen shards, for the cluster; Ssards for closed indices do not count toward this limit, a cluster with no frozen data nodes is unlimited.",
+				Description: "The total number of primary and replica frozen shards, for the cluster; Shards for closed indices do not count toward this limit, a cluster with no frozen data nodes is unlimited.",
 			},
 			"cluster_persistent_tasks_allocation_enable": {
 				Type:        schema.TypeString,
@@ -334,9 +334,7 @@ func resourceOpensearchClusterSettingsCreate(d *schema.ResourceData, meta interf
 }
 
 func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface{}) error {
-	var err error
-
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -348,17 +346,14 @@ func resourceOpensearchPutClusterSettings(d *schema.ResourceData, meta interface
 		return err
 	}
 
-	// client doesn't support PUTing settings: https://github.com/olivere/elastic/issues/1274
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   "/_cluster/settings",
-		Body:   string(body),
+	_, err = client.Client.Cluster.PutSettings(context.TODO(), opensearchapi.ClusterPutSettingsReq{
+		Body: bytes.NewReader(body),
 	})
 	if err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func resourceOpensearchClusterSettingsRead(d *schema.ResourceData, meta interface{}) error {
@@ -387,36 +382,40 @@ func resourceOpensearchClusterSettingsDelete(d *schema.ResourceData, meta interf
 }
 
 func resourceOpensearchClusterSettingsGet(meta interface{}) (map[string]interface{}, error) {
-	var err error
-	var settings map[string]interface{}
-	var response *json.RawMessage
+	var persistentSettings map[string]interface{}
 
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
-		return settings, err
+		return nil, err
 	}
-	var res *elastic7.Response
-	res, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "GET",
-		Path:   "/_cluster/settings?flat_settings=true",
+
+	// Request flat settings to match expected format (dot notation keys)
+	flatSettings := true
+	res, err := client.Client.Cluster.GetSettings(context.TODO(), &opensearchapi.ClusterGetSettingsReq{
+		Params: opensearchapi.ClusterGetSettingsParams{
+			FlatSettings: &flatSettings,
+		},
 	})
 	if err != nil {
-		return settings, err
+		return nil, err
 	}
-	response = &res.Body
 
-	err = json.Unmarshal(*response, &settings)
+	// Unmarshal the persistent settings from the response
+	err = json.Unmarshal(res.Persistent, &persistentSettings)
 	if err != nil {
-		return settings, fmt.Errorf("fail to unmarshal: %v", err)
+		return nil, fmt.Errorf("fail to unmarshal persistent settings: %v", err)
 	}
 
-	return settings, err
+	// Wrap in the expected structure with "persistent" key
+	result := map[string]interface{}{
+		"persistent": persistentSettings,
+	}
+
+	return result, nil
 }
 
 func clearAllSettings(meta interface{}) error {
-	var err error
-
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -432,16 +431,14 @@ func clearAllSettings(meta interface{}) error {
 		}
 	  }`
 
-	_, err = osClient.PerformRequest(context.TODO(), elastic7.PerformRequestOptions{
-		Method: "PUT",
-		Path:   "/_cluster/settings",
-		Body:   body,
+	_, err = client.Client.Cluster.PutSettings(context.TODO(), opensearchapi.ClusterPutSettingsReq{
+		Body: strings.NewReader(body),
 	})
 	if err != nil {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func clusterSettingsFromResourceData(d *schema.ResourceData) map[string]interface{} {

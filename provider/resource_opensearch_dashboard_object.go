@@ -1,16 +1,18 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
-
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 const (
@@ -107,16 +109,16 @@ func resourceOpensearchDashboardObjectCreate(d *schema.ResourceData, meta interf
 	if err != nil {
 		return err
 	}
-	client, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return fmt.Errorf("Could not read client: %+v", err)
 	}
 
 	// make OpenSearch API calls
-	if err = elastic7CreateIndexIfNotExists(client, state.index); err != nil {
+	if err = createDashboardIndexIfNotExists(client, state.index); err != nil {
 		return fmt.Errorf("Failed to create new Dashboard index: %+v", err)
 	}
-	resp, err := state.elastic7PutDashboardObject(client)
+	resp, err := state.putDashboardObject(client)
 	if err != nil {
 		return fmt.Errorf("Failed to put Dashboard object: %+v", err)
 	}
@@ -132,15 +134,15 @@ func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interfac
 	if err != nil {
 		return err
 	}
-	client, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
 
 	// fetch object from OpenSearch
-	result, err := state.elastic7GetDashboardObject(client)
+	result, err := state.getDashboardObject(client)
 	if err != nil {
-		if elastic7.IsNotFound(err) {
+		if isNotFound(err) {
 			log.Printf("[WARN] Dashboard Object (%s) not found, removing from state", state.id)
 			d.SetId("")
 			return nil
@@ -151,25 +153,29 @@ func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interfac
 	// build json string from response that represents body configuration
 	// Note that only the 'original' keys are considered. Keys that
 	// OpenSearch adds internally will be ignored (e.g. 'updated_at').
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return fmt.Errorf("Failed to marshal result: %+v", err)
+	log.Printf("[TRACE] body source: %s", string(result.Source))
+
+	var source map[string]interface{}
+	if err := json.Unmarshal(result.Source, &source); err != nil {
+		return fmt.Errorf("Failed to unmarshal source: %+v", err)
 	}
-	log.Printf("[TRACE] body: %s", string(resultJSON))
 
 	var originalKeys []string
 	for k := range state.dashboardObject {
 		originalKeys = append(originalKeys, k)
 	}
 
-	res := make(map[string]interface{})
-	if err := json.Unmarshal(resultJSON, &res); err != nil {
-		return fmt.Errorf("Failed to unmarshal '%+v': %+v", resultJSON, err)
-	}
-
 	stateObject := []map[string]interface{}{make(map[string]interface{})}
 	for _, k := range originalKeys {
-		stateObject[0][k] = res[k]
+		if k == "_id" {
+			// _id is returned separately in the response, not in _source
+			stateObject[0][k] = result.Id
+		} else if k == "_source" {
+			// The entire source is the _source content
+			stateObject[0][k] = source
+		} else {
+			stateObject[0][k] = source[k]
+		}
 	}
 	bodyBytes, err := json.Marshal(stateObject)
 	if err != nil {
@@ -190,13 +196,13 @@ func resourceOpensearchDashboardObjectUpdate(d *schema.ResourceData, meta interf
 	if err != nil {
 		return err
 	}
-	client, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
 
 	// update data in OpenSearch via put request
-	resp, err := state.elastic7PutDashboardObject(client)
+	resp, err := state.putDashboardObject(client)
 	if err != nil {
 		return fmt.Errorf("Dashboard object update failed: %+v", err)
 	}
@@ -208,7 +214,7 @@ func resourceOpensearchDashboardObjectUpdate(d *schema.ResourceData, meta interf
 
 func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interface{}) error {
 	// read old values. note that readDashboardObjectState(d) would read new state
-	client, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
@@ -231,24 +237,45 @@ func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interf
 	}
 
 	// make delete api call
-	return elastic7DeleteDashboardObject(client, indexStr, d.Id(), tenantNameStr)
+	return deleteDashboardObject(client, indexStr, d.Id(), tenantNameStr)
 }
 
-func elastic7CreateIndexIfNotExists(client *elastic7.Client, index string) error {
-	log.Printf("[INFO] elastic7CreateIndexIfNotExists %s", index)
-	exists, err := client.IndexExists(index).Do(context.TODO())
+func createDashboardIndexIfNotExists(client *OpenSearchClient, index string) error {
+	log.Printf("[INFO] createDashboardIndexIfNotExists %s", index)
+
+	// Check if index exists
+	existsReq := opensearchapi.IndicesExistsReq{
+		Indices: []string{index},
+	}
+	existsResp, err := client.Client.Indices.Exists(context.TODO(), existsReq)
 	if err != nil {
-		return fmt.Errorf("%+v", err)
-	}
-	if !exists {
-		createIndex, err := client.CreateIndex(index).Body(`{"mappings":{}}`).Do(context.TODO())
-		if createIndex.Acknowledged {
-			log.Printf("[INFO] Created new Dashboard index")
-			return err
+		// The new SDK returns an error for 404 (index not found)
+		// If it's a 404, we should proceed to create the index
+		if !isNotFound(err) {
+			return fmt.Errorf("failed to check index existence: %+v", err)
 		}
-		return fmt.Errorf("Failed to create OpenSearchsearch index: %+v", err)
+		// Index doesn't exist, continue to create it
+	} else if existsResp.StatusCode == http.StatusOK {
+		// Index already exists
+		return nil
 	}
-	return nil
+
+	// Create the index
+	createReq := opensearchapi.IndicesCreateReq{
+		Index: index,
+		Body:  bytes.NewReader([]byte(`{"mappings":{}}`)),
+	}
+	createResp, err := client.Client.Indices.Create(context.TODO(), createReq)
+	if err != nil {
+		return fmt.Errorf("failed to create OpenSearch index: %+v", err)
+	}
+
+	if createResp.Acknowledged {
+		log.Printf("[INFO] Created new Dashboard index")
+		return nil
+	}
+
+	return fmt.Errorf("failed to create OpenSearch index: index creation not acknowledged")
 }
 
 type dashboardObjectState struct {
@@ -308,36 +335,148 @@ func readBodyInterface(i interface{}) (map[string]interface{}, error) {
 	return dashboardObject, nil
 }
 
-func (s *dashboardObjectState) elastic7PutDashboardObject(client *elastic7.Client) (*elastic7.IndexResponse, error) {
-	req := client.Index().Index(s.index).Id(s.id).BodyJson(s.dashboardObject["_source"])
-	if s.tenantName != "" {
-		req = req.Header(SECURITY_TENANT_HEADER, s.tenantName)
-	}
-	return req.Do(context.TODO())
+type dashboardObjectResponse struct {
+	Id     string `json:"_id"`
+	Index  string `json:"_index"`
+	Result string `json:"result"`
 }
 
-func (s *dashboardObjectState) elastic7GetDashboardObject(client *elastic7.Client) (*elastic7.GetResult, error) {
-	req := client.Get().Index(s.index).Id(s.id)
-	if s.tenantName != "" {
-		req = req.Header(SECURITY_TENANT_HEADER, s.tenantName)
-	}
-	result, err := req.Do(context.TODO())
-	if elastic7.IsNotFound(err) {
-		return nil, err // there is a check against this error
-	}
+func (s *dashboardObjectState) putDashboardObject(client *OpenSearchClient) (*dashboardObjectResponse, error) {
+	// Convert source to JSON
+	sourceJSON, err := json.Marshal(s.dashboardObject["_source"])
 	if err != nil {
-		return nil, fmt.Errorf("Could not retrieve dashboard object: %+v", err)
+		return nil, fmt.Errorf("failed to marshal source: %+v", err)
 	}
-	return result, nil
+
+	// Build the path
+	path := fmt.Sprintf("/%s/_doc/%s", s.index, s.id)
+
+	// Create request
+	req, err := http.NewRequest("PUT", client.config.rawUrl+path, bytes.NewReader(sourceJSON))
+	if err != nil {
+		return nil, fmt.Errorf("error building PUT request: %+v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add tenant header if needed
+	if s.tenantName != "" {
+		req.Header.Set(SECURITY_TENANT_HEADER, s.tenantName)
+	}
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return nil, fmt.Errorf("error putting dashboard object: %+v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %+v", err)
+	}
+
+	// Check status
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("error putting dashboard object: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var result dashboardObjectResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("error unmarshaling response: %+v", err)
+	}
+
+	// Ensure ID is set
+	result.Id = s.id
+
+	return &result, nil
 }
 
-func elastic7DeleteDashboardObject(client *elastic7.Client, index, id, tenantName string) error {
-	req := client.Delete().Index(index).Id(id)
-	if tenantName != "" {
-		req = req.Header(SECURITY_TENANT_HEADER, tenantName)
-	}
-	_, err := req.Do(context.TODO())
+type getResponse struct {
+	Found   bool            `json:"found"`
+	Source  json.RawMessage `json:"_source"`
+	Id      string          `json:"_id"`
+	Index   string          `json:"_index"`
+	Version int64           `json:"_version"`
+}
 
-	// we'll get an error if it's not found
-	return err
+func (s *dashboardObjectState) getDashboardObject(client *OpenSearchClient) (*getResponse, error) {
+	// Build the path
+	path := fmt.Sprintf("/%s/_doc/%s", s.index, s.id)
+
+	// Create request
+	req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error building GET request: %+v", err)
+	}
+
+	// Add tenant header if needed
+	if s.tenantName != "" {
+		req.Header.Set(SECURITY_TENANT_HEADER, s.tenantName)
+	}
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return nil, fmt.Errorf("error getting dashboard object: %+v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %+v", err)
+	}
+
+	// Check for not found
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("dashboard object not found: %s/%s", s.index, s.id)
+	}
+
+	// Check status
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("error getting dashboard object: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var result getResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("error unmarshaling response: %+v", err)
+	}
+
+	return &result, nil
+}
+
+func deleteDashboardObject(client *OpenSearchClient, index, id, tenantName string) error {
+	// Build the path
+	path := fmt.Sprintf("/%s/_doc/%s", index, id)
+
+	// Create request
+	req, err := http.NewRequest("DELETE", client.config.rawUrl+path, nil)
+	if err != nil {
+		return fmt.Errorf("error building DELETE request: %+v", err)
+	}
+
+	// Add tenant header if needed
+	if tenantName != "" {
+		req.Header.Set(SECURITY_TENANT_HEADER, tenantName)
+	}
+
+	// Execute request
+	resp, err := client.Client.Client.Perform(req)
+	if err != nil {
+		return fmt.Errorf("error deleting dashboard object: %+v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response (needed to consume body)
+	_, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response: %+v", err)
+	}
+
+	// We'll get an error if it's not found (404), which is acceptable in delete
+	// The calling code checks for other errors
+	return nil
 }

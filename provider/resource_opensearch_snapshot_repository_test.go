@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func TestAccOpensearchSnapshotRepository(t *testing.T) {
@@ -17,6 +18,12 @@ func TestAccOpensearchSnapshotRepository(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchSnapshotRepository,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchSnapshotRepositoryExists("opensearch_snapshot_repository.test"),
+				),
+			},
+			{
+				Config: testAccOpensearchSnapshotRepositoryUpdated,
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchSnapshotRepositoryExists("opensearch_snapshot_repository.test"),
 				),
@@ -56,11 +63,13 @@ func testCheckOpensearchSnapshotRepositoryExists(name string) resource.TestCheck
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.Snapshot.Repository.Get(context.TODO(), &opensearchapi.SnapshotRepositoryGetReq{
+			Repos: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return err
@@ -79,11 +88,13 @@ func testCheckOpensearchSnapshotRepositoryDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.SnapshotGetRepository(rs.Primary.ID).Do(context.TODO())
+		_, err = client.Client.Snapshot.Repository.Get(context.TODO(), &opensearchapi.SnapshotRepositoryGetReq{
+			Repos: []string{rs.Primary.ID},
+		})
 
 		if err != nil {
 			return nil // should be not found error
@@ -102,6 +113,17 @@ resource "opensearch_snapshot_repository" "test" {
 
   settings = {
     location = "/tmp/opensearch"
+  }
+}
+`
+
+var testAccOpensearchSnapshotRepositoryUpdated = `
+resource "opensearch_snapshot_repository" "test" {
+  name = "terraform-test"
+  type = "fs"
+
+  settings = {
+    location = "/tmp/opensearch-updated"
   }
 }
 `

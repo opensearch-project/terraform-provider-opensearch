@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
 func TestAccOpensearchAnomalyDetection(t *testing.T) {
+	randomName := "test-detector" + acctest.RandStringFromCharSet(8, acctest.CharSetAlphaNum)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -17,22 +19,27 @@ func TestAccOpensearchAnomalyDetection(t *testing.T) {
 		CheckDestroy: testCheckOpensearchAnomalyDetectionDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccOpensearchAnomalyDetection,
+				Config: testAccOpensearchAnomalyDetection(randomName),
 				Check: resource.ComposeTestCheckFunc(
-					testCheckOpensearchAnomalyDetectionExists("opensearch_anomaly_detection.test-detector12"),
+					testCheckOpensearchAnomalyDetectionExists(fmt.Sprintf("opensearch_anomaly_detection.%s", randomName)),
 				),
+				// NOTE: This resource has complex drift issues with filter_query transformation
+				// The API transforms "gt": 1 to {"from": 1, "to": null, ...}
 				ExpectNonEmptyPlan: true,
 			},
 			{
-				Config: testAccOpensearchAnomalyDetectionUpdate,
+				Config: testAccOpensearchAnomalyDetectionUpdate(randomName),
 				Check: resource.ComposeTestCheckFunc(
-					testCheckOpensearchAnomalyDetectionExists("opensearch_anomaly_detection.test-detector12"),
+					testCheckOpensearchAnomalyDetectionExists(fmt.Sprintf("opensearch_anomaly_detection.%s", randomName)),
 				),
 				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
 }
+
+// Note: Import test is not added for anomaly detection due to complex drift issues
+// with filter_query transformation that require significant normalization changes
 
 func testCheckOpensearchAnomalyDetectionExists(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
@@ -78,7 +85,8 @@ func testCheckOpensearchAnomalyDetectionDestroy(s *terraform.State) error {
 	return nil
 }
 
-var testAccOpensearchAnomalyDetection = `
+func testAccOpensearchAnomalyDetection(detectorName string) string {
+	return fmt.Sprintf(`
 resource "opensearch_audit_config" "test" {
   enabled = true
 
@@ -127,11 +135,11 @@ resource "opensearch_audit_config" "test" {
   }
 }
 
-resource "opensearch_anomaly_detection" "test-detector12" {
+resource "opensearch_anomaly_detection" "%[1]s" {
   depends_on = [opensearch_audit_config.test]
   body       = <<EOF
 {
-  "name": "test-detector12",
+  "name": "%[1]s",
   "description": "Test detector",
   "time_field": "@timestamp",
   "indices": [
@@ -181,9 +189,11 @@ resource "opensearch_anomaly_detection" "test-detector12" {
 }
 EOF
 }
-`
+`, detectorName)
+}
 
-var testAccOpensearchAnomalyDetectionUpdate = `
+func testAccOpensearchAnomalyDetectionUpdate(detectorName string) string {
+	return fmt.Sprintf(`
 resource "opensearch_audit_config" "test" {
   enabled = true
 
@@ -232,11 +242,11 @@ resource "opensearch_audit_config" "test" {
   }
 }
 
-resource "opensearch_anomaly_detection" "test-detector12" {
+resource "opensearch_anomaly_detection" "%[1]s" {
   depends_on = [opensearch_audit_config.test]
   body       = <<EOF
 {
-  "name": "test-detector12",
+  "name": "%[1]s",
   "description": "Test detector 12",
   "time_field": "@timestamp",
   "indices": [
@@ -286,4 +296,5 @@ resource "opensearch_anomaly_detection" "test-detector12" {
 }
 EOF
 }
-`
+`, detectorName)
+}

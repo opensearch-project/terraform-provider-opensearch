@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"regexp"
 	"testing"
-
-	elastic7 "github.com/olivere/elastic/v7"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -132,20 +131,28 @@ func testCheckOpensearchDashboardObjectExists(name string, id string, tenantName
 
 		meta := testAccProvider.Meta()
 
-		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.Get().
-			Index(".kibana").
-			Id(id).
-			Header(SECURITY_TENANT_HEADER, tenantName).
-			Do(context.TODO())
 
+		// Build the request path for the dashboard object
+		path := fmt.Sprintf("/.kibana/_doc/%s", id)
+		req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set(SECURITY_TENANT_HEADER, tenantName)
+
+		resp, err := client.Client.Client.Perform(req)
 		if err != nil {
 			log.Printf("[INFO] testCheckOpensearchDashboardObjectExists: %+v", err)
 			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("dashboard object not found, status: %d", resp.StatusCode)
 		}
 
 		return nil
@@ -161,28 +168,36 @@ func testCheckOpensearchDashboardObjectDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 		tenantName := rs.Primary.Attributes["tenant_name"]
 
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = osClient.Get().
-			Index(".kibana").
-			Id("response-time-percentile").
-			Header(SECURITY_TENANT_HEADER, tenantName).
-			Do(context.TODO())
 
+		// Build the request path for the dashboard object
+		path := "/.kibana/_doc/response-time-percentile"
+		req, err := http.NewRequest("GET", client.config.rawUrl+path, nil)
 		if err != nil {
-			if elastic7.IsNotFound(err) {
-				return nil // should be not found error
-			}
+			return err
+		}
+		req.Header.Set(SECURITY_TENANT_HEADER, tenantName)
 
-			if tenantName != "global_tenant" && (elastic7.IsForbidden(err)) {
-				// when tenant has been destroyed this is the expected error
-				return nil
-			}
-
-			// Fail on any other error
+		resp, err := client.Client.Client.Perform(req)
+		if err != nil {
 			return fmt.Errorf("Unexpected error %s", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusNotFound {
+			return nil // should be not found error
+		}
+
+		if tenantName != "global_tenant" && resp.StatusCode == http.StatusForbidden {
+			// when tenant has been destroyed this is the expected error
+			return nil
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("Unexpected status code: %d", resp.StatusCode)
 		}
 
 		return fmt.Errorf("Dashboard object %q still exists", rs.Primary.ID)

@@ -3,12 +3,12 @@
 page_title: "opensearch_component_template Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Component templates are building blocks for constructing index templates that specify index mappings, settings, and aliases. You cannot directly apply a component template to a data stream or index. To be applied, a component template must be included in an index template’s composed_of list.
+  Component templates are building blocks for constructing index templates that specify index mappings, settings, and aliases. You cannot directly apply a component template to a data stream or index. To be applied, a component template must be included in an index template's composed_of list.
 ---
 
 # opensearch_component_template (Resource)
 
-Component templates are building blocks for constructing index templates that specify index mappings, settings, and aliases. You cannot directly apply a component template to a data stream or index. To be applied, a component template must be included in an index template’s `composed_of` list.
+Component templates are building blocks for constructing index templates that specify index mappings, settings, and aliases. You cannot directly apply a component template to a data stream or index. To be applied, a component template must be included in an index template's `composed_of` list.
 
 ## Example Usage
 
@@ -58,6 +58,8 @@ EOF
 ## Import
 
 Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
 # Import by name

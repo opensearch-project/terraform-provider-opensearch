@@ -2,30 +2,15 @@ package provider
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	awscredentials "github.com/aws/aws-sdk-go/aws/credentials"
-	awsstscreds "github.com/aws/aws-sdk-go/aws/credentials/stscreds"
-	awssession "github.com/aws/aws-sdk-go/aws/session"
-	awssigv4 "github.com/aws/aws-sdk-go/aws/signer/v4"
-	awssts "github.com/aws/aws-sdk-go/service/sts"
-	"github.com/deoxxa/aws_signing_client"
-	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-
-	elastic7 "github.com/olivere/elastic/v7"
 )
 
 type ServerFlavor int64
@@ -69,6 +54,8 @@ type ProviderConf struct {
 	proxy                   string
 	// determined after connecting to the server
 	flavor ServerFlavor
+	// New opensearch-go/v4 client (Phase 2 migration)
+	opensearchClient *OpenSearchClient
 }
 
 func Provider() *schema.Provider {
@@ -96,156 +83,167 @@ func Provider() *schema.Provider {
 				Type:        schema.TypeString,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_USERNAME", nil),
-				Description: "Username to use to connect to OpenSearch using basic auth",
+				Description: "Username for OpenSearch basic auth",
 			},
 			"password": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PASSWORD", nil),
-				Description: "Password to use to connect to OpenSearch using basic auth",
+				Description: "Password for OpenSearch basic auth",
 			},
 			"token": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_TOKEN", nil),
-				Description: "A bearer token or ApiKey for an Authorization header, e.g. Active Directory API key.",
+				Description: "Authorization token for OpenSearch",
 			},
 			"token_name": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "ApiKey",
-				Description: "The type of token, usually ApiKey or Bearer",
-			},
-			"aws_assume_role_arn": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "Amazon Resource Name of an IAM Role to assume prior to making AWS API calls.",
-			},
-			"aws_assume_role_external_id": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "External ID configured in the IAM policy of the IAM Role to assume prior to making AWS API calls.",
-			},
-			"aws_access_key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "The access key for use with AWS OpenSearch Service domains",
-			},
-			"aws_secret_key": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "The secret key for use with AWS OpenSearch Service domains",
-			},
-			"aws_token": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "The session token for use with AWS OpenSearch Service domains",
-			},
-			"aws_profile": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "The AWS profile for use with AWS OpenSearch Service domains",
-			},
-			"aws_region": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "The AWS region for use in signing of AWS OpenSearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.",
-			},
-			"cacert_file": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "",
-				Description: "A Custom CA certificate",
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_TOKEN_NAME", "ApiKey"),
+				Description: "Authorization token name for OpenSearch",
 			},
 			"insecure": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				Default:     false,
-				Description: "Disable SSL verification of API calls",
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_INSECURE", false),
+				Description: "Disable SSL verification",
+			},
+			"cacert_file": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_CACERT", nil),
+				Description: "Path to a CA certificate file to verify the server's certificate",
 			},
 			"client_cert_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
-				Description: "A X509 certificate to connect to OpenSearch",
-				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_CERTIFICATE_PATH", ""),
+				DefaultFunc: envFallbackDefault("OPENSEARCH_CLIENT_CERT_PATH", "OS_CLIENT_CERTIFICATE_PATH"),
+				Description: "Path to a client certificate file",
 			},
 			"client_key_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
-				Description: "A X509 key to connect to OpenSearch",
-				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_KEY_PATH", ""),
+				DefaultFunc: envFallbackDefault("OPENSEARCH_CLIENT_KEY_PATH", "OS_CLIENT_KEY_PATH"),
+				Description: "Path to a client key file",
 			},
 			"sign_aws_requests": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				Default:     true,
-				Description: "Enable signing of AWS OpenSearch requests. The `url` must refer to AWS ES domain (`*.<region>.es.amazonaws.com`), or `aws_region` must be specified explicitly.",
-			},
-			"aws_signature_service": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "es",
-				Description: "AWS service name used in the credential scope of signed requests to OpenSearch.",
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_SIGN_AWS", true),
+				Description: "Enable AWS request signing",
 			},
 			"opensearch_version": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
-				Description: "OpenSearch Version",
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_VERSION", nil),
+				Description: "OpenSearch version",
 			},
-			// version_ping_timeout is the time the ping to check the cluster
-			// version waits for a response from OpenSearch on startup, e.g. when
-			// creating a provider.
+			"ping_timeout_seconds": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PING_TIMEOUT", 5),
+				Description: "Timeout for OpenSearch pings in seconds",
+			},
 			"version_ping_timeout": {
 				Type:        schema.TypeInt,
 				Optional:    true,
-				Default:     5,
-				Description: "Version ping timeout in seconds",
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PING_TIMEOUT", nil),
+				Description: "Version ping timeout in seconds. Deprecated: use ping_timeout_seconds instead.",
+				Deprecated:  "Use ping_timeout_seconds instead",
+			},
+			"aws_region": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_REGION", nil),
+				Description: "AWS region for request signing",
+			},
+			"aws_signature_service": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_AWS_SIGNATURE_SERVICE", nil),
+				Description: "AWS service name used in the credential scope of signed requests. Deprecated: AWS service is now auto-detected from the URL. Use 'aoss' for OpenSearch Serverless.",
+				Deprecated:  "AWS service is now auto-detected from the URL. Set opensearch_version for Serverless.",
+			},
+			"aws_assume_role_arn": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_AWS_ASSUME_ROLE_ARN", nil),
+				Description: "AWS IAM Role to assume for request signing",
+			},
+			"aws_assume_role_external_id": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_AWS_ASSUME_ROLE_EXTERNAL_ID", nil),
+				Description: "AWS IAM Role external ID for request signing",
+			},
+			"aws_access_key": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_ACCESS_KEY_ID", nil),
+				Description: "AWS access key for request signing",
+			},
+			"aws_secret_key": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_SECRET_ACCESS_KEY", nil),
+				Description: "AWS secret key for request signing",
+			},
+			"aws_session_token": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_SESSION_TOKEN", nil),
+				Description: "AWS session token for request signing",
+			},
+			"aws_token": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_SESSION_TOKEN", nil),
+				Description: "AWS session token for request signing. Deprecated: use aws_session_token instead.",
+				Deprecated:  "Use aws_session_token instead",
+			},
+			"aws_profile": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_PROFILE", nil),
+				Description: "AWS profile for request signing",
 			},
 			"host_override": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
-				Description: "If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to OpenSearch via an SSH tunnel.",
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_HOST_OVERRIDE", nil),
+				Description: "Override the host header for requests",
 			},
 			"proxy": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "Proxy URL to use for requests to OpenSearch.",
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PROXY", nil),
+				Description: "Proxy URL for requests",
 			},
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
+			"opensearch_audit_config":              resourceOpenSearchAuditConfig(),
 			"opensearch_cluster_settings":          resourceOpensearchClusterSettings(),
-			"opensearch_component_template":        resourceOpensearchComponentTemplate(),
 			"opensearch_composable_index_template": resourceOpensearchComposableIndexTemplate(),
+			"opensearch_component_template":        resourceOpensearchComponentTemplate(),
+			"opensearch_dashboard_tenant":          resourceOpenSearchDashboardTenant(),
+			"opensearch_dashboard_object":          resourceOpensearchDashboardObject(),
 			"opensearch_data_stream":               resourceOpensearchDataStream(),
 			"opensearch_index_template":            resourceOpensearchIndexTemplate(),
 			"opensearch_index":                     resourceOpensearchIndex(),
 			"opensearch_ingest_pipeline":           resourceOpensearchIngestPipeline(),
-			"opensearch_dashboard_object":          resourceOpensearchDashboardObject(),
-			"opensearch_audit_config":              resourceOpenSearchAuditConfig(),
-			"opensearch_ism_policy_mapping":        resourceOpenSearchISMPolicyMapping(),
-			"opensearch_ism_policy":                resourceOpenSearchISMPolicy(),
-			"opensearch_dashboard_tenant":          resourceOpenSearchDashboardTenant(),
-			"opensearch_monitor":                   resourceOpenSearchMonitor(),
 			"opensearch_role":                      resourceOpenSearchRole(),
 			"opensearch_roles_mapping":             resourceOpenSearchRolesMapping(),
-			"opensearch_user":                      resourceOpenSearchUser(),
 			"opensearch_script":                    resourceOpensearchScript(),
 			"opensearch_snapshot_repository":       resourceOpensearchSnapshotRepository(),
-			"opensearch_channel_configuration":     resourceOpenSearchChannelConfiguration(),
-			"opensearch_anomaly_detection":         resourceOpenSearchAnomalyDetection(),
 			"opensearch_sm_policy":                 resourceOpenSearchSMPolicy(),
+			"opensearch_user":                      resourceOpenSearchUser(),
+			"opensearch_channel_configuration":     resourceOpenSearchChannelConfiguration(),
+			"opensearch_ism_policy_mapping":        resourceOpenSearchISMPolicyMapping(),
+			"opensearch_ism_policy":                resourceOpenSearchISMPolicy(),
+			"opensearch_monitor":                   resourceOpenSearchMonitor(),
+			"opensearch_anomaly_detection":         resourceOpenSearchAnomalyDetection(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
@@ -256,392 +254,133 @@ func Provider() *schema.Provider {
 	}
 }
 
-func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
+func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
 	rawUrl := d.Get("url").(string)
+	_, err := url.Parse(rawUrl)
+	if err != nil {
+		return nil, diag.FromErr(err)
+	}
+
 	parsedUrl, err := url.Parse(rawUrl)
 	if err != nil {
 		return nil, diag.FromErr(err)
 	}
 
-	return &ProviderConf{
-		rawUrl:             rawUrl,
-		insecure:           d.Get("insecure").(bool),
-		sniffing:           d.Get("sniff").(bool),
-		healthchecking:     d.Get("healthcheck").(bool),
-		cacertFile:         d.Get("cacert_file").(string),
-		username:           d.Get("username").(string),
-		password:           d.Get("password").(string),
-		token:              d.Get("token").(string),
-		tokenName:          d.Get("token_name").(string),
-		parsedUrl:          parsedUrl,
-		signAWSRequests:    d.Get("sign_aws_requests").(bool),
-		awsSig4Service:     d.Get("aws_signature_service").(string),
-		osVersion:          d.Get("opensearch_version").(string),
-		pingTimeoutSeconds: d.Get("version_ping_timeout").(int),
-		awsRegion:          d.Get("aws_region").(string),
+	if d.Get("username").(string) != "" {
+		parsedUrl.User = url.UserPassword(d.Get("username").(string), d.Get("password").(string))
+	}
 
+	conf := &ProviderConf{
+		rawUrl:                  rawUrl,
+		parsedUrl:               parsedUrl,
+		sniffing:                d.Get("sniff").(bool),
+		healthchecking:          d.Get("healthcheck").(bool),
+		username:                d.Get("username").(string),
+		password:                d.Get("password").(string),
+		token:                   d.Get("token").(string),
+		tokenName:               d.Get("token_name").(string),
+		insecure:                d.Get("insecure").(bool),
+		cacertFile:              d.Get("cacert_file").(string),
+		signAWSRequests:         d.Get("sign_aws_requests").(bool),
+		osVersion:               d.Get("opensearch_version").(string),
+		pingTimeoutSeconds:      resolveIntField(d, "ping_timeout_seconds", "version_ping_timeout", 5),
+		awsRegion:               d.Get("aws_region").(string),
 		awsAssumeRoleArn:        d.Get("aws_assume_role_arn").(string),
 		awsAssumeRoleExternalID: d.Get("aws_assume_role_external_id").(string),
 		awsAccessKeyId:          d.Get("aws_access_key").(string),
 		awsSecretAccessKey:      d.Get("aws_secret_key").(string),
-		awsSessionToken:         d.Get("aws_token").(string),
+		awsSessionToken:         resolveStringField(d, "aws_session_token", "aws_token"),
+		awsSig4Service:          d.Get("aws_signature_service").(string),
 		awsProfile:              d.Get("aws_profile").(string),
 		certPemPath:             d.Get("client_cert_path").(string),
 		keyPemPath:              d.Get("client_key_path").(string),
 		hostOverride:            d.Get("host_override").(string),
 		proxy:                   d.Get("proxy").(string),
-	}, nil
+	}
+
+	return conf, diags
 }
 
-func getClient(conf *ProviderConf) (*elastic7.Client, error) {
-	opts := []elastic7.ClientOptionFunc{
-		elastic7.SetURL(conf.rawUrl),
-		elastic7.SetScheme(conf.parsedUrl.Scheme),
-		elastic7.SetSniff(conf.sniffing),
-		elastic7.SetHealthcheck(conf.healthchecking),
+// getOpenSearchClient returns the opensearch-go/v4 client, creating it if necessary
+// This is the new client getter for Phase 2 migration
+func getOpenSearchClient(conf *ProviderConf) (*OpenSearchClient, error) {
+	// Return existing client if already created
+	if conf.opensearchClient != nil {
+		return conf.opensearchClient, nil
 	}
 
-	if conf.parsedUrl.User.Username() != "" {
-		p, _ := conf.parsedUrl.User.Password()
-		opts = append(opts, elastic7.SetBasicAuth(conf.parsedUrl.User.Username(), p))
-	}
-	if conf.username != "" && conf.password != "" {
-		opts = append(opts, elastic7.SetBasicAuth(conf.username, conf.password))
-	}
-
-	if m := awsUrlRegexp.FindStringSubmatch(conf.parsedUrl.Hostname()); m != nil && conf.signAWSRequests {
-		log.Printf("[INFO] Using AWS: %+v", m[1])
-		client, err := awsHttpClient(m[1], conf, map[string]string{})
-		if err != nil {
-			return nil, err
-		}
-		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
-	} else if m := awsOpensearchServerlessUrlRegexp.FindStringSubmatch(conf.parsedUrl.Hostname()); (m != nil || (conf.awsSig4Service == "aoss" && conf.awsRegion != "")) && conf.signAWSRequests {
-		var region string
-		if m != nil {
-			region = m[1]
-		} else {
-			region = conf.awsRegion
-		}
-		log.Printf("[INFO] Using AWS: %+v", region)
-		conf.awsSig4Service = "aoss"
-		client, err := awsHttpClient(region, conf, map[string]string{})
-		if err != nil {
-			return nil, err
-		}
-		client.Transport = Wrap(client.Transport)
-		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
-		conf.flavor = OpenSearch
-		if conf.osVersion == "" {
-			conf.osVersion = minimalOpensearchServerlessVersion
-		}
-	} else if awsRegion := conf.awsRegion; conf.awsRegion != "" && conf.signAWSRequests {
-		log.Printf("[INFO] Using AWS: %+v", awsRegion)
-		client, err := awsHttpClient(awsRegion, conf, map[string]string{})
-		if err != nil {
-			return nil, err
-		}
-		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
-	} else if conf.insecure || conf.cacertFile != "" {
-		opts = append(opts, elastic7.SetHttpClient(tlsHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
-		if conf.token != "" {
-			opts = append(opts, elastic7.SetHttpClient(tokenHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
-		}
-	} else if conf.token != "" {
-		opts = append(opts, elastic7.SetHttpClient(tokenHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
-	} else {
-		opts = append(opts, elastic7.SetHttpClient(defaultHttpClient(conf, map[string]string{})))
-	}
-
-	logProviderLevel, ok := os.LookupEnv("TF_LOG_PROVIDER")
-	if !ok {
-		logProviderLevel = "ERROR"
-	}
-	logProviderLevel = strings.ToUpper(logProviderLevel)
-
-	esLogger := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.LevelFromString(logProviderLevel),
-		Output:     os.Stderr,
-		JSONFormat: true,
-	})
-	switch logProviderLevel {
-	case "TRACE":
-		traceLogger := esLogger.StandardLogger(&hclog.StandardLoggerOptions{
-			ForceLevel: hclog.LevelFromString("TRACE"),
-		})
-		opts = append(opts, elastic7.SetTraceLog(traceLogger))
-		fallthrough
-	case "INFO":
-		infoLogger := esLogger.StandardLogger(&hclog.StandardLoggerOptions{
-			ForceLevel: hclog.LevelFromString("INFO"),
-		})
-		opts = append(opts, elastic7.SetInfoLog(infoLogger))
-		fallthrough
-	default:
-		errorLogger := esLogger.StandardLogger(&hclog.StandardLoggerOptions{
-			ForceLevel: hclog.LevelFromString("ERROR"),
-		})
-		opts = append(opts, elastic7.SetErrorLog(errorLogger))
-	}
-
-	client, err := elastic7.NewClient(opts...)
+	// Create new client
+	client, err := NewOpenSearchClient(conf)
 	if err != nil {
-		if errors.Is(err, elastic7.ErrNoClient) {
-			log.Printf("[INFO] couldn't create client: %T, %s, %T", err, err.Error(), errors.Unwrap(err))
-			return nil, errors.New("HEAD healthcheck failed: This is usually due to network or permission issues. The underlying error isn't accessible, please debug by disabling healthchecks.")
-		}
-		return nil, err
+		return nil, fmt.Errorf("failed to create OpenSearch client: %w", err)
 	}
 
+	// Perform version detection if not already set
 	if conf.osVersion == "" {
-		log.Printf("[INFO] Pinging url to determine version %+v with timeout %ds", conf.rawUrl, conf.pingTimeoutSeconds)
+		log.Printf("[INFO] Getting server info to determine version %s with timeout %ds", conf.rawUrl, conf.pingTimeoutSeconds)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(conf.pingTimeoutSeconds)*time.Second)
 		defer cancel()
-		info, httpStatus, err := client.Ping(conf.rawUrl).Do(ctx)
-		if httpStatus == http.StatusForbidden {
-			return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster.")
-		} else if httpStatus == http.StatusUnauthorized {
-			return nil, errors.New("HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster")
-		}
 
+		// Use the new client's Info method to get version
+		info, err := client.Client.Info(ctx, nil)
 		if err != nil {
-			// Replace the timeout error because it gives no context
+			// Check for specific error types
 			if os.IsTimeout(err) {
-				err = fmt.Errorf("timeout after %d seconds while pinging '%+v' to determine server version, please consider setting 'opensearch_version' to avoid this lookup", conf.pingTimeoutSeconds, conf.rawUrl)
+				return nil, fmt.Errorf("timeout after %d seconds while getting info from '%s' to determine server version, please consider setting 'opensearch_version' to avoid this lookup", conf.pingTimeoutSeconds, conf.rawUrl)
 			}
-
-			return nil, err
+			return nil, fmt.Errorf("failed to get OpenSearch info: %w", err)
 		}
+
 		conf.osVersion = info.Version.Number
+		log.Printf("[INFO] OpenSearch version %s (distribution: %s)", info.Version.Number, info.Version.Distribution)
 
-		log.Printf("[INFO] OS version %+v", info.Version)
-		switch info.Version.BuildFlavor {
-		case "default":
-			conf.flavor = Unknown
-		default:
+		// Determine flavor based on distribution
+		switch info.Version.Distribution {
+		case "opensearch":
 			conf.flavor = OpenSearch
+		default:
+			conf.flavor = Unknown
 		}
 	}
 
+	// Store client in config for reuse
+	conf.opensearchClient = client
 	return client, nil
 }
 
-func assumeRoleCredentials(region, roleARN, roleExternalID, profile string, endpoint string) *awscredentials.Credentials {
-	sessOpts := awsSessionOptions(region, endpoint)
-	if profile != "" {
-		sessOpts.Profile = profile
+// resolveStringField returns the value of newField if non-empty, otherwise falls back to oldField.
+// This supports backward compatibility when provider fields are renamed.
+func resolveStringField(d *schema.ResourceData, newField, oldField string) string {
+	if v := d.Get(newField).(string); v != "" {
+		return v
 	}
-
-	sess := awssession.Must(awssession.NewSessionWithOptions(sessOpts))
-	stsClient := awssts.New(sess)
-	assumeRoleProvider := &awsstscreds.AssumeRoleProvider{
-		Client:  stsClient,
-		RoleARN: roleARN,
-	}
-
-	if roleExternalID != "" {
-		assumeRoleProvider.ExternalID = aws.String(roleExternalID)
-	}
-
-	return awscredentials.NewChainCredentials([]awscredentials.Provider{assumeRoleProvider})
+	return d.Get(oldField).(string)
 }
 
-func awsSessionOptions(region string, endpoint string) awssession.Options {
-	return awssession.Options{
-		Config: aws.Config{
-			Region:   aws.String(region),
-			LogLevel: aws.LogLevel(aws.LogDebugWithHTTPBody),
-			Logger: aws.LoggerFunc(func(args ...interface{}) {
-				log.Print(append([]interface{}{"[DEBUG] "}, args...))
-			}),
-			CredentialsChainVerboseErrors: aws.Bool(true),
-			MaxRetries:                    aws.Int(1),
-			// HTTP client is required to fetch EC2 metadata values
-			// having zero timeout on the default HTTP client sometimes makes
-			// it fail with Credential error
-			// https://github.com/aws/aws-sdk-go/issues/2914
-			HTTPClient: &http.Client{Timeout: 10 * time.Second},
-			Endpoint:   aws.String(endpoint),
-		},
-		SharedConfigState: awssession.SharedConfigEnable,
+// resolveIntField returns the value of newField if non-zero, otherwise falls back to oldField.
+// If both are zero, returns the provided default value.
+func resolveIntField(d *schema.ResourceData, newField, oldField string, defaultVal int) int {
+	if v := d.Get(newField).(int); v != 0 {
+		return v
 	}
+	if v := d.Get(oldField).(int); v != 0 {
+		return v
+	}
+	return defaultVal
 }
 
-func awsSession(region string, conf *ProviderConf, endpoint string) *awssession.Session {
-	sessOpts := awsSessionOptions(region, endpoint)
-
-	// 1. access keys take priority
-	// 2. next is an assume role configuration
-	// 3. followed by a profile (for assume role)
-	// 4. let the default credentials provider figure out the rest (env, ec2, etc..)
-	//
-	// note: if #1 is chosen, then no further providers will be tested, since we've overridden the credentials with just a static provider
-	if conf.awsAccessKeyId != "" {
-		sessOpts.Config.Credentials = awscredentials.NewStaticCredentials(conf.awsAccessKeyId, conf.awsSecretAccessKey, conf.awsSessionToken)
-	} else if conf.awsAssumeRoleArn != "" {
-		if conf.awsAssumeRoleExternalID == "" {
-			conf.awsAssumeRoleExternalID = ""
+// envFallbackDefault returns a DefaultFunc that checks the primary env var first,
+// then falls back to the legacy env var. If neither is set, returns nil (no default).
+func envFallbackDefault(primaryEnvVar, legacyEnvVar string) schema.SchemaDefaultFunc {
+	return func() (interface{}, error) {
+		if v := os.Getenv(primaryEnvVar); v != "" {
+			return v, nil
 		}
-		sessOpts.Config.Credentials = assumeRoleCredentials(region, conf.awsAssumeRoleArn, conf.awsAssumeRoleExternalID, conf.awsProfile, endpoint)
-	} else if conf.awsProfile != "" {
-		sessOpts.Profile = conf.awsProfile
-	}
-
-	transport := http.Transport{}
-	// If configured as insecure, turn off SSL verification
-	if conf.insecure {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	} else if conf.hostOverride != "" {
-		// Only use `host_override` to set `ServerName` if we're using a secure connection
-		transport.TLSClientConfig = &tls.Config{ServerName: conf.hostOverride}
-	}
-
-	client := &http.Client{Transport: &transport}
-	sessOpts.Config.HTTPClient = client
-
-	return awssession.Must(awssession.NewSessionWithOptions(sessOpts))
-}
-
-func awsHttpClient(region string, conf *ProviderConf, headers map[string]string) (*http.Client, error) {
-	session := awsSession(region, conf, "")
-	// Call Get() to ensure concurrency safe retrieval of credentials. Since the
-	// client is created in many go routines, this synchronizes it.
-	_, err := session.Config.Credentials.Get()
-	if err != nil {
-		return nil, err
-	}
-
-	// Set the proxy URL after configuring AWS credentials since the proxy
-	// should be not used for credential sources that call a URL like ECS Task
-	// Roles or EC2 Instance Roles.
-	if conf.proxy != "" {
-		proxyURL, _ := url.Parse(conf.proxy)
-		transport, _ := session.Config.HTTPClient.Transport.(*http.Transport)
-		transport.Proxy = http.ProxyURL(proxyURL)
-		session.Config.HTTPClient.Transport = transport
-	}
-
-	signer := awssigv4.NewSigner(session.Config.Credentials)
-	client, err := aws_signing_client.New(signer, session.Config.HTTPClient, conf.awsSig4Service, region)
-	if err != nil {
-		return nil, err
-	}
-
-	rt := WithHeader(client.Transport)
-	rt.hostOverride = conf.hostOverride
-	for k, v := range headers {
-		rt.Set(k, v)
-	}
-	client.Transport = rt
-
-	return client, nil
-}
-
-func tokenHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
-	// Setup TLS options
-	tlsConfig := &tls.Config{}
-	if conf.insecure {
-		tlsConfig.InsecureSkipVerify = true
-	} else if conf.hostOverride != "" {
-		tlsConfig.ServerName = conf.hostOverride
-	}
-
-	// Wrapper to inject headers as needed
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	// Configure a proxy URL if one is provided.
-	if conf.proxy != "" {
-		proxyURL, _ := url.Parse(conf.proxy)
-		transport.Proxy = http.ProxyURL(proxyURL)
-	}
-
-	rt := WithHeader(transport)
-	rt.hostOverride = conf.hostOverride
-	rt.Set("Authorization", fmt.Sprintf("%s %s", conf.tokenName, conf.token))
-	for k, v := range headers {
-		rt.Set(k, v)
-	}
-
-	client := &http.Client{Transport: rt}
-
-	return client
-}
-
-func tlsHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
-	// Configure TLS/SSL
-	tlsConfig := &tls.Config{}
-	if conf.certPemPath != "" && conf.keyPemPath != "" {
-		certPem, _, err := readPathOrContent(conf.certPemPath)
-		if err != nil {
-			log.Fatal(err)
+		if v := os.Getenv(legacyEnvVar); v != "" {
+			return v, nil
 		}
-		keyPem, _, err := readPathOrContent(conf.keyPemPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		cert, err := tls.X509KeyPair([]byte(certPem), []byte(keyPem))
-		if err != nil {
-			log.Fatal(err)
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
+		return nil, nil
 	}
-
-	// If a cacertFile has been specified, use that for cert validation
-	if conf.cacertFile != "" {
-		caCert, _, _ := readPathOrContent(conf.cacertFile)
-
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM([]byte(caCert))
-		tlsConfig.RootCAs = caCertPool
-	}
-
-	// If configured as insecure, turn off SSL verification
-	if conf.insecure {
-		tlsConfig.InsecureSkipVerify = true
-	} else if conf.hostOverride != "" {
-		tlsConfig.ServerName = conf.hostOverride
-	}
-
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	// Configure a proxy URL if one is provided.
-	if conf.proxy != "" {
-		proxyURL, _ := url.Parse(conf.proxy)
-		transport.Proxy = http.ProxyURL(proxyURL)
-	}
-
-	rt := WithHeader(transport)
-	rt.hostOverride = conf.hostOverride
-	for k, v := range headers {
-		rt.Set(k, v)
-	}
-
-	client := &http.Client{Transport: rt}
-
-	return client
-}
-
-func defaultHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
-	// Setup TLS options
-	tlsConfig := &tls.Config{}
-	if conf.insecure {
-		tlsConfig.InsecureSkipVerify = true
-	} else if conf.hostOverride != "" {
-		tlsConfig.ServerName = conf.hostOverride
-	}
-
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	// Configure a proxy URL if one is provided.
-	if conf.proxy != "" {
-		proxyURL, _ := url.Parse(conf.proxy)
-		transport.Proxy = http.ProxyURL(proxyURL)
-	}
-
-	// Wrapper to inject headers as needed
-	rt := WithHeader(transport)
-	rt.hostOverride = conf.hostOverride
-	for k, v := range headers {
-		rt.Set(k, v)
-	}
-
-	client := &http.Client{Transport: rt}
-	return client
 }

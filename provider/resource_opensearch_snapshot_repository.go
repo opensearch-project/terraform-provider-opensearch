@@ -1,10 +1,12 @@
 package provider
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	elastic7 "github.com/olivere/elastic/v7"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 func resourceOpensearchSnapshotRepository() *schema.Resource {
@@ -53,11 +55,11 @@ func resourceOpensearchSnapshotRepositoryRead(d *schema.ResourceData, meta inter
 	var repositoryType string
 	var settings map[string]interface{}
 	var err error
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	repositoryType, settings, err = elastic7SnapshotGetRepository(osClient, id)
+	repositoryType, settings, err = getSnapshotRepository(client, id)
 
 	if err != nil {
 		return err
@@ -70,13 +72,24 @@ func resourceOpensearchSnapshotRepositoryRead(d *schema.ResourceData, meta inter
 	return ds.err
 }
 
-func elastic7SnapshotGetRepository(client *elastic7.Client, id string) (string, map[string]interface{}, error) {
-	repos, err := client.SnapshotGetRepository(id).Do(context.TODO())
+func getSnapshotRepository(client *OpenSearchClient, id string) (string, map[string]interface{}, error) {
+	res, err := client.Client.Snapshot.Repository.Get(context.TODO(), &opensearchapi.SnapshotRepositoryGetReq{
+		Repos: []string{id},
+	})
 	if err != nil {
 		return "", make(map[string]interface{}), err
 	}
 
-	return repos[id].Type, repos[id].Settings, nil
+	if repo, ok := res.Repos[id]; ok {
+		// Convert settings from map[string]string to map[string]interface{}
+		settings := make(map[string]interface{})
+		for k, v := range repo.Settings {
+			settings[k] = v
+		}
+		return repo.Type, settings, nil
+	}
+
+	return "", make(map[string]interface{}), nil
 }
 
 func resourceOpensearchSnapshotRepositoryUpdate(d *schema.ResourceData, meta interface{}) error {
@@ -90,22 +103,31 @@ func resourceOpensearchSnapshotRepositoryUpdate(d *schema.ResourceData, meta int
 	}
 
 	var err error
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	err = os7SnapshotCreateRepository(osClient, name, repositoryType, settings)
+	err = createSnapshotRepository(client, name, repositoryType, settings)
 
 	return err
 }
 
-func os7SnapshotCreateRepository(client *elastic7.Client, name string, repositoryType string, settings map[string]interface{}) error {
-	repo := elastic7.SnapshotRepositoryMetaData{
-		Type:     repositoryType,
-		Settings: settings,
+func createSnapshotRepository(client *OpenSearchClient, name string, repositoryType string, settings map[string]interface{}) error {
+	// Build the request body
+	repoBody := map[string]interface{}{
+		"type":     repositoryType,
+		"settings": settings,
 	}
 
-	_, err := client.SnapshotCreateRepository(name).BodyJson(&repo).Do(context.TODO())
+	bodyJSON, err := json.Marshal(repoBody)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Client.Snapshot.Repository.Create(context.TODO(), opensearchapi.SnapshotRepositoryCreateReq{
+		Repo: name,
+		Body: bytes.NewReader(bodyJSON),
+	})
 	return err
 }
 
@@ -113,20 +135,17 @@ func resourceOpensearchSnapshotRepositoryDelete(d *schema.ResourceData, meta int
 	id := d.Id()
 
 	var err error
-	osClient, err := getClient(meta.(*ProviderConf))
+	client, err := getOpenSearchClient(meta.(*ProviderConf))
 	if err != nil {
 		return err
 	}
-	err = os7SnapshotDeleteRepository(osClient, id)
+	_, err = client.Client.Snapshot.Repository.Delete(context.TODO(), opensearchapi.SnapshotRepositoryDeleteReq{
+		Repos: []string{id},
+	})
 
 	if err != nil {
 		return err
 	}
 	d.SetId("")
 	return nil
-}
-
-func os7SnapshotDeleteRepository(client *elastic7.Client, id string) error {
-	_, err := client.SnapshotDeleteRepository(id).Do(context.TODO())
-	return err
 }

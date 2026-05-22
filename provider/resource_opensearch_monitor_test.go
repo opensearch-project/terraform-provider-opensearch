@@ -21,7 +21,35 @@ func TestAccOpensearchOpenDistroMonitor(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchMonitorExists("opensearch_monitor.test_monitor"),
 				),
-				ExpectNonEmptyPlan: true,
+			},
+			{
+				Config: testAccOpensearchOpenDistroMonitorUpdated,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchMonitorExists("opensearch_monitor.test_monitor"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchOpenDistroMonitorImport(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		Providers:    testAccOpendistroProviders,
+		CheckDestroy: testCheckOpensearchMonitorDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchOpenDistroMonitor,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchMonitorExists("opensearch_monitor.test_monitor"),
+				),
+			},
+			{
+				ResourceName:      "opensearch_monitor.test_monitor",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
@@ -102,6 +130,57 @@ resource "opensearch_monitor" "test_monitor" {
                     "@timestamp": {
                       "boost": 1,
                       "from": "||-1h",
+                      "to": "",
+                      "include_lower": true,
+                      "include_upper": true,
+                      "format": "epoch_millis"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": []
+}
+EOF
+}
+`
+
+var testAccOpensearchOpenDistroMonitorUpdated = `
+resource "opensearch_monitor" "test_monitor" {
+  body = <<EOF
+{
+  "name": "test-monitor-updated",
+  "type": "monitor",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 5,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": ["*"],
+        "query": {
+          "size": 0,
+          "aggregations": {},
+          "query": {
+            "bool": {
+              "adjust_pure_negative": true,
+              "boost": 1,
+              "filter": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "boost": 1,
+                      "from": "||-2h",
                       "to": "",
                       "include_lower": true,
                       "include_upper": true,

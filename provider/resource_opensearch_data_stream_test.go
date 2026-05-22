@@ -37,6 +37,39 @@ func TestAccOpensearchDataStream(t *testing.T) {
 	})
 }
 
+func TestAccOpensearchDataStreamImport(t *testing.T) {
+	provider := Provider()
+	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
+	if diags.HasError() {
+		t.Skipf("err: %#v", diags)
+	}
+	var allowed bool = true
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+
+			if !allowed {
+				t.Skip("/_data_stream endpoint only supported on OS >= 2.0.0")
+			}
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: testCheckOpensearchDataStreamDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchDataStream,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchDataStreamExists("opensearch_data_stream.foo"),
+				),
+			},
+			{
+				ResourceName:      "opensearch_data_stream.foo",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func testCheckOpensearchDataStreamExists(name string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[name]
@@ -50,11 +83,11 @@ func testCheckOpensearchDataStreamExists(name string) resource.TestCheckFunc {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		err = elastic7GetDataStream(osClient, rs.Primary.ID)
+		err = getDataStream(client, rs.Primary.ID)
 
 		if err != nil {
 			return err
@@ -73,11 +106,11 @@ func testCheckOpensearchDataStreamDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		osClient, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		err = elastic7GetDataStream(osClient, rs.Primary.ID)
+		err = getDataStream(client, rs.Primary.ID)
 
 		if err != nil {
 			return nil // should be not found error

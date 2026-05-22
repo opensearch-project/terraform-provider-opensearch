@@ -30,6 +30,12 @@ func TestAccOpensearchIngestPipeline(t *testing.T) {
 					testCheckOpensearchIngestPipelineExists("opensearch_ingest_pipeline.test"),
 				),
 			},
+			{
+				Config: testAccOpensearchIngestPipelineV7Updated,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchIngestPipelineExists("opensearch_ingest_pipeline.test"),
+				),
+			},
 		},
 	})
 }
@@ -75,11 +81,11 @@ func testCheckOpensearchIngestPipelineExists(name string) resource.TestCheckFunc
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
+		_, err = getIngestPipeline(client, rs.Primary.ID)
 
 		if err != nil {
 			return err
@@ -98,11 +104,11 @@ func testCheckOpensearchIngestPipelineDestroy(s *terraform.State) error {
 		meta := testAccProvider.Meta()
 
 		var err error
-		client, err := getClient(meta.(*ProviderConf))
+		client, err := getOpenSearchClient(meta.(*ProviderConf))
 		if err != nil {
 			return err
 		}
-		_, err = client.IngestGetPipeline(rs.Primary.ID).Do(context.TODO())
+		_, err = getIngestPipeline(client, rs.Primary.ID)
 
 		if err != nil {
 			return nil // should be not found error
@@ -126,6 +132,26 @@ resource "opensearch_ingest_pipeline" "test" {
       "set" : {
         "field": "foo",
         "value": "bar"
+      }
+    }
+  ]
+}
+EOF
+}
+`
+
+var testAccOpensearchIngestPipelineV7Updated = `
+resource "opensearch_ingest_pipeline" "test" {
+  name = "terraform-test"
+  body = <<EOF
+{
+  "description" : "describe pipeline updated",
+  "version": 124,
+  "processors" : [
+    {
+      "set" : {
+        "field": "foo",
+        "value": "baz"
       }
     }
   ]
