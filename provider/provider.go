@@ -388,7 +388,7 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 	if err != nil {
 		if errors.Is(err, elastic7.ErrNoClient) {
 			log.Printf("[INFO] couldn't create client: %T, %s, %T", err, err.Error(), errors.Unwrap(err))
-			return nil, errors.New("HEAD healthcheck failed: This is usually due to network or permission issues. The underlying error isn't accessible, please debug by disabling healthchecks.")
+			return nil, errors.New("HEAD healthcheck failed: This is usually due to network or permission issues. The underlying error isn't accessible, please debug by disabling healthchecks")
 		}
 		return nil, err
 	}
@@ -398,9 +398,10 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(conf.pingTimeoutSeconds)*time.Second)
 		defer cancel()
 		info, httpStatus, err := client.Ping(conf.rawUrl).Do(ctx)
-		if httpStatus == http.StatusForbidden {
-			return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster.")
-		} else if httpStatus == http.StatusUnauthorized {
+		switch httpStatus {
+		case http.StatusForbidden:
+			return nil, errors.New("HTTP 403 Forbidden: Permission denied. Please ensure that the correct credentials are being used to access the cluster")
+		case http.StatusUnauthorized:
 			return nil, errors.New("HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster")
 		}
 

@@ -268,7 +268,7 @@ func expandIndexPermissionsSet(resourcesArray []interface{}) ([]IndexPermissions
 	for _, item := range resourcesArray {
 		data, ok := item.(map[string]interface{})
 		if !ok {
-			return vperm, fmt.Errorf("Error asserting data as type []byte : %v", item)
+			return vperm, fmt.Errorf("error asserting data as type []byte : %v", item)
 		}
 
 		fls := data["field_level_security"]
@@ -309,7 +309,7 @@ func expandTenantPermissionsSet(resourcesArray []interface{}) ([]TenantPermissio
 	for _, item := range resourcesArray {
 		data, ok := item.(map[string]interface{})
 		if !ok {
-			return vperm, fmt.Errorf("Error asserting data as type []byte : %v", item)
+			return vperm, fmt.Errorf("error asserting data as type []byte : %v", item)
 		}
 		obj := TenantPermissions{
 			TenantPatterns: expandStringList(data["tenant_patterns"].(*schema.Set).List()),
@@ -339,12 +339,12 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 
 	if v, ok := m["document_level_security"]; ok {
-		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
+		fmt.Fprintf(&buf, "%s-", v.(string))
 	}
 
 	if v, ok := m["fls"]; ok {
@@ -356,7 +356,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 
@@ -369,7 +369,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 	if v, ok := m["masked_fields"]; ok {
@@ -381,7 +381,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 	if v, ok := m["allowed_actions"]; ok {
@@ -393,7 +393,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 
@@ -415,7 +415,7 @@ func tenantPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 	if v, ok := m["allowed_actions"]; ok {
@@ -427,7 +427,7 @@ func tenantPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 

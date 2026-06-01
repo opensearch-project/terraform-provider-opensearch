@@ -488,7 +488,7 @@ func clearAllSettings(meta interface{}) error {
 func clusterSettingsFromResourceData(d *schema.ResourceData) map[string]interface{} {
 	settings := make(map[string]interface{})
 	for _, key := range dynamicClusterSettings {
-		schemaName := strings.Replace(key, ".", "_", -1)
+		schemaName := strings.ReplaceAll(key, ".", "_")
 		
 		// Handle integer settings where 0 is a valid value
 		if containsString(intClusterSettings, key) {
@@ -516,7 +516,7 @@ func clusterResourceDataFromSettings(settings map[string]interface{}, d *schema.
 			continue
 		}
 
-		schemaName := strings.Replace(key, ".", "_", -1)
+		schemaName := strings.ReplaceAll(key, ".", "_")
 		if isTypeListSetting(key) {
 			if list, ok := value.([]interface{}); ok {
 				if err := d.Set(schemaName, list); err != nil {

@@ -16,7 +16,7 @@ func TestAccOpensearchComposableIndexTemplate(t *testing.T) {
 		t.Skipf("err: %#v", diags)
 	}
 
-	var allowed bool = true
+	var allowed = true
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -44,7 +44,7 @@ func TestAccOpensearchComposableIndexTemplate_importBasic(t *testing.T) {
 		t.Skipf("err: %#v", diags)
 	}
 
-	var allowed bool = true
+	var allowed = true
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
