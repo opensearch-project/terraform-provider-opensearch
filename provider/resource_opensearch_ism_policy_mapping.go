@@ -104,7 +104,7 @@ func resourceOpensearchOpenDistroISMPolicyMappingRetry(indexPattern string, poli
 		// This isn't a great test, index patterns with a glob could in theory
 		// match zero indices or more
 		if len(indices) == 0 {
-			return retry.RetryableError(fmt.Errorf("Expected at least one index to be mapped, but found %d", len(indices)))
+			return retry.RetryableError(fmt.Errorf("expected at least one index to be mapped, but found %d", len(indices)))
 		}
 
 		err = resourceOpensearchOpenDistroISMPolicyMappingRead(d, m)

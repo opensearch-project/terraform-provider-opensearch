@@ -372,7 +372,7 @@ func TestAccOpensearchIndex_rolloverAliasOpendistro(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var allowed bool = true
+	var allowed = true
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -585,7 +585,7 @@ func TestAccOpensearchIndex_knnAlgoParamEFSearchConfig(t *testing.T) {
 }
 
 func TestAccOpensearchIndex_mappingsWhitespaceStability(t *testing.T) {
-	var config string = testAccOpensearchMappingsWhitespaceStability
+	var config = testAccOpensearchMappingsWhitespaceStability
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -634,7 +634,7 @@ func TestAccOpensearchIndex_doctype(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var config string = testAccOpensearchMappingWithDocType
+	var config = testAccOpensearchMappingWithDocType
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },

@@ -15,7 +15,7 @@ func TestAccOpensearchIndexTemplate(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var config string = testAccOpensearchIndexTemplateV7
+	var config = testAccOpensearchIndexTemplateV7
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -39,7 +39,7 @@ func TestAccOpensearchIndexTemplate_importBasic(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var config string = testAccOpensearchIndexTemplateV7
+	var config = testAccOpensearchIndexTemplateV7
 
 	resource.Test(t, resource.TestCase{
 
