@@ -945,12 +945,13 @@ func waitForModelRegistrationTask(ctx context.Context, client *opensearch.Client
 		}
 
 		state, _ := result["state"].(string)
-		if state == "COMPLETED" {
+		switch state {
+		case "COMPLETED":
 			if modelID, ok := result["model_id"].(string); ok && modelID != "" {
 				return modelID, nil
 			}
 			return "", fmt.Errorf("ML Model registration task completed but 'model_id' not found in response")
-		} else if state == "FAILED" {
+		case "FAILED":
 			errorMsg := extractTaskErrorMessage(result)
 			return "", fmt.Errorf("ML Model registration task failed (task_id: %s, state: %s): %s", taskID, state, errorMsg)
 		}

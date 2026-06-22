@@ -326,6 +326,11 @@ func getCreds(t *testing.T, region string, config *ProviderConf, endpoint string
 	s := awsSession(region, config, endpoint)
 	if s == nil {
 		t.Fatalf("awsSession returned nil")
+		return credentials.Value{}
+	}
+	if s.Config.Credentials == nil {
+		t.Fatalf("awsSession returned session with nil credentials")
+		return credentials.Value{}
 	}
 	creds, err := s.Config.Credentials.Get()
 	if err != nil {
