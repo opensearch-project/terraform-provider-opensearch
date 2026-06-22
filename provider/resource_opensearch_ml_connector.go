@@ -49,6 +49,7 @@ func resourceOpensearchMLConnector() *schema.Resource {
 			"credential": {
 				Type:        schema.TypeMap,
 				Required:    true,
+				Sensitive:   true,
 				Description: "Defines any credential variables required for connecting to the endpoint",
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
