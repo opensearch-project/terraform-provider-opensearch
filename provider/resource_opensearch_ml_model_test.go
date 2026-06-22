@@ -61,18 +61,6 @@ func TestAccOpensearchMLModel_OSProvidedPretrained(t *testing.T) {
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: testCheckOpensearchMLModelDestroy,
 		Steps: []resource.TestStep{
-			// TODO - remove
-			//{
-			//	Config: testAccOpensearchMLModelConfig_OSProvidedPretrained_Minimal(),
-			//	Check: resource.ComposeTestCheckFunc(
-			//		testCheckOpensearchMLModelExists("opensearch_ml_model.os_pretrained_minimal"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.os_pretrained_minimal", "name", "amazon/neural-sparse/opensearch-neural-sparse-encoding-doc-v2-mini"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.os_pretrained_minimal", "version", "1.0.0"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.os_pretrained_minimal", "model_format", "TORCH_SCRIPT"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.os_pretrained_minimal", "function_name", "SPARSE_ENCODING"),
-			//		resource.TestCheckResourceAttrSet("opensearch_ml_model.os_pretrained_minimal", "model_group_id"),
-			//	),
-			//},
 			{
 				Config: testAccOpensearchMLModelConfig_OSProvidedPretrained_WithOptional(),
 				Check: resource.ComposeTestCheckFunc(
@@ -114,25 +102,6 @@ func TestAccOpensearchMLModel_Custom(t *testing.T) {
 		Providers:    testAccOpendistroProviders,
 		CheckDestroy: testCheckOpensearchMLModelDestroy,
 		Steps: []resource.TestStep{
-			// TODO - remove
-			//{
-			//	Config: testAccOpensearchMLModelConfig_Custom_Minmal(),
-			//	Check: resource.ComposeTestCheckFunc(
-			//		testCheckOpensearchMLModelExists("opensearch_ml_model.custom_minimal"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "name", "custom_minimal"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "version", "1.0.2"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "model_format", "TORCH_SCRIPT"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "function_name", "TEXT_EMBEDDING"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "model_content_hash_value", "843d3246ed04369593f1c54f2be92dc9878d60d5610b89617c585619e9f162d0"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "url", "https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/paraphrase-MiniLM-L3-v2/1.0.2/torch_script/sentence-transformers_paraphrase-MiniLM-L3-v2-1.0.2-torch_script.zip"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "model_config.#", "1"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "model_config.0.model_type", "bert"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "model_config.0.embedding_dimension", "384"),
-			//		resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "model_config.0.framework_type", "SENTENCE_TRANSFORMERS"),
-			//		//resource.TestCheckResourceAttr("opensearch_ml_model.custom_minimal", "model_config.0.pooling_mode", "MEAN"),
-			//		resource.TestCheckResourceAttrSet("opensearch_ml_model.custom_minimal", "model_group_id"),
-			//	),
-			//},
 			{
 				Config: testAccOpensearchMLModelConfig_Custom_WithOptional(),
 				Check: resource.ComposeTestCheckFunc(
@@ -167,7 +136,7 @@ func TestAccOpensearchMLModel_Custom(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "is_enabled", "false"),
 				),
 			},
-			/*{
+			{
 				Config: testAccOpensearchMLModelConfig_Custom_WithOptional_Updated(),
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchMLModelExists("opensearch_ml_model.custom_with_optional"),
@@ -185,8 +154,13 @@ func TestAccOpensearchMLModel_Custom(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "model_config.0.embedding_dimension", "384"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "model_config.0.framework_type", "SENTENCE_TRANSFORMERS"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "model_config.0.pooling_mode", "MEAN"),
-					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "model_config.0.all_config", ""),
+					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "model_config.0.all_config", "{\"updated\": true}"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "model_config.0.normalize_result", "true"),
+					// Note: 'additional_config' is not returned by the API and cannot be tested here.
+					// Unlike root-level fields like 'url' and 'version' which persist in state when not explicitly set by Read,
+					// 'additional_config' is nested in 'model_config' which IS explicitly set by Read.
+					// When d.Set("model_config", ...) is called, it overwrites the entire block with only API-returned fields,
+					// clearing 'additional_config' from state. This is correct behavior - state should reflect API reality.
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "rate_limiter.#", "1"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "rate_limiter.0.limit", "8"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "rate_limiter.0.unit", "MINUTES"),
@@ -195,7 +169,7 @@ func TestAccOpensearchMLModel_Custom(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "interface.0.output", ""),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "is_enabled", "false"),
 				),
-			},*/
+			},
 			{
 				ResourceName:      "opensearch_ml_model.custom_with_optional",
 				ImportState:       true,
@@ -475,24 +449,6 @@ func testCheckOpensearchMLModelDestroy(s *terraform.State) error {
 	return nil
 }
 
-//func testAccOpensearchMLModelConfig_OSProvidedPretrained_Minimal() string {
-//	return `
-//resource "opensearch_ml_model_group" "dependency" {
-// name = "dependency_group_for_os_pretrained_minimal"
-//}
-//
-//resource "opensearch_ml_model" "os_pretrained_minimal" {
-// name           = "amazon/neural-sparse/opensearch-neural-sparse-encoding-doc-v2-mini"
-// version        = "1.0.0"
-// model_format   = "TORCH_SCRIPT"
-// function_name  = "SPARSE_ENCODING"
-// model_group_id = opensearch_ml_model_group.dependency.id
-//
-// deploy_after_registering = false
-//}
-//`
-//}
-
 func testAccOpensearchMLModelConfig_OSProvidedPretrained_WithOptional() string {
 	return `
 resource "opensearch_ml_model_group" "dependency" {
@@ -511,33 +467,6 @@ resource "opensearch_ml_model" "os_pretrained_with_optional" {
 }
 `
 }
-
-// TODO - remove
-//func testAccOpensearchMLModelConfig_Custom_Minmal() string {
-//	return `
-//resource "opensearch_ml_model_group" "dependency" {
-// name = "dependency_group_for_custom_minimal"
-//}
-//
-//resource "opensearch_ml_model" "custom_minimal" {
-// name           = "custom_minimal"
-// version        = "1.0.2"
-// model_format   = "TORCH_SCRIPT"
-// function_name  = "TEXT_EMBEDDING"
-// model_content_hash_value = "843d3246ed04369593f1c54f2be92dc9878d60d5610b89617c585619e9f162d0"
-// model_config {
-//   model_type          = "bert"
-//   embedding_dimension = 384
-//   framework_type      = "sentence_transformers"
-//   pooling_mode        = "MEAN"
-// }
-// url = "https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/paraphrase-MiniLM-L3-v2/1.0.2/torch_script/sentence-transformers_paraphrase-MiniLM-L3-v2-1.0.2-torch_script.zip"
-// model_group_id = opensearch_ml_model_group.dependency.id
-//
-// deploy_after_registering = false
-//}
-//`
-//}
 
 func testAccOpensearchMLModelConfig_Custom_WithOptional() string {
 	return fmt.Sprintf(`
@@ -599,9 +528,9 @@ resource "opensearch_ml_model" "custom_with_optional" {
     embedding_dimension = 384
     framework_type      = "sentence_transformers"
     pooling_mode        = "MEAN"
-    all_config          = ""
-	additional_config {
-      space_type = "l3"
+    all_config          = "{\"updated\": true}"
+    additional_config {
+      space_type = "l2"
     }
     normalize_result = true
   }
