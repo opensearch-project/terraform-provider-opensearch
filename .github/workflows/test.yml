@@ -16,12 +16,12 @@ jobs:
         # we depend on full git history for linters
         fetch-depth: 0
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v9
       with:
         # Required: the version of golangci-lint is required and must be
         # specified without patch version: we always use the latest patch
         # version.
-        version: v1.64
+        version: v2.12
         args: --verbose --timeout=10m
   test:
     strategy:
@@ -127,7 +127,6 @@ jobs:
         GPG_PRIVATE_KEY: op://opensearch-infra-secrets/release-gpg-key/signing-subkey-private
         GPG_PASSPHRASE: op://opensearch-infra-secrets/release-gpg-key/passphrase
         GPG_FINGERPRINT: op://opensearch-infra-secrets/release-gpg-key/signing-subkey-fingerprint
-
     - name: Import GPG key
       id: import_gpg
       uses: crazy-max/ghaction-import-gpg@v6
@@ -135,7 +134,6 @@ jobs:
         gpg_private_key: ${{ env.GPG_PRIVATE_KEY }}
         passphrase: ${{ env.GPG_PASSPHRASE }}
         fingerprint: ${{ env.GPG_FINGERPRINT }}
-        
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v6
       with:

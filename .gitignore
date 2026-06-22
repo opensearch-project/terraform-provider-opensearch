@@ -1,5 +1,14 @@
 /vendor
 .DS_Store
 .vscode/
+.idea/
 terraform-provider-opensearch
 __debug*
+
+# Developer sandbox
+.dev.terraformrc
+dev/terraform.tfvars
+dev/terraform.tfstate
+dev/terraform.tfstate.backup
+dev/.terraform/
+dev/.terraform.lock.hcl

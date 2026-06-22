@@ -6,6 +6,8 @@
   - [Running tests locally](#running-tests-locally)
     - [To Run Specific Test](#to-run-specific-test)
     - [Fix the go-lint errors](#fix-the-go-lint-errors)
+  - [Developer sandbox](#developer-sandbox)
+  - [Generating documentation](#generating-documentation)
   - [Debugging this provider](#debugging-this-provider)
 - [Version and Branching](#version-and-branching)
 - [Contributing](#contributing)
@@ -42,6 +44,14 @@ Examples of resources can be found in the examples directory.
 
 ### Running tests locally
 
+The `Makefile` wraps the most common workflows. Running `make test` starts a local OpenSearch cluster (via Docker Compose) and executes the full acceptance-test suite:
+
+```sh
+make test
+```
+
+**Manual equivalent** (no `make`):
+
 ```sh
 export OSS_IMAGE="opensearchproject/opensearch:2"
 docker compose up -d
@@ -59,13 +69,68 @@ Note:  Starting from version `2.12.0`, the `admin` user password is determined b
 
 ```sh
 cd provider/
-TF_ACC=2 go test -run TestAccOpensearchOpenDistroDashboardTenant  -v -cover -short
+TF_ACC=2 go test -run TestAccOpensearchOpenDistroDashboardTenant -v -cover -short
 ```
 
 #### Fix the go-lint errors
 
 ```sh
-golangci-lint run --out-format=github-actions 
+golangci-lint run --out-format=github-actions
+```
+
+### Developer sandbox
+
+The `dev/` directory is a ready-to-use Terraform configuration that provisions a small set of resources against a locally-running cluster. 
+It is useful for iterating on provider changes end-to-end without writing temporary Terraform code.
+
+**One-command setup** (starts OpenSearch + Dashboards, builds the provider, and applies the sandbox config):
+
+```sh
+make dev
+```
+
+The images for OpenSearch core and OpenSearch Dashboards can be overridden; so can the initial admin password:
+
+```sh
+OSS_IMAGE=opensearchproject/opensearch:2.17.0 \
+OSS_DASHBOARDS_IMAGE=opensearchproject/opensearch-dashboards:2.17.0 \
+OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456 \
+make dev-up
+```
+
+To manage the cluster independently (without Dashboards):
+
+```sh
+make up    # start OpenSearch only
+make down  # stop OpenSearch
+```
+
+Available Make targets related to the development sandbox:
+
+| Target              | Description                                                                           |
+|---------------------|---------------------------------------------------------------------------------------|
+| `make dev-up`       | Start OpenSearch + OpenSearch Dashboards (`dashboards` Compose profile)               |
+| `make dev-build`    | Build the provider binary to use locally                                              |
+| `make dev-config`   | Generate `.dev.terraformrc` with a `dev_overrides` block pointing to the local binary |
+| `make dev-plan`     | Build + `terraform plan` against `dev/`                                               |
+| `make dev-apply`    | Build + `terraform apply -auto-approve` against `dev/`                                |
+| `make dev-destroy`  | `terraform destroy -auto-approve` (cluster stays up)                                  |
+| `make dev-teardown` | Destroy Terraform resources and stop the OpenSearch cluster + OpenSearch Dashboards   |
+| `make dev-down`     | Stop OpenSearch cluster + OpenSearch Dashboards without touching Terraform state      |
+
+**Terraform variables** are read from `dev/terraform.tfvars` (gitignored). Copy `dev/terraform.tfvars.example` to get started.
+The defaults work against the local Docker cluster with no changes needed. 
+For AWS-specific testing, pass credentials as `TF_VAR_*` environment variables — see `dev/terraform.tfvars.example`.
+
+The UI of OpenSearch Dashboards will be exposed at `http://localhost:5601` when the `dev-up` target is used.
+
+### Generating documentation
+
+Generate example usage documentation in `docs/` from the configuration in `resources/<resource name>/import.sh` and
+`resources/<resource name>/resource.tf`:
+
+```sh
+make docs
 ```
 
 ### Debugging this provider

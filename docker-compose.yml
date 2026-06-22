@@ -36,6 +36,20 @@ services:
         hard: -1
     ports:
       - 9200:9200
+  opensearch-dashboards:
+    profiles:
+      - dashboards
+    image: ${OSS_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:2}
+    container_name: opensearch-dashboards
+    hostname: opensearch-dashboards
+    networks:
+      - opensearch
+    ports:
+      - 5601:5601
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+    depends_on:
+      - opensearch
 networks:
   opensearch:
     driver: bridge
