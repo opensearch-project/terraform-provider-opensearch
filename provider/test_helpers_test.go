@@ -13,7 +13,7 @@ func getResourceIDFromState(s *terraform.State, name string) (string, error) {
 		return "", fmt.Errorf("resource with name '%s' not found in state", name)
 	}
 	if rs.Primary.ID == "" {
-		return "", fmt.Errorf("resource with name '%s' found in state, but with not ID set", name)
+		return "", fmt.Errorf("resource with name '%s' found in state, but with no ID set", name)
 	}
 	return rs.Primary.ID, nil
 }

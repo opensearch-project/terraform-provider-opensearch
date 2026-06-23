@@ -545,9 +545,10 @@ func resourceOpensearchMLModelRead(ctx context.Context, d *schema.ResourceData, 
 			return diag.Errorf("error setting function_name: %s", err)
 		}
 	}
-	if err := d.Set("is_enabled", false); err != nil {
-		return diag.Errorf("error setting is_enabled: %s", err)
-	}
+	// Only update is_enabled when the API returns it. The API omits this field both when
+	// it is false and for model types that don't surface it (e.g. OS-provided pretrained,
+	// remote models). Leaving it unset keeps the config/prior-state value in place,
+	// which avoids a false diff on models where the default (true) is never echoed back.
 	if isEnabled, ok := model["is_enabled"].(bool); ok {
 		if err := d.Set("is_enabled", isEnabled); err != nil {
 			return diag.Errorf("error setting is_enabled: %s", err)
@@ -959,7 +960,7 @@ func waitForModelRegistrationTask(ctx context.Context, client *opensearch.Client
 		time.Sleep(modelRegistrationPollInterval)
 	}
 
-	return "", fmt.Errorf("timeout waiting for ML Model registration task to complete after %s seconds", maxModelRegistrationWait)
+	return "", fmt.Errorf("timeout waiting for ML Model registration task to complete after %s", maxModelRegistrationWait)
 }
 
 func waitForModelDeployment(ctx context.Context, client *opensearch.Client, baseURL, modelID string) (string, error) {
@@ -997,7 +998,7 @@ func waitForModelDeployment(ctx context.Context, client *opensearch.Client, base
 		time.Sleep(modelDeploymentPollInterval)
 	}
 
-	return "", fmt.Errorf("timeout waiting for ML Model deployment to complete after %s seconds", maxModelDeploymentWait)
+	return "", fmt.Errorf("timeout waiting for ML Model deployment to complete after %s", maxModelDeploymentWait)
 }
 
 func extractTaskErrorMessage(taskResult map[string]interface{}) string {
