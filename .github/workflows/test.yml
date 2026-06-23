@@ -8,15 +8,15 @@ jobs:
     name: Runs go linters
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
       with:
         go-version: '1.25'
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         # we depend on full git history for linters
         fetch-depth: 0
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v9
+      uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
       with:
         # Required: the version of golangci-lint is required and must be
         # specified without patch version: we always use the latest patch
@@ -50,16 +50,16 @@ jobs:
       run: |
         sudo sysctl -w vm.max_map_count=262144
     - name: Setup Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
       with:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         # we depend on full git history for linters
         fetch-depth: 0
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: |
           ~/go/pkg/mod              # Module download cache
@@ -77,7 +77,7 @@ jobs:
       run: docker ps -a
     # While docker/OS is booting up, run the linters
     - name: Install managed version of terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       with:
         terraform_version: 1.1.7
         terraform_wrapper: false
@@ -97,7 +97,7 @@ jobs:
         ./script/wait-for-endpoint --timeout=60 http://admin:myStrongPassword123%40456@localhost:9200
     - name: Dump docker logs on failure
       if: failure()
-      uses: jwalton/gh-docker-logs@v2
+      uses: jwalton/gh-docker-logs@2741064ab9d7af54b0b1ffb6076cf64c16f0220e # v2.2.2
     - name: Run the tests
       run: |
         export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
@@ -112,13 +112,13 @@ jobs:
     name: Release
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
       with:
         go-version: '1.25'
     - name: Load secret
-      uses: 1password/load-secrets-action@v2
+      uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2.0.0
       with:
         # Export loaded secrets as environment variables
         export-env: true
@@ -129,13 +129,13 @@ jobs:
         GPG_FINGERPRINT: op://opensearch-infra-secrets/release-gpg-key/signing-subkey-fingerprint
     - name: Import GPG key
       id: import_gpg
-      uses: crazy-max/ghaction-import-gpg@v6
+      uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6.3.0
       with:
         gpg_private_key: ${{ env.GPG_PRIVATE_KEY }}
         passphrase: ${{ env.GPG_PASSPHRASE }}
         fingerprint: ${{ env.GPG_FINGERPRINT }}
     - name: Run GoReleaser
-      uses: goreleaser/goreleaser-action@v6
+      uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
       with:
         version: latest
         args: release --clean
