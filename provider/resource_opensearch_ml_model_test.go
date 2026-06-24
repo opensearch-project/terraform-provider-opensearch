@@ -71,6 +71,8 @@ func TestAccOpensearchMLModel_OSProvidedPretrained(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_ml_model.os_pretrained_with_optional", "model_format", "TORCH_SCRIPT"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.os_pretrained_with_optional", "function_name", "SPARSE_ENCODING"),
 					resource.TestCheckResourceAttrSet("opensearch_ml_model.os_pretrained_with_optional", "model_group_id"),
+					resource.TestCheckResourceAttr("opensearch_ml_model.os_pretrained_with_optional", "is_enabled", "true"),
+					testCheckOpensearchMLModelIsEnabledInAPI("opensearch_ml_model.os_pretrained_with_optional", true),
 				),
 			},
 			{
@@ -82,7 +84,12 @@ func TestAccOpensearchMLModel_OSProvidedPretrained(t *testing.T) {
 				//     though it does return it for custom and third-party models
 				//   - version
 				//   - deploy_after_registering: attribute is only used by Provider, not by the OpenSearch API
-				ImportStateVerifyIgnore: []string{"description", "version", "deploy_after_registering"},
+				//   - is_enabled: register ignores the field; the API only echoes it once an Update (PUT) has
+				//     persisted it. The provider always issues that PUT after register, but SPARSE_ENCODING
+				//     models reject it (403), so here the field is never persisted nor returned by GET and is
+				//     left to whatever the import writes (the zero value). Other model types persist it, which
+				//     is why their import steps do not ignore is_enabled.
+				ImportStateVerifyIgnore: []string{"description", "version", "deploy_after_registering", "is_enabled"},
 			},
 			// Note: OS-provided pretrained sparse encoding models cannot be updated via OpenSearch API
 			// The API returns 403: "The function category SPARSE_ENCODING is not supported at this time"
@@ -134,6 +141,7 @@ func TestAccOpensearchMLModel_Custom(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "interface.0.input", "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{\"type\":\"string\",\"description\":\"Test description field\"}}}}}"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "interface.0.output", ""),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "is_enabled", "false"),
+					testCheckOpensearchMLModelIsEnabledInAPI("opensearch_ml_model.custom_with_optional", false),
 				),
 			},
 			{
@@ -167,7 +175,8 @@ func TestAccOpensearchMLModel_Custom(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "interface.#", "1"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "interface.0.input", "{\"properties\":{\"parameters\":{\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"Updated text field\"}}}}}"),
 					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "interface.0.output", ""),
-					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "is_enabled", "false"),
+					resource.TestCheckResourceAttr("opensearch_ml_model.custom_with_optional", "is_enabled", "true"),
+					testCheckOpensearchMLModelIsEnabledInAPI("opensearch_ml_model.custom_with_optional", true),
 				),
 			},
 			{
@@ -205,6 +214,9 @@ func TestAccOpensearchMLModel_ThirdParty(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_ml_model.thirdparty_minimal", "function_name", "REMOTE"),
 					resource.TestCheckResourceAttrSet("opensearch_ml_model.thirdparty_minimal", "model_group_id"),
 					resource.TestCheckResourceAttrSet("opensearch_ml_model.thirdparty_minimal", "connector_id"),
+					// When is_enabled is omitted it must default to true (schema Default).
+					resource.TestCheckResourceAttr("opensearch_ml_model.thirdparty_minimal", "is_enabled", "true"),
+					testCheckOpensearchMLModelIsEnabledInAPI("opensearch_ml_model.thirdparty_minimal", true),
 				),
 			},
 			{
@@ -228,6 +240,7 @@ func TestAccOpensearchMLModel_ThirdParty(t *testing.T) {
 					// Similar to 'additional_config' in model_config, this nested field is cleared when d.Set("guardrails", ...)
 					// overwrites the entire block with only API-returned fields. This is correct behavior - state should reflect API reality.
 					resource.TestCheckResourceAttr("opensearch_ml_model.thirdparty_with_optional", "is_enabled", "false"),
+					testCheckOpensearchMLModelIsEnabledInAPI("opensearch_ml_model.thirdparty_with_optional", false),
 				),
 			},
 			{
@@ -251,6 +264,7 @@ func TestAccOpensearchMLModel_ThirdParty(t *testing.T) {
 					// Similar to 'additional_config' in model_config, this nested field is cleared when d.Set("guardrails", ...)
 					// overwrites the entire block with only API-returned fields. This is correct behavior - state should reflect API reality.
 					resource.TestCheckResourceAttr("opensearch_ml_model.thirdparty_with_optional", "is_enabled", "true"),
+					testCheckOpensearchMLModelIsEnabledInAPI("opensearch_ml_model.thirdparty_with_optional", true),
 				),
 			},
 			{
@@ -398,6 +412,30 @@ func testCheckOpensearchMLModelExists(name string) resource.TestCheckFunc {
 	}
 }
 
+func testCheckOpensearchMLModelIsEnabledInAPI(name string, expected bool) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		resourceID, stateError := getResourceIDFromState(s, name)
+		if stateError != nil {
+			return stateError
+		}
+		conf := testAccOpendistroProvider.Meta().(*ProviderConf)
+
+		model, apiError := getMLModelFromAPI(context.Background(), conf, resourceID)
+		if apiError != nil {
+			return apiError
+		}
+
+		actual := true // absent means enabled (cluster default)
+		if v, ok := model["is_enabled"].(bool); ok {
+			actual = v
+		}
+		if actual != expected {
+			return fmt.Errorf("model %s: expected is_enabled=%t in cluster, got %t (raw: %v)", name, expected, actual, model["is_enabled"])
+		}
+		return nil
+	}
+}
+
 func testCheckOpensearchMLModelDeploymentStatus(name string, expectedStatus string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		resourceID, stateError := getResourceIDFromState(s, name)
@@ -462,7 +500,8 @@ resource "opensearch_ml_model" "os_pretrained_with_optional" {
   model_format   = "TORCH_SCRIPT"
   function_name  = "SPARSE_ENCODING"
   model_group_id = opensearch_ml_model_group.dependency.id
-  
+  is_enabled     = true
+
   deploy_after_registering = false
 }
 `
@@ -541,7 +580,7 @@ resource "opensearch_ml_model" "custom_with_optional" {
   interface {
     input = "{\"properties\":{\"parameters\":{\"properties\":{\"text\":{\"type\":\"string\",\"description\":\"Updated text field\"}}}}}"
   }
-  is_enabled = false
+  is_enabled = true
 
   deploy_after_registering = false
 }

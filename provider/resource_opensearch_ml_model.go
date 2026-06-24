@@ -67,6 +67,7 @@ func resourceOpensearchMLModel() *schema.Resource {
 			"is_enabled": {
 				Type:        schema.TypeBool,
 				Optional:    true,
+				Default:     true,
 				Description: "Whether the model is enabled. Disabled ML Models are unavailable to the Predict API requests regardless of the ML Model deployment status. Defaults to `true`.",
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
 					// When 'is_enabled' is set to false, the API doesn't return it.
@@ -390,10 +391,11 @@ func resourceOpensearchMLModelCreate(ctx context.Context, d *schema.ResourceData
 	if v, ok := d.GetOk("function_name"); ok {
 		payload["function_name"] = v.(string)
 	}
-	payload["is_enabled"] = false
-	if v, ok := d.GetOk("is_enabled"); ok {
-		payload["is_enabled"] = v.(bool)
-	}
+	// Note: OpenSearch seems to ignore this value in the register payload (it only persists the field
+	// via the Update Model API). We keep it in the registration payload in case a future version of the
+	// API uses it. The actual disabling (the default of the API is to enable) is done by an explicit update
+	// after registration (see below).
+	payload["is_enabled"] = d.Get("is_enabled").(bool)
 
 	// ============================================
 	// === OpenSearch-provided models
@@ -494,6 +496,12 @@ func resourceOpensearchMLModelCreate(ctx context.Context, d *schema.ResourceData
 
 	d.SetId(modelID)
 
+	// OpenSearch ignores `is_enabled` at registration, so a model registered with
+	// `is_enabled = false` would otherwise stay enabled.
+	if err := setMLModelEnabled(ctx, conf, modelID, d.Get("name").(string), d.Get("is_enabled").(bool)); err != nil {
+		return diag.Errorf("error disabling ML Model: %s", err)
+	}
+
 	// Deploy the model if deploy_after_registering is true or not set (defaults to true)
 	deployAfterRegistering := d.Get("deploy_after_registering").(bool)
 	if deployAfterRegistering {
@@ -545,10 +553,18 @@ func resourceOpensearchMLModelRead(ctx context.Context, d *schema.ResourceData, 
 			return diag.Errorf("error setting function_name: %s", err)
 		}
 	}
-	// Only update is_enabled when the API returns it. The API omits this field both when
-	// it is false and for model types that don't surface it (e.g. OS-provided pretrained,
-	// remote models). Leaving it unset keeps the config/prior-state value in place,
-	// which avoids a false diff on models where the default (true) is never echoed back.
+	// The OpenSearch model GET response never echos is_enabled, so the value in `d` is persisted
+	// (the planned value from Create / Update, which respects the default of `true`). The
+	// overwrite below is in case a future OpenSearch version starts returning the `is_enabled`
+	// value (or if it's already returned in special cases not caught during testing).
+	//
+	// Limitation: on Import there is no prior value and the schema default is not applied, so
+	// `d.Get` returns false; so an enabled model is imported with `is_enabled = false` until the
+	// next apply reconciles it (hence `is_enabled` is in ImportStateVerifyIgnore for the case
+	// where the config omits it).
+	if err := d.Set("is_enabled", d.Get("is_enabled").(bool)); err != nil {
+		return diag.Errorf("error setting is_enabled: %s", err)
+	}
 	if isEnabled, ok := model["is_enabled"].(bool); ok {
 		if err := d.Set("is_enabled", isEnabled); err != nil {
 			return diag.Errorf("error setting is_enabled: %s", err)
@@ -868,6 +884,27 @@ func buildModelConfigPayload(modelConfigMap map[string]interface{}) map[string]i
 	}
 
 	return cleanedModelConfig
+}
+
+func setMLModelEnabled(ctx context.Context, conf *ProviderConf, modelID string, modelName string, enabled bool) error {
+	jsonPayload, err := json.Marshal(map[string]interface{}{"is_enabled": enabled})
+	if err != nil {
+		return fmt.Errorf("failed to marshal 'is_enabled' update payload: %w", err)
+	}
+	url := conf.rawUrl + fmt.Sprintf("/_plugins/_ml/models/%s", modelID)
+	_, err = performRequestAndParse(ctx, conf.osClient, "PUT", url, strings.NewReader(string(jsonPayload)), "update ML Model 'is_enabled'")
+	if err != nil {
+		// Some model types (e.g. OpenSearch-provided pretrained SPARSE_ENCODING models) reject the update
+		// of the 'is_enabled' parameter with a 403 "... is not supported at this time". For those, 'is_enabled'
+		// cannot be changed, so we leave it as the OpenSearch default instead of failing the apply.
+		var httpErr *HTTPError
+		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusForbidden && strings.Contains(httpErr.Message, "is not supported at this time") {
+			log.Printf("[WARN] ML Model %s (ID %s) does not support updating 'is_enabled'; leaving it at the OpenSearch default. Error from OpenSearch: %s", modelName, modelID, httpErr.Message)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func deployMLModel(ctx context.Context, conf *ProviderConf, modelID string) error {
