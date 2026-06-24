@@ -16,7 +16,13 @@ services:
       - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456"
       - "plugins.security.ssl.http.enabled=false"
       - "plugins.ml_commons.only_run_on_ml_node=false"
-      - "plugins.ml_commons.native_memory_threshold=99"
+      # Disable the ML Commons memory circuit breakers in the test cluster. Tests
+      # register and deploy several real models back-to-back; and undeploy asynchronously on
+      # destroy so memory from a prior test can still be held when the next test deploys,
+      # tripping the breaker on resource-constrained CI runners ("Memory Circuit Breaker
+      # is open"). Both the native and JVM-heap breakers must be disabled.
+      - "plugins.ml_commons.native_memory_threshold=100"
+      - "plugins.ml_commons.jvm_heap_memory_threshold=100"
       - "plugins.ml_commons.connector_access_control_enabled=true"
       - "plugins.ml_commons.trusted_connector_endpoints_regex=^https?://.*"
       - "plugins.ml_commons.model_access_control_enabled=true"
