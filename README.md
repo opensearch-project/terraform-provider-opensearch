@@ -41,6 +41,10 @@ Examples of resources can be found in the examples directory.
 - [x] [Dashboards Tenant](https://opensearch.org/docs/latest/security/multi-tenancy/tenant-index/)
 - [x] [Alerting Monitors](https://opensearch.org/docs/latest/observing-your-data/alerting/monitors/)
 - [x] [Notification Channels](https://opensearch.org/docs/latest/observing-your-data/notifications/index/)
+- [x] ML Commons
+   - [x] [ML Connector](https://docs.opensearch.org/latest/ml-commons-plugin/api/connector-apis/index/)
+   - [x] [ML Model Group](https://docs.opensearch.org/latest/ml-commons-plugin/api/model-group-apis/index/)
+   - [x] [ML Model](https://docs.opensearch.org/latest/ml-commons-plugin/api/model-apis/index/)
 
 ### Running tests locally
 
