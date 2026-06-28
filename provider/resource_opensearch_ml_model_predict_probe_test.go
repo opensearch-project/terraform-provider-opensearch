@@ -96,7 +96,7 @@ func TestWaitForModelPredictReady_ImmediateSuccess(t *testing.T) {
 	shortenPredictProbeTimings(t, 5*time.Second)
 	fake := newFakePredictServer(t, []fakePredictResponse{predictSuccess})
 
-	err := waitForModelPredictReady(context.Background(), fake.conf(t), "m1", defaultPredictProbeBody);
+	err := waitForModelPredictReady(context.Background(), fake.conf(t), "m1", defaultPredictProbeBody)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestWaitForModelPredictReady_CustomProbeBody(t *testing.T) {
 	fake := newFakePredictServer(t, []fakePredictResponse{predictSuccess})
 
 	customBody := `{"text_docs": ["healthcheck"]}`
-	err := waitForModelPredictReady(context.Background(), fake.conf(t), "m1", customBody);
+	err := waitForModelPredictReady(context.Background(), fake.conf(t), "m1", customBody)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
