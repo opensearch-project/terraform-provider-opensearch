@@ -81,7 +81,11 @@ func TestDeployMLModel_HappyPath(t *testing.T) {
 }
 
 func TestDeployMLModel_PartiallyDeployedTriggersUndeployAndRedeploy(t *testing.T) {
-	fake := newFakeMLModelServer(t, []string{"PARTIALLY_DEPLOYED", "DEPLOYED"})
+	// States served in order by the fake GET handler:
+	//   [0] PARTIALLY_DEPLOYED - first deployAndWait returns this, triggering the retry path
+	//   [1] UNDEPLOYED         - undeployMLModel's post-undeploy poll sees UNDEPLOYED and returns
+	//   [2] DEPLOYED           - second deployAndWait returns DEPLOYED (success)
+	fake := newFakeMLModelServer(t, []string{"PARTIALLY_DEPLOYED", "UNDEPLOYED", "DEPLOYED"})
 
 	if err := deployMLModel(context.Background(), fake.conf(t), "m1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -111,7 +115,11 @@ func TestDeployMLModel_UndeployedTriggersRedeployOnly(t *testing.T) {
 }
 
 func TestDeployMLModel_FailsAfterSingleRetry(t *testing.T) {
-	fake := newFakeMLModelServer(t, []string{"PARTIALLY_DEPLOYED", "PARTIALLY_DEPLOYED"})
+	// States served in order:
+	//   [0] PARTIALLY_DEPLOYED - first deployAndWait returns this, triggering the retry path
+	//   [1] UNDEPLOYED         - undeployMLModel's post-undeploy poll sees UNDEPLOYED and returns
+	//   [2] PARTIALLY_DEPLOYED - second deployAndWait still not DEPLOYED → error
+	fake := newFakeMLModelServer(t, []string{"PARTIALLY_DEPLOYED", "UNDEPLOYED", "PARTIALLY_DEPLOYED"})
 
 	err := deployMLModel(context.Background(), fake.conf(t), "m1")
 	if err == nil {

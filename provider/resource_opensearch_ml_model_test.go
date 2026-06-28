@@ -84,12 +84,14 @@ func TestAccOpensearchMLModel_OSProvidedPretrained(t *testing.T) {
 				//     though it does return it for custom and third-party models
 				//   - version
 				//   - deploy_after_registering: attribute is only used by Provider, not by the OpenSearch API
+				//   - wait_for_predict: attribute is only used by Provider, not by the OpenSearch API
+				//   - predict_probe_body: attribute is only used by Provider, not by the OpenSearch API
 				//   - is_enabled: register ignores the field; the API only echoes it once an Update (PUT) has
 				//     persisted it. The provider always issues that PUT after register, but SPARSE_ENCODING
 				//     models reject it (403), so here the field is never persisted nor returned by GET and is
 				//     left to whatever the import writes (the zero value). Other model types persist it, which
 				//     is why their import steps do not ignore is_enabled.
-				ImportStateVerifyIgnore: []string{"description", "version", "deploy_after_registering", "is_enabled"},
+				ImportStateVerifyIgnore: []string{"description", "version", "deploy_after_registering", "wait_for_predict", "predict_probe_body", "is_enabled"},
 			},
 			// Note: OS-provided pretrained sparse encoding models cannot be updated via OpenSearch API
 			// The API returns 403: "The function category SPARSE_ENCODING is not supported at this time"
@@ -188,7 +190,9 @@ func TestAccOpensearchMLModel_Custom(t *testing.T) {
 				//   - version
 				//   - model_config.0.additional_config (nested field)
 				//   - deploy_after_registering: attribute is only used by Provider, not by the OpenSearch API
-				ImportStateVerifyIgnore: []string{"url", "version", "model_config.0.additional_config.#", "model_config.0.additional_config.0.%", "model_config.0.additional_config.0.space_type", "deploy_after_registering"},
+				//   - wait_for_predict: attribute is only used by Provider, not by the OpenSearch API
+				//   - predict_probe_body: attribute is only used by Provider, not by the OpenSearch API
+				ImportStateVerifyIgnore: []string{"url", "version", "model_config.0.additional_config.#", "model_config.0.additional_config.0.%", "model_config.0.additional_config.0.space_type", "deploy_after_registering", "wait_for_predict", "predict_probe_body"},
 			},
 		},
 	})
@@ -273,7 +277,9 @@ func TestAccOpensearchMLModel_ThirdParty(t *testing.T) {
 				ImportStateVerify: true,
 				// These fields are not returned by the OpenSearch API:
 				//   - deploy_after_registering: attribute is only used by Provider, not by the OpenSearch API
-				ImportStateVerifyIgnore: []string{"deploy_after_registering"},
+				//   - wait_for_predict: attribute is only used by Provider, not by the OpenSearch API
+				//   - predict_probe_body: attribute is only used by Provider, not by the OpenSearch API
+				ImportStateVerifyIgnore: []string{"deploy_after_registering", "wait_for_predict", "predict_probe_body"},
 			},
 		},
 	})
@@ -329,7 +335,9 @@ func TestAccOpensearchMLModel_GuardrailsModelType(t *testing.T) {
 				ImportStateVerify: true,
 				// These fields are not returned by the OpenSearch API:
 				//   - deploy_after_registering: attribute is only used by Provider, not by the OpenSearch API
-				ImportStateVerifyIgnore: []string{"deploy_after_registering"},
+				//   - wait_for_predict: attribute is only used by Provider, not by the OpenSearch API
+				//   - predict_probe_body: attribute is only used by Provider, not by the OpenSearch API
+				ImportStateVerifyIgnore: []string{"deploy_after_registering", "wait_for_predict", "predict_probe_body"},
 			},
 		},
 	})
@@ -841,6 +849,7 @@ resource "opensearch_ml_model" "with_deploy" {
   model_group_id           = opensearch_ml_model_group.dependency.id
   connector_id             = opensearch_ml_connector.dependency.id
   deploy_after_registering = true
+  wait_for_predict         = false
 }
 `, testAccOpensearchMLConnectorConfig_Dependency())
 }

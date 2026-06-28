@@ -17,10 +17,17 @@ import (
 )
 
 const (
-	maxModelRegistrationWait      = 120 * time.Second
-	modelRegistrationPollInterval = 2 * time.Second
-	maxModelDeploymentWait        = 120 * time.Second
-	modelDeploymentPollInterval   = 2 * time.Second
+	maxModelRegistrationWait               = 120 * time.Second
+	modelRegistrationPollInterval          = 2 * time.Second
+	maxModelDeploymentStateChangeWait      = 120 * time.Second
+	modelDeploymentStateChangePollInterval = 2 * time.Second
+)
+
+// Declared as vars so unit tests can override them.
+var (
+	maxPredictProbeWait      = 60 * time.Second
+	predictProbePollInterval = 5 * time.Second
+	defaultPredictProbeBody  = `{"parameters": {"inputText": "healthcheck"}}`
 )
 
 func resourceOpensearchMLModel() *schema.Resource {
@@ -81,6 +88,18 @@ func resourceOpensearchMLModel() *schema.Resource {
 				Default:     true,
 				ForceNew:    true,
 				Description: "Whether to deploy the model after registration. Defaults to `true`.",
+			},
+			"wait_for_predict": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+				Description: "When true (default), polls `POST /_plugins/_ml/models/<id>/_predict` after deployment to confirm the model is actually usable in memory — not just `DEPLOYED` in the index. Only takes effect when `deploy_after_registering = true`. Set to false to rely only on `model_state`.",
+			},
+			"predict_probe_body": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     defaultPredictProbeBody,
+				Description: "JSON body sent to `POST /_plugins/_ml/models/<id>/_predict` when probing readiness. Defaults to `{\"parameters\": {\"inputText\": \"healthcheck\"}}`, which works for remote connector models. Override this for models whose predict API expects a different input format (e.g. `{\"text_docs\": [\"healthcheck\"]}`). Only takes effect when `wait_for_predict = true`.",
 			},
 
 			// ========================================================
@@ -502,11 +521,17 @@ func resourceOpensearchMLModelCreate(ctx context.Context, d *schema.ResourceData
 		return diag.Errorf("error disabling ML Model: %s", err)
 	}
 
-	// Deploy the model if deploy_after_registering is true or not set (defaults to true)
+	// Deploy the model if 'deploy_after_registering' is true or not set (defaults to true)
 	deployAfterRegistering := d.Get("deploy_after_registering").(bool)
 	if deployAfterRegistering {
 		if err := deployMLModel(ctx, conf, modelID); err != nil {
 			return diag.Errorf("error deploying ML Model: %s", err)
+		}
+		// Confirm the model is usable if 'wait_for_predict' is true or not set (defaults to true)
+		if d.Get("wait_for_predict").(bool) {
+			if err := waitForModelPredictReady(ctx, conf, modelID, d.Get("predict_probe_body").(string)); err != nil {
+				return diag.Errorf("error waiting for ML Model predict readiness: %s", err)
+			}
 		}
 	}
 
@@ -945,7 +970,7 @@ func deployAndWaitForModel(ctx context.Context, conf *ProviderConf, modelID stri
 		return "", err
 	}
 
-	return waitForModelDeployment(ctx, conf.osClient, conf.rawUrl, modelID)
+	return waitForModelDeploymentStateChange(ctx, conf.osClient, conf.rawUrl, modelID, "DEPLOYED", "PARTIALLY_DEPLOYED", "UNDEPLOYED")
 }
 
 func undeployMLModel(ctx context.Context, conf *ProviderConf, modelID string) error {
@@ -963,7 +988,8 @@ func undeployMLModel(ctx context.Context, conf *ProviderConf, modelID string) er
 		return err
 	}
 
-	return nil
+	_, err = waitForModelDeploymentStateChange(ctx, conf.osClient, conf.rawUrl, modelID, "UNDEPLOYED", "REGISTERED")
+	return err
 }
 
 func waitForModelRegistrationTask(ctx context.Context, client *opensearch.Client, baseURL, taskID string) (string, error) {
@@ -1000,27 +1026,42 @@ func waitForModelRegistrationTask(ctx context.Context, client *opensearch.Client
 	return "", fmt.Errorf("timeout waiting for ML Model registration task to complete after %s", maxModelRegistrationWait)
 }
 
-func waitForModelDeployment(ctx context.Context, client *opensearch.Client, baseURL, modelID string) (string, error) {
+// waitForModelDeploymentStateChange polls 'model_state' until it matches any of targetStates,
+// returning the observed state. Always errors on DEPLOY_FAILED or context cancellation/timeout.
+func waitForModelDeploymentStateChange(ctx context.Context, client *opensearch.Client, baseURL, modelID string, targetStates ...string) (string, error) {
 	url := baseURL + fmt.Sprintf("/_plugins/_ml/models/%s", modelID)
 
-	deadline := time.Now().Add(maxModelDeploymentWait)
+	isTarget := func(state string) bool {
+		for _, s := range targetStates {
+			if state == s {
+				return true
+			}
+		}
+		return false
+	}
+
+	deadline := time.Now().Add(maxModelDeploymentStateChangeWait)
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
-			return "", fmt.Errorf("context cancelled while waiting for ML Model deployment: %w", ctx.Err())
+			return "", fmt.Errorf("context cancelled while waiting for ML Model state change: %w", ctx.Err())
 		default:
 		}
 
 		result, err := performRequestAndParse(ctx, client, "GET", url, nil, "get ML Model status")
 		if err != nil {
+			var httpErr *HTTPError
+			if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+				return "UNDEPLOYED", nil
+			}
 			return "", err
 		}
 
 		modelState, _ := result["model_state"].(string)
-		switch modelState {
-		case "DEPLOYED", "PARTIALLY_DEPLOYED", "UNDEPLOYED":
+		if isTarget(modelState) {
 			return modelState, nil
-		case "DEPLOY_FAILED":
+		}
+		if modelState == "DEPLOY_FAILED" {
 			errorMsg := "unknown error"
 			if errStr, ok := result["error"].(string); ok && errStr != "" {
 				errorMsg = errStr
@@ -1032,10 +1073,35 @@ func waitForModelDeployment(ctx context.Context, client *opensearch.Client, base
 			return modelState, fmt.Errorf("ML Model deployment failed (model_id: %s, state: %s): %s", modelID, modelState, errorMsg)
 		}
 
-		time.Sleep(modelDeploymentPollInterval)
+		time.Sleep(modelDeploymentStateChangePollInterval)
 	}
 
-	return "", fmt.Errorf("timeout waiting for ML Model deployment to complete after %s", maxModelDeploymentWait)
+	return "", fmt.Errorf("timeout waiting for ML Model to reach state %v after %s (model_id: %s)", targetStates, maxModelDeploymentStateChangeWait, modelID)
+}
+
+func waitForModelPredictReady(ctx context.Context, conf *ProviderConf, modelID string, probeBody string) error {
+	url := conf.rawUrl + fmt.Sprintf("/_plugins/_ml/models/%s/_predict", modelID)
+	deadline := time.Now().Add(maxPredictProbeWait)
+
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context cancelled while waiting for ML Model predict readiness: %w", ctx.Err())
+		default:
+		}
+
+		result, err := performRequestAndParse(ctx, conf.osClient, "POST", url,
+			strings.NewReader(probeBody), "probe ML Model predict readiness")
+		if err == nil {
+			if _, ok := result["inference_results"]; ok {
+				return nil
+			}
+		}
+
+		time.Sleep(predictProbePollInterval)
+	}
+
+	return fmt.Errorf("timeout waiting for ML Model predict readiness after %s (model_id: %s): model_state is DEPLOYED but _predict does not return inference_results", maxPredictProbeWait, modelID)
 }
 
 func extractTaskErrorMessage(taskResult map[string]interface{}) string {
