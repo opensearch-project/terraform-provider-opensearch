@@ -76,8 +76,7 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 					return warnings, errors
 				},
 				StateFunc: func(v interface{}) string {
-					jsonStr, _ := structure.NormalizeJsonString(v)
-					return stripDashboardObjectServerFields(jsonStr)
+					return normalizeDashboardObjectForState(v)
 				},
 				Description: "The JSON body of the dashboard object.",
 			},
@@ -181,7 +180,7 @@ func resourceOpensearchDashboardObjectRead(d *schema.ResourceData, meta interfac
 	// Strip server-managed fields so state stays clean and does not perpetually
 	// diff against config (StateFunc is not applied on d.Set).
 	ds := &resourceDataSetter{d: d}
-	ds.set("body", stripDashboardObjectServerFields(string(bodyBytes)))
+	ds.set("body", normalizeDashboardObjectForState(string(bodyBytes)))
 
 	return ds.err
 }
@@ -236,15 +235,23 @@ func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interf
 	return elastic7DeleteDashboardObject(client, indexStr, d.Id(), tenantNameStr)
 }
 
-// stripDashboardObjectServerFields removes server-managed fields from a
-// serialized dashboard object body array that are not user-controlled:
-//   - _source.updated_at      – always overwritten by OpenSearch on every write
+// normalizeDashboardObjectForState normalizes and strips server-managed fields
+// from a dashboard object body array:
+//   - _source.updated_at 			   – always overwritten by OpenSearch on every write
 //   - _source["index-pattern"].fields – a cached field list maintained by Dashboards
 //
 // This is called both from the StateFunc (to normalize the config value) and
 // from the Read function (to normalize the value written to state via d.Set,
 // since the SDK does not apply StateFunc during d.Set).
-func stripDashboardObjectServerFields(bodyStr string) string {
+func normalizeDashboardObjectForState(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	bodyStr, ok := v.(string)
+	if !ok {
+		return ""
+	}
+
 	var body []interface{}
 	if err := json.Unmarshal([]byte(bodyStr), &body); err != nil {
 		return bodyStr
