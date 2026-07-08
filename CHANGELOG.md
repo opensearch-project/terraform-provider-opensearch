@@ -3,6 +3,7 @@
 ### Changed
 
 ### Added
+* Support the `search.cancel_after_time_interval` persistent cluster setting via `search_cancel_after_time_interval` on `opensearch_cluster_settings`
 
 ### Fixed
 

@@ -33,6 +33,7 @@ var (
 		"network.breaker.inflight_requests.limit",
 		"script.max_compilations_rate",
 		"search.default_search_timeout",
+		"search.cancel_after_time_interval",
 		"action.auto_create_index",
 		"cluster.routing.allocation.enable",
 		"cluster.search.request.slowlog.level",
@@ -305,6 +306,11 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "A time string setting a cluster-wide default timeout for all search requests",
+			},
+			"search_cancel_after_time_interval": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "A time string setting the default timeout for all search requests at the coordinating node level, after which the request is cancelled; defaults to -1 (no timeout)",
 			},
 			"action_auto_create_index": {
 				Type:         schema.TypeString,
