@@ -75,8 +75,8 @@ EOF
 - `aws_secret_key` (String) The secret key for use with AWS OpenSearch Service domains
 - `aws_signature_service` (String) AWS service name used in the credential scope of signed requests to OpenSearch.
 - `aws_token` (String) The session token for use with AWS OpenSearch Service domains
-- `aws_web_identity_role_arn` (String) Amazon Resource Name of an IAM Role to assume via AssumeRoleWithWebIdentity. Defaults to the standard AWS_ROLE_ARN environment variable, so EKS IRSA works with no configuration.
-- `aws_web_identity_token_file` (String) Path to a file containing an OIDC web identity token. Defaults to the standard AWS_WEB_IDENTITY_TOKEN_FILE environment variable, so EKS IRSA works with no configuration.
+- `aws_web_identity_role_arn` (String) Amazon Resource Name of an IAM Role to assume via AssumeRoleWithWebIdentity. Falls back to the standard AWS_ROLE_ARN environment variable (so EKS IRSA works with no configuration), unless an explicit aws_profile is set, in which case the environment variable is ignored — mirroring the AWS CLI.
+- `aws_web_identity_token_file` (String) Path to a file containing an OIDC web identity token. Falls back to the standard AWS_WEB_IDENTITY_TOKEN_FILE environment variable (so EKS IRSA works with no configuration), unless an explicit aws_profile is set, in which case the environment variable is ignored — mirroring the AWS CLI.
 - `cacert_file` (String) A Custom CA certificate
 - `client_cert_path` (String) A X509 certificate to connect to OpenSearch
 - `client_key_path` (String) A X509 key to connect to OpenSearch
