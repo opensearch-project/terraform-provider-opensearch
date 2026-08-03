@@ -623,11 +623,6 @@ func assumeRoleCredentials(region, roleARN, roleExternalID, roleSessionName, pro
 		assumeRoleProvider.ExternalID = aws.String(roleExternalID)
 	}
 
-	// Apply the session name to the plain assume-role path, not just the web
-	// identity path, matching the AWS CLI (botocore AssumeRoleProvider maps
-	// role_session_name / AWS_ROLE_SESSION_NAME to RoleSessionName):
-	//   https://github.com/boto/botocore/blob/d6092247/botocore/credentials.py#L1643-L1645
-	//   https://github.com/boto/botocore/blob/d6092247/botocore/credentials.py#L1884
 	if roleSessionName != "" {
 		assumeRoleProvider.RoleSessionName = roleSessionName
 	}
