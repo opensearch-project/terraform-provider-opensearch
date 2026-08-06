@@ -42,8 +42,9 @@ func TestAccOpensearchDashboardObject(t *testing.T) {
 			{
 				// Verify that server-managed fields (index-pattern.fields, updated_at)
 				// do not cause a perpetual diff after the index pattern is created.
-				Config:   indexPatternConfig,
-				PlanOnly: true,
+				Config:             indexPatternConfig,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})
