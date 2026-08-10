@@ -9,6 +9,48 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
+const (
+	testOpensearchDataStreamImport = `
+  resource "opensearch_data_stream" "test1import" {
+    name = "terraform-test1import"
+    depends_on = [
+      opensearch_index_template.test1import
+    ]
+  }
+  resource "opensearch_index_template" "test1import" {
+    name = "terraform-test1import"
+    body = <<EOF
+          {
+          	"index_patterns": ["terraform-test1import"],
+          	"data_stream": {
+            	"timestamp_field": {
+                "name": "@timestamp"
+                }
+              }
+          }
+          EOF
+  }
+`
+)
+
+func TestAccOpensearchDataStream_importBasic(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testCheckOpensearchDataStreamDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testOpensearchDataStreamImport,
+			},
+			{
+				ResourceName:      "opensearch_data_stream.test1import",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func TestAccOpensearchDataStream(t *testing.T) {
 	provider := Provider()
 	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
