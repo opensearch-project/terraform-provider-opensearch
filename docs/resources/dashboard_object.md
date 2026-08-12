@@ -112,4 +112,19 @@ EOF
 
 - `id` (String) The ID of this resource.
 
+## Import
 
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import from default (.kibana/global) scope
+terraform import opensearch_dashboard_object.test_visualization response-time-percentile
+
+# Import from a tenant scope
+terraform import opensearch_dashboard_object.test_visualization 'response-time-percentile,tenant_name=tenant_test'
+
+# Import from a custom Dashboards index
+terraform import opensearch_dashboard_object.test_visualization 'response-time-percentile,index=.kibana_custom'
+```

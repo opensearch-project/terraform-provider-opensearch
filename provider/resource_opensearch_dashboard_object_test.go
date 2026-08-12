@@ -13,6 +13,75 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
+func TestParseDashboardObjectImportID(t *testing.T) {
+	testCases := []struct {
+		name       string
+		input      string
+		objectID   string
+		tenantName string
+		indexName  string
+		expectErr  bool
+	}{
+		{
+			name:      "default",
+			input:     "response-time-percentile",
+			objectID:  "response-time-percentile",
+			indexName: "",
+		},
+		{
+			name:       "tenant name",
+			input:      "response-time-percentile,tenant_name=tenant_test",
+			objectID:   "response-time-percentile",
+			tenantName: "tenant_test",
+		},
+		{
+			name:      "custom index",
+			input:     "response-time-percentile,index=.kibana_custom",
+			objectID:  "response-time-percentile",
+			indexName: ".kibana_custom",
+		},
+		{
+			name:      "empty object id",
+			input:     ",tenant_name=tenant_test",
+			expectErr: true,
+		},
+		{
+			name:      "unknown key",
+			input:     "response-time-percentile,foo=bar",
+			expectErr: true,
+		},
+		{
+			name:      "conflicting keys",
+			input:     "response-time-percentile,tenant_name=tenant_test,index=.kibana_custom",
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			objectID, tenantName, indexName, err := parseDashboardObjectImportID(tc.input)
+			if tc.expectErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if objectID != tc.objectID {
+				t.Fatalf("expected object_id %q, got %q", tc.objectID, objectID)
+			}
+			if tenantName != tc.tenantName {
+				t.Fatalf("expected tenant_name %q, got %q", tc.tenantName, tenantName)
+			}
+			if indexName != tc.indexName {
+				t.Fatalf("expected index %q, got %q", tc.indexName, indexName)
+			}
+		})
+	}
+}
+
 func TestAccOpensearchDashboardObject(t *testing.T) {
 	provider := Provider()
 	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
@@ -32,6 +101,12 @@ func TestAccOpensearchDashboardObject(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_visualization", "response-time-percentile", ""),
 				),
+			},
+			{
+				ResourceName:      "opensearch_dashboard_object.test_visualization",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateId:     "response-time-percentile",
 			},
 			{
 				Config: indexPatternConfig,
@@ -63,6 +138,12 @@ func TestAccOpensearchDashboardObjectWithTenant(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_dashboard_tenant.tenant_test", "tenant_name", "tenant_test"),
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_visualization", "response-time-percentile", "tenant_test"),
 				),
+			},
+			{
+				ResourceName:      "opensearch_dashboard_object.test_visualization",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateId:     "response-time-percentile,tenant_name=tenant_test",
 			},
 			{
 				Config: indexPatternConfig,
