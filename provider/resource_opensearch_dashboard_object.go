@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -24,6 +25,9 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 		Read:        resourceOpensearchDashboardObjectRead,
 		Update:      resourceOpensearchDashboardObjectUpdate,
 		Delete:      resourceOpensearchDashboardObjectDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceOpensearchDashboardObjectImport,
+		},
 		CustomizeDiff: customdiff.ForceNewIfChange(
 			"body",
 			// force recreation if _id of object changed
@@ -98,6 +102,40 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 			},
 		},
 	}
+}
+
+func resourceOpensearchDashboardObjectImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	objectID, tenantName, indexName, err := parseDashboardObjectImportID(d.Id())
+	if err != nil {
+		return nil, err
+	}
+
+	if tenantName != "" {
+		if err := d.Set("tenant_name", tenantName); err != nil {
+			return nil, err
+		}
+	}
+	if indexName != "" {
+		if err := d.Set("index", indexName); err != nil {
+			return nil, err
+		}
+	}
+
+	d.SetId(objectID)
+
+	seedBodyBytes, err := json.Marshal([]map[string]interface{}{{
+		"_id":     objectID,
+		"_source": map[string]interface{}{},
+	}})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := d.Set("body", string(seedBodyBytes)); err != nil {
+		return nil, err
+	}
+
+	return []*schema.ResourceData{d}, nil
 }
 
 func resourceOpensearchDashboardObjectCreate(d *schema.ResourceData, meta interface{}) error {
@@ -306,7 +344,13 @@ type dashboardObjectState struct {
 func readDashboardObjectState(d *schema.ResourceData) (*dashboardObjectState, error) {
 	dashboardObject, err := readBodyInterface(d.Get("body"))
 	if err != nil {
-		return nil, fmt.Errorf("could not read body interface: %+v", err)
+		if d.Id() == "" {
+			return nil, fmt.Errorf("could not read body interface: %+v", err)
+		}
+		dashboardObject = map[string]interface{}{
+			"_id":     d.Id(),
+			"_source": map[string]interface{}{},
+		}
 	}
 	// Calculate index if tenantName is given
 	indexName := d.Get("index").(string)
@@ -321,12 +365,80 @@ func readDashboardObjectState(d *schema.ResourceData) (*dashboardObjectState, er
 	if indexName == "" {
 		indexName = ".kibana"
 	}
+
+	objectID, ok := dashboardObject["_id"].(string)
+	if !ok || objectID == "" {
+		if d.Id() == "" {
+			return nil, fmt.Errorf("dashboard object body missing valid _id")
+		}
+		objectID = d.Id()
+		dashboardObject["_id"] = objectID
+	}
+
+	if dashboardObject["_source"] == nil {
+		dashboardObject["_source"] = map[string]interface{}{}
+	}
+
 	return &dashboardObjectState{
 		index:           indexName,
 		tenantName:      tenantName,
 		dashboardObject: dashboardObject,
-		id:              dashboardObject["_id"].(string),
+		id:              objectID,
 	}, nil
+}
+
+func parseDashboardObjectImportID(input string) (string, string, string, error) {
+	if input == "" {
+		return "", "", "", fmt.Errorf("invalid import ID: expected object_id[,tenant_name=<name>][,index=<name>]")
+	}
+
+	parts := strings.Split(input, ",")
+	objectID := strings.TrimSpace(parts[0])
+	if objectID == "" {
+		return "", "", "", fmt.Errorf("invalid import ID %q: object_id cannot be empty", input)
+	}
+
+	tenantName := ""
+	indexName := ""
+
+	for _, raw := range parts[1:] {
+		part := strings.TrimSpace(raw)
+		if part == "" {
+			continue
+		}
+
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			return "", "", "", fmt.Errorf("invalid import ID %q: expected key=value segment %q", input, part)
+		}
+
+		key := strings.TrimSpace(kv[0])
+		value := strings.TrimSpace(kv[1])
+		if value == "" {
+			return "", "", "", fmt.Errorf("invalid import ID %q: value for %q cannot be empty", input, key)
+		}
+
+		switch key {
+		case "tenant_name":
+			if tenantName != "" {
+				return "", "", "", fmt.Errorf("invalid import ID %q: tenant_name provided more than once", input)
+			}
+			tenantName = value
+		case "index":
+			if indexName != "" {
+				return "", "", "", fmt.Errorf("invalid import ID %q: index provided more than once", input)
+			}
+			indexName = value
+		default:
+			return "", "", "", fmt.Errorf("invalid import ID %q: unsupported key %q", input, key)
+		}
+	}
+
+	if tenantName != "" && indexName != "" {
+		return "", "", "", fmt.Errorf("invalid import ID %q: tenant_name conflicts with index", input)
+	}
+
+	return objectID, tenantName, indexName, nil
 }
 
 func readBodyInterface(i interface{}) (map[string]interface{}, error) {
