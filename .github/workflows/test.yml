@@ -69,7 +69,7 @@ jobs:
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: ${{ runner.os }}-go-
     - name: Run Docker containers
-      run: docker compose up --detach
+      run: docker compose --profile dashboards up --detach
       env:
         OSS_IMAGE: "${{ matrix.oss-image }}:${{ matrix.version }}"
         OS_COMMAND: "${{matrix.OS_COMMAND}}"
@@ -95,12 +95,17 @@ jobs:
       # ensure that OS has come up and is available
       run: |
         ./script/wait-for-endpoint --timeout=60 http://admin:myStrongPassword123%40456@localhost:9200
+    - name: Wait for OpenSearch Dashboards
+      # ensure that Dashboards has come up and is available, used by opensearch_dashboard tests
+      run: |
+        ./script/wait-for-endpoint --timeout=120 http://admin:myStrongPassword123%40456@localhost:5601/api/status
     - name: Dump docker logs on failure
       if: failure()
       uses: jwalton/gh-docker-logs@2741064ab9d7af54b0b1ffb6076cf64c16f0220e # v2.2.2
     - name: Run the tests
       run: |
         export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
+        export OPENSEARCH_DASHBOARDS_URL=http://admin:myStrongPassword123%40456@localhost:5601
         export TF_LOG=INFO
         TF_ACC=1 go test ./... -v -parallel 20 -cover -short
         # check goreleaser config for deprecations

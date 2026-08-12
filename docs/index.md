@@ -77,6 +77,7 @@ EOF
 - `cacert_file` (String) A Custom CA certificate
 - `client_cert_path` (String) A X509 certificate to connect to OpenSearch
 - `client_key_path` (String) A X509 key to connect to OpenSearch
+- `dashboards_url` (String) OpenSearch Dashboards URL, used by resources that call the Dashboards Saved Objects API (e.g. `opensearch_dashboard`). Reuses the `username`/`password`/AWS credentials configured above. If unset, defaults to `<url>/_dashboards`, the path used by Amazon OpenSearch Service and by self-managed deployments that reverse-proxy Dashboards behind that base path. Set this explicitly if Dashboards is reachable at a separate host or port.
 - `healthcheck` (Boolean) Set the client healthcheck option for the OpenSearch client. Healthchecking is designed for direct access to the cluster.
 - `host_override` (String) If provided, sets the 'Host' header of requests and the 'ServerName' for certificate validation to this value. See the documentation on connecting to OpenSearch via an SSH tunnel.
 - `insecure` (Boolean) Disable SSL verification of API calls

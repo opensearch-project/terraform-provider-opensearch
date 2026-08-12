@@ -68,6 +68,8 @@ type ProviderConf struct {
 	keyPemPath              string
 	hostOverride            string
 	proxy                   string
+	dashboardsUrl           string
+	parsedDashboardsUrl     *url.URL
 	// determined after connecting to the server
 	flavor ServerFlavor
 
@@ -226,6 +228,12 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Description: "Proxy URL to use for requests to OpenSearch.",
 			},
+			"dashboards_url": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_DASHBOARDS_URL", ""),
+				Description: "OpenSearch Dashboards URL, used by resources that call the Dashboards Saved Objects API (e.g. `opensearch_dashboard`). Reuses the `username`/`password`/AWS credentials configured above. If unset, defaults to `<url>/_dashboards`, the path used by Amazon OpenSearch Service and by self-managed deployments that reverse-proxy Dashboards behind that base path. Set this explicitly if Dashboards is reachable at a separate host or port.",
+			},
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
@@ -237,6 +245,7 @@ func Provider() *schema.Provider {
 			"opensearch_index":                     resourceOpensearchIndex(),
 			"opensearch_ingest_pipeline":           resourceOpensearchIngestPipeline(),
 			"opensearch_dashboard_object":          resourceOpensearchDashboardObject(),
+			"opensearch_dashboard":                 resourceOpensearchDashboard(),
 			"opensearch_audit_config":              resourceOpenSearchAuditConfig(),
 			"opensearch_ism_policy_mapping":        resourceOpenSearchISMPolicyMapping(),
 			"opensearch_ism_policy":                resourceOpenSearchISMPolicy(),
@@ -270,6 +279,15 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 		return nil, diag.FromErr(err)
 	}
 
+	dashboardsUrl := d.Get("dashboards_url").(string)
+	var parsedDashboardsUrl *url.URL
+	if dashboardsUrl != "" {
+		parsedDashboardsUrl, err = url.Parse(dashboardsUrl)
+		if err != nil {
+			return nil, diag.FromErr(err)
+		}
+	}
+
 	conf := &ProviderConf{
 		rawUrl:             rawUrl,
 		insecure:           d.Get("insecure").(bool),
@@ -297,6 +315,8 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 		keyPemPath:              d.Get("client_key_path").(string),
 		hostOverride:            d.Get("host_override").(string),
 		proxy:                   d.Get("proxy").(string),
+		dashboardsUrl:           dashboardsUrl,
+		parsedDashboardsUrl:     parsedDashboardsUrl,
 	}
 
 	osClient, err := getOSClient(conf)
@@ -515,6 +535,18 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 	}
 
 	return client, nil
+}
+
+// dashboardsSavedObjectsPath builds the request path for the OpenSearch
+// Dashboards Saved Objects API. When dashboards_url isn't configured, the
+// Dashboards API is assumed to be reachable at the "/_dashboards" base path
+// on the primary OpenSearch url, matching the layout used by Amazon
+// OpenSearch Service and by reverse-proxied self-managed deployments.
+func dashboardsSavedObjectsPath(conf *ProviderConf, suffix string) string {
+	if conf.dashboardsUrl != "" {
+		return "/api/saved_objects" + suffix
+	}
+	return "/_dashboards/api/saved_objects" + suffix
 }
 
 func assumeRoleCredentials(region, roleARN, roleExternalID, profile string, endpoint string) *awscredentials.Credentials {
