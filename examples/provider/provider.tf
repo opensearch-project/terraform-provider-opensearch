@@ -3,6 +3,13 @@ provider "opensearch" {
   url = "http://127.0.0.1:9200"
 }
 
+# Configure the OpenSearch provider for resources backed by OpenSearch Dashboards APIs
+provider "opensearch" {
+  alias          = "dashboards"
+  url            = "http://127.0.0.1:9200"
+  dashboards_url = "http://127.0.0.1:5601"
+}
+
 # Create an index template
 resource "opensearch_index_template" "template_1" {
   name = "template_1"

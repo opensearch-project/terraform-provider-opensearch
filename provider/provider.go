@@ -44,6 +44,7 @@ var minimalOpensearchServerlessVersion = "2.0.0"
 
 type ProviderConf struct {
 	rawUrl                  string
+	dashboardsUrl           string
 	insecure                bool
 	sniffing                bool
 	healthchecking          bool
@@ -53,6 +54,7 @@ type ProviderConf struct {
 	token                   string
 	tokenName               string
 	parsedUrl               *url.URL
+	parsedDashboardsUrl     *url.URL
 	signAWSRequests         bool
 	osVersion               string
 	pingTimeoutSeconds      int
@@ -83,6 +85,12 @@ func Provider() *schema.Provider {
 				Required:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_URL", nil),
 				Description: "OpenSearch URL",
+			},
+			"dashboards_url": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_DASHBOARDS_URL", ""),
+				Description: "OpenSearch Dashboards URL. Required for OpenSearch Dashboards API resources such as workspaces.",
 			},
 			"sniff": {
 				Type:        schema.TypeBool,
@@ -229,30 +237,32 @@ func Provider() *schema.Provider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"opensearch_cluster_settings":          resourceOpensearchClusterSettings(),
-			"opensearch_component_template":        resourceOpensearchComponentTemplate(),
-			"opensearch_composable_index_template": resourceOpensearchComposableIndexTemplate(),
-			"opensearch_data_stream":               resourceOpensearchDataStream(),
-			"opensearch_index_template":            resourceOpensearchIndexTemplate(),
-			"opensearch_index":                     resourceOpensearchIndex(),
-			"opensearch_ingest_pipeline":           resourceOpensearchIngestPipeline(),
-			"opensearch_dashboard_object":          resourceOpensearchDashboardObject(),
-			"opensearch_audit_config":              resourceOpenSearchAuditConfig(),
-			"opensearch_ism_policy_mapping":        resourceOpenSearchISMPolicyMapping(),
-			"opensearch_ism_policy":                resourceOpenSearchISMPolicy(),
-			"opensearch_dashboard_tenant":          resourceOpenSearchDashboardTenant(),
-			"opensearch_monitor":                   resourceOpenSearchMonitor(),
-			"opensearch_role":                      resourceOpenSearchRole(),
-			"opensearch_roles_mapping":             resourceOpenSearchRolesMapping(),
-			"opensearch_user":                      resourceOpenSearchUser(),
-			"opensearch_script":                    resourceOpensearchScript(),
-			"opensearch_snapshot_repository":       resourceOpensearchSnapshotRepository(),
-			"opensearch_channel_configuration":     resourceOpenSearchChannelConfiguration(),
-			"opensearch_anomaly_detection":         resourceOpenSearchAnomalyDetection(),
-			"opensearch_sm_policy":                 resourceOpenSearchSMPolicy(),
-			"opensearch_ml_connector":              resourceOpensearchMLConnector(),
-			"opensearch_ml_model_group":            resourceOpensearchMLModelGroup(),
-			"opensearch_ml_model":                  resourceOpensearchMLModel(),
+			"opensearch_cluster_settings":            resourceOpensearchClusterSettings(),
+			"opensearch_component_template":          resourceOpensearchComponentTemplate(),
+			"opensearch_composable_index_template":   resourceOpensearchComposableIndexTemplate(),
+			"opensearch_data_stream":                 resourceOpensearchDataStream(),
+			"opensearch_index_template":              resourceOpensearchIndexTemplate(),
+			"opensearch_index":                       resourceOpensearchIndex(),
+			"opensearch_ingest_pipeline":             resourceOpensearchIngestPipeline(),
+			"opensearch_dashboard_object":            resourceOpensearchDashboardObject(),
+			"opensearch_dashboard_workspace":         resourceOpensearchDashboardWorkspace(),
+			"opensearch_dashboard_workspace_objects": resourceOpensearchDashboardWorkspaceObjects(),
+			"opensearch_audit_config":                resourceOpenSearchAuditConfig(),
+			"opensearch_ism_policy_mapping":          resourceOpenSearchISMPolicyMapping(),
+			"opensearch_ism_policy":                  resourceOpenSearchISMPolicy(),
+			"opensearch_dashboard_tenant":            resourceOpenSearchDashboardTenant(),
+			"opensearch_monitor":                     resourceOpenSearchMonitor(),
+			"opensearch_role":                        resourceOpenSearchRole(),
+			"opensearch_roles_mapping":               resourceOpenSearchRolesMapping(),
+			"opensearch_user":                        resourceOpenSearchUser(),
+			"opensearch_script":                      resourceOpensearchScript(),
+			"opensearch_snapshot_repository":         resourceOpensearchSnapshotRepository(),
+			"opensearch_channel_configuration":       resourceOpenSearchChannelConfiguration(),
+			"opensearch_anomaly_detection":           resourceOpenSearchAnomalyDetection(),
+			"opensearch_sm_policy":                   resourceOpenSearchSMPolicy(),
+			"opensearch_ml_connector":                resourceOpensearchMLConnector(),
+			"opensearch_ml_model_group":              resourceOpensearchMLModelGroup(),
+			"opensearch_ml_model":                    resourceOpensearchMLModel(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
@@ -269,23 +279,33 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 	if err != nil {
 		return nil, diag.FromErr(err)
 	}
+	dashboardsUrl := d.Get("dashboards_url").(string)
+	var parsedDashboardsUrl *url.URL
+	if dashboardsUrl != "" {
+		parsedDashboardsUrl, err = url.Parse(dashboardsUrl)
+		if err != nil {
+			return nil, diag.FromErr(err)
+		}
+	}
 
 	conf := &ProviderConf{
-		rawUrl:             rawUrl,
-		insecure:           d.Get("insecure").(bool),
-		sniffing:           d.Get("sniff").(bool),
-		healthchecking:     d.Get("healthcheck").(bool),
-		cacertFile:         d.Get("cacert_file").(string),
-		username:           d.Get("username").(string),
-		password:           d.Get("password").(string),
-		token:              d.Get("token").(string),
-		tokenName:          d.Get("token_name").(string),
-		parsedUrl:          parsedUrl,
-		signAWSRequests:    d.Get("sign_aws_requests").(bool),
-		awsSig4Service:     d.Get("aws_signature_service").(string),
-		osVersion:          d.Get("opensearch_version").(string),
-		pingTimeoutSeconds: d.Get("version_ping_timeout").(int),
-		awsRegion:          d.Get("aws_region").(string),
+		rawUrl:              rawUrl,
+		dashboardsUrl:       dashboardsUrl,
+		insecure:            d.Get("insecure").(bool),
+		sniffing:            d.Get("sniff").(bool),
+		healthchecking:      d.Get("healthcheck").(bool),
+		cacertFile:          d.Get("cacert_file").(string),
+		username:            d.Get("username").(string),
+		password:            d.Get("password").(string),
+		token:               d.Get("token").(string),
+		tokenName:           d.Get("token_name").(string),
+		parsedUrl:           parsedUrl,
+		parsedDashboardsUrl: parsedDashboardsUrl,
+		signAWSRequests:     d.Get("sign_aws_requests").(bool),
+		awsSig4Service:      d.Get("aws_signature_service").(string),
+		osVersion:           d.Get("opensearch_version").(string),
+		pingTimeoutSeconds:  d.Get("version_ping_timeout").(int),
+		awsRegion:           d.Get("aws_region").(string),
 
 		awsAssumeRoleArn:        d.Get("aws_assume_role_arn").(string),
 		awsAssumeRoleExternalID: d.Get("aws_assume_role_external_id").(string),

@@ -1,0 +1,1 @@
+terraform import opensearch_dashboard_workspace.logs workspace-id

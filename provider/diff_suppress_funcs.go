@@ -112,6 +112,10 @@ func diffSuppressChannelConfiguration(k, old, new string, d *schema.ResourceData
 }
 
 func diffSuppressIngestPipeline(k, old, new string, d *schema.ResourceData) bool {
+	return suppressEquivalentJSON(k, old, new, d)
+}
+
+func suppressEquivalentJSON(k, old, new string, d *schema.ResourceData) bool {
 	var oo, no interface{}
 	if err := json.Unmarshal([]byte(old), &oo); err != nil {
 		return false
