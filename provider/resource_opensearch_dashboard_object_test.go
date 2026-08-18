@@ -432,10 +432,14 @@ EOF
 `
 
 func indexPatternBody(fields string) string {
-	return `[{"_id":"index-pattern:logs","_source":{"type":"index-pattern","index-pattern":{"title":"logs-*","timeFieldName":"@timestamp","fields":"` + fields + `"},"references":[]}}]`
+	return indexPatternBodyAt(fields, "2026-01-01T00:00:00.000Z")
 }
 
-func TestDashboardObjectPopularityDiffSuppress(t *testing.T) {
+func indexPatternBodyAt(fields, updatedAt string) string {
+	return `[{"_id":"index-pattern:logs","_source":{"type":"index-pattern","index-pattern":{"title":"logs-*","timeFieldName":"@timestamp","fields":"` + fields + `"},"references":[],"updated_at":"` + updatedAt + `"}}]`
+}
+
+func TestDashboardObjectBookkeepingDiffSuppress(t *testing.T) {
 	// Popularity counters live inside the JSON-encoded `fields` attribute, so the escaping
 	// here is what an export actually contains.
 	noPopularity := `[{\"count\":0,\"name\":\"@timestamp\",\"type\":\"date\"},{\"count\":0,\"name\":\"message\",\"type\":\"string\"}]`
@@ -483,6 +487,32 @@ func TestDashboardObjectPopularityDiffSuppress(t *testing.T) {
 			suppress: false,
 		},
 		{
+			// What Dashboards actually does: bumping a counter restamps updated_at too.
+			name:     "popularity climbed and updated_at was restamped",
+			old:      indexPatternBodyAt(somePopularity, "2026-08-17T21:04:11.884Z"),
+			new:      indexPatternBodyAt(noPopularity, "2026-01-01T00:00:00.000Z"),
+			suppress: true,
+		},
+		{
+			name:     "updated_at alone",
+			old:      indexPatternBodyAt(somePopularity, "2026-08-17T21:04:11.884Z"),
+			new:      indexPatternBodyAt(somePopularity, "2026-01-01T00:00:00.000Z"),
+			suppress: true,
+		},
+		{
+			name:     "updated_at restamped alongside a real edit",
+			old:      indexPatternBodyAt(somePopularity, "2026-08-17T21:04:11.884Z"),
+			new:      strings.Replace(indexPatternBodyAt(noPopularity, "2026-01-01T00:00:00.000Z"), "logs-*", "logs-2024-*", 1),
+			suppress: false,
+		},
+		{
+			// migrationVersion is real content, so it must still diff.
+			name:     "migrationVersion changed",
+			old:      strings.Replace(indexPatternBody(somePopularity), `"references":[]`, `"references":[],"migrationVersion":{"index-pattern":"7.6.0"}`, 1),
+			new:      strings.Replace(indexPatternBody(noPopularity), `"references":[]`, `"references":[],"migrationVersion":{"index-pattern":"7.11.0"}`, 1),
+			suppress: false,
+		},
+		{
 			name:     "unparseable body is not suppressed",
 			old:      "not json",
 			new:      indexPatternBody(noPopularity),
@@ -492,20 +522,22 @@ func TestDashboardObjectPopularityDiffSuppress(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := dashboardObjectPopularityDiffSuppress("body", tc.old, tc.new, nil); got != tc.suppress {
+			if got := dashboardObjectBookkeepingDiffSuppress("body", tc.old, tc.new, nil); got != tc.suppress {
 				t.Fatalf("expected suppress %v, got %v", tc.suppress, got)
 			}
 		})
 	}
 }
 
-func TestStripDashboardFieldPopularity(t *testing.T) {
-	stripped, err := stripDashboardFieldPopularity(indexPatternBody(`[{\"count\":7,\"name\":\"@timestamp\"}]`))
+func TestStripDashboardBookkeeping(t *testing.T) {
+	stripped, err := stripDashboardBookkeeping(indexPatternBody(`[{\"count\":7,\"name\":\"@timestamp\"}]`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if strings.Contains(stripped, "count") {
-		t.Fatalf("expected popularity counter to be removed, got %s", stripped)
+	for _, unwanted := range []string{"count", "updated_at"} {
+		if strings.Contains(stripped, unwanted) {
+			t.Fatalf("expected %q to be removed, got %s", unwanted, stripped)
+		}
 	}
 	// Everything else about the object has to survive, or unrelated drift would be hidden too.
 	for _, want := range []string{"index-pattern:logs", "logs-*", "@timestamp", "timeFieldName"} {
