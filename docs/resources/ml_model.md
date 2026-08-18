@@ -198,9 +198,11 @@ resource "opensearch_ml_model" "third_party_with_model_guardrails" {
 - `model_config` (Block List, Max: 1) Model’s configuration, including the `model_type`, `embedding_dimension`, and `framework_type`. The optional `all_config` JSON string contains all model configurations. The `additional_config` object contains the corresponding `space_type` for pretrained models or the specified `space_type` for custom models. Required for custom models. (see [below for nested schema](#nestedblock--model_config))
 - `model_content_hash_value` (String) SHA-256 hash of the downloaded model. Required for custom models.
 - `model_format` (String) Portable format of the model file. Valid values are `"TORCH_SCRIPT"` and `"ONNX"`. Required for OS-provided pretrained and custom models)
+- `predict_probe_body` (String) JSON body sent to `POST /_plugins/_ml/models/<id>/_predict` when probing readiness. Defaults to `{"parameters": {"inputText": "healthcheck"}}`, which works for remote connector models. Override this for models whose predict API expects a different input format (e.g. `{"text_docs": ["healthcheck"]}`). Only takes effect when `wait_for_predict = true`.
 - `rate_limiter` (Block List, Max: 1) Limits the number of times that any user can call the Predict API on the ML Model. (see [below for nested schema](#nestedblock--rate_limiter))
 - `url` (String) URL from which to download the model. Required for custom models.
 - `version` (String) Version of the ML Model. For OS-provided models, this identifies which version to download.
+- `wait_for_predict` (Boolean) When true (default), polls `POST /_plugins/_ml/models/<id>/_predict` after deployment to confirm the model is actually usable in memory — not just `DEPLOYED` in the index. Only takes effect when `deploy_after_registering = true`. Set to false to rely only on `model_state`.
 
 ### Read-Only
 

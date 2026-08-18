@@ -43,31 +43,34 @@ var awsOpensearchServerlessUrlRegexp = regexp.MustCompile(`([a-z0-9-]+).aoss.ama
 var minimalOpensearchServerlessVersion = "2.0.0"
 
 type ProviderConf struct {
-	rawUrl                  string
-	insecure                bool
-	sniffing                bool
-	healthchecking          bool
-	cacertFile              string
-	username                string
-	password                string
-	token                   string
-	tokenName               string
-	parsedUrl               *url.URL
-	signAWSRequests         bool
-	osVersion               string
-	pingTimeoutSeconds      int
-	awsRegion               string
-	awsAssumeRoleArn        string
-	awsAssumeRoleExternalID string
-	awsAccessKeyId          string
-	awsSecretAccessKey      string
-	awsSessionToken         string
-	awsSig4Service          string
-	awsProfile              string
-	certPemPath             string
-	keyPemPath              string
-	hostOverride            string
-	proxy                   string
+	rawUrl                   string
+	insecure                 bool
+	sniffing                 bool
+	healthchecking           bool
+	cacertFile               string
+	username                 string
+	password                 string
+	token                    string
+	tokenName                string
+	parsedUrl                *url.URL
+	signAWSRequests          bool
+	osVersion                string
+	pingTimeoutSeconds       int
+	awsRegion                string
+	awsAssumeRoleArn         string
+	awsAssumeRoleExternalID  string
+	awsAssumeRoleSessionName string
+	awsWebIdentityRoleArn    string
+	awsWebIdentityTokenFile  string
+	awsAccessKeyId           string
+	awsSecretAccessKey       string
+	awsSessionToken          string
+	awsSig4Service           string
+	awsProfile               string
+	certPemPath              string
+	keyPemPath               string
+	hostOverride             string
+	proxy                    string
 	// determined after connecting to the server
 	flavor ServerFlavor
 
@@ -131,6 +134,24 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Default:     "",
 				Description: "External ID configured in the IAM policy of the IAM Role to assume prior to making AWS API calls.",
+			},
+			"aws_assume_role_session_name": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AWS_ROLE_SESSION_NAME", ""),
+				Description: "Session name to use when assuming a role, including via web identity.",
+			},
+			"aws_web_identity_role_arn": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				Description: "Amazon Resource Name of an IAM Role to assume via AssumeRoleWithWebIdentity. Falls back to the standard AWS_ROLE_ARN environment variable (so EKS IRSA works with no configuration), unless an explicit aws_profile is set, in which case the environment variable is ignored — mirroring the AWS CLI.",
+			},
+			"aws_web_identity_token_file": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Default:     "",
+				Description: "Path to a file containing an OIDC web identity token. Falls back to the standard AWS_WEB_IDENTITY_TOKEN_FILE environment variable (so EKS IRSA works with no configuration), unless an explicit aws_profile is set, in which case the environment variable is ignored — mirroring the AWS CLI.",
 			},
 			"aws_access_key": {
 				Type:        schema.TypeString,
@@ -287,16 +308,19 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 		pingTimeoutSeconds: d.Get("version_ping_timeout").(int),
 		awsRegion:          d.Get("aws_region").(string),
 
-		awsAssumeRoleArn:        d.Get("aws_assume_role_arn").(string),
-		awsAssumeRoleExternalID: d.Get("aws_assume_role_external_id").(string),
-		awsAccessKeyId:          d.Get("aws_access_key").(string),
-		awsSecretAccessKey:      d.Get("aws_secret_key").(string),
-		awsSessionToken:         d.Get("aws_token").(string),
-		awsProfile:              d.Get("aws_profile").(string),
-		certPemPath:             d.Get("client_cert_path").(string),
-		keyPemPath:              d.Get("client_key_path").(string),
-		hostOverride:            d.Get("host_override").(string),
-		proxy:                   d.Get("proxy").(string),
+		awsAssumeRoleArn:         d.Get("aws_assume_role_arn").(string),
+		awsAssumeRoleExternalID:  d.Get("aws_assume_role_external_id").(string),
+		awsAssumeRoleSessionName: d.Get("aws_assume_role_session_name").(string),
+		awsWebIdentityRoleArn:    d.Get("aws_web_identity_role_arn").(string),
+		awsWebIdentityTokenFile:  d.Get("aws_web_identity_token_file").(string),
+		awsAccessKeyId:           d.Get("aws_access_key").(string),
+		awsSecretAccessKey:       d.Get("aws_secret_key").(string),
+		awsSessionToken:          d.Get("aws_token").(string),
+		awsProfile:               d.Get("aws_profile").(string),
+		certPemPath:              d.Get("client_cert_path").(string),
+		keyPemPath:               d.Get("client_key_path").(string),
+		hostOverride:             d.Get("host_override").(string),
+		proxy:                    d.Get("proxy").(string),
 	}
 
 	osClient, err := getOSClient(conf)
@@ -305,7 +329,66 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 	}
 	conf.osClient = osClient
 
-	return conf, nil
+	resolveAWSWebIdentityEnv(conf)
+
+	return conf, awsCredentialWarnings(conf)
+}
+
+// resolveAWSWebIdentityEnv applies the standard web identity environment
+// variables (AWS_ROLE_ARN, AWS_WEB_IDENTITY_TOKEN_FILE) to the provider
+// configuration so that EKS IRSA works with no explicit configuration.
+//
+// It mirrors the AWS CLI (botocore) credential precedence: an explicitly
+// configured profile suppresses web identity sourced from the environment, so
+// an explicit aws_profile wins over ambient IRSA env vars. Web identity set
+// explicitly in the provider config is left untouched and still applies.
+//
+// This matches botocore at commit d6092247:
+//   - create_credential_resolver derives disable_env_vars from whether a profile
+//     was explicitly selected:
+//     https://github.com/boto/botocore/blob/d6092247/botocore/credentials.py#L84-L95
+//   - AssumeRoleWithWebIdentityProvider._get_env_config returns None for
+//     AWS_ROLE_ARN / AWS_WEB_IDENTITY_TOKEN_FILE when env vars are disabled, i.e.
+//     when a profile was explicitly selected:
+//     https://github.com/boto/botocore/blob/d6092247/botocore/credentials.py#L1918-L1924
+func resolveAWSWebIdentityEnv(conf *ProviderConf) {
+	// An explicit profile disables env-var-sourced web identity (botocore's
+	// disable_env_vars). aws_access_key is not checked here because static keys
+	// already take unconditional precedence in awsSession.
+	if conf.awsProfile != "" {
+		return
+	}
+	if conf.awsWebIdentityRoleArn == "" {
+		conf.awsWebIdentityRoleArn = os.Getenv("AWS_ROLE_ARN")
+	}
+	if conf.awsWebIdentityTokenFile == "" {
+		conf.awsWebIdentityTokenFile = os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")
+	}
+}
+
+// awsCredentialWarnings surfaces likely-misconfiguration diagnostics for the AWS
+// credential settings. Assuming a role via web identity requires both a role ARN
+// and a token file; with only one set the web identity source is silently
+// skipped, so we warn to make the misconfiguration explicit.
+//
+// The AWS CLI goes further and errors in the token-set-but-role-missing case
+// (botocore AssumeRoleWithWebIdentityProvider._assume_role_with_web_identity at
+// commit d6092247:
+// https://github.com/boto/botocore/blob/d6092247/botocore/credentials.py#L1944-L1953);
+// we prefer a warning over a hard failure for both partial cases.
+func awsCredentialWarnings(conf *ProviderConf) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if (conf.awsWebIdentityRoleArn == "") != (conf.awsWebIdentityTokenFile == "") {
+		diags = append(diags, diag.Diagnostic{
+			Severity: diag.Warning,
+			Summary:  "Incomplete web identity configuration",
+			Detail: "Only one of aws_web_identity_role_arn (or AWS_ROLE_ARN) and " +
+				"aws_web_identity_token_file (or AWS_WEB_IDENTITY_TOKEN_FILE) is set. " +
+				"Both are required to assume a role via AssumeRoleWithWebIdentity (e.g. EKS IRSA); " +
+				"the web identity credential source will be skipped.",
+		})
+	}
+	return diags
 }
 
 func getOSClient(conf *ProviderConf) (*opensearch.Client, error) {
@@ -517,10 +600,16 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 	return client, nil
 }
 
-func assumeRoleCredentials(region, roleARN, roleExternalID, profile string, endpoint string) *awscredentials.Credentials {
+func assumeRoleCredentials(region, roleARN, roleExternalID, roleSessionName, profile string, endpoint string, base *awscredentials.Credentials) *awscredentials.Credentials {
 	sessOpts := awsSessionOptions(region, endpoint)
 	if profile != "" {
 		sessOpts.Profile = profile
+	}
+	// When base credentials are supplied (e.g. resolved via web identity), sign
+	// the STS AssumeRole call with them so the role is chained from that
+	// identity rather than the ambient credential chain.
+	if base != nil {
+		sessOpts.Config.Credentials = base
 	}
 
 	sess := awssession.Must(awssession.NewSessionWithOptions(sessOpts))
@@ -534,7 +623,20 @@ func assumeRoleCredentials(region, roleARN, roleExternalID, profile string, endp
 		assumeRoleProvider.ExternalID = aws.String(roleExternalID)
 	}
 
+	if roleSessionName != "" {
+		assumeRoleProvider.RoleSessionName = roleSessionName
+	}
+
 	return awscredentials.NewChainCredentials([]awscredentials.Provider{assumeRoleProvider})
+}
+
+func assumeRoleWithWebIdentityCredentials(region, roleARN, sessionName, tokenFile, endpoint string) *awscredentials.Credentials {
+	sessOpts := awsSessionOptions(region, endpoint)
+	sess := awssession.Must(awssession.NewSessionWithOptions(sessOpts))
+	stsClient := awssts.New(sess)
+	provider := awsstscreds.NewWebIdentityRoleProviderWithOptions(stsClient, roleARN, sessionName, awsstscreds.FetchTokenPath(tokenFile))
+
+	return awscredentials.NewChainCredentials([]awscredentials.Provider{provider})
 }
 
 func awsSessionOptions(region string, endpoint string) awssession.Options {
@@ -562,18 +664,30 @@ func awsSession(region string, conf *ProviderConf, endpoint string) *awssession.
 	sessOpts := awsSessionOptions(region, endpoint)
 
 	// 1. access keys take priority
-	// 2. next is an assume role configuration
-	// 3. followed by a profile (for assume role)
-	// 4. let the default credentials provider figure out the rest (env, ec2, etc..)
+	// 2. next is an explicit assume role configuration. If web identity is also
+	//    configured, its credentials are resolved first and used as the base for
+	//    the assume-role call (role chaining); otherwise the base session uses
+	//    the standard credential chain, which also resolves IRSA env vars.
+	// 3. next is an assume role via web identity (e.g. EKS IRSA). The role ARN
+	//    and token file come from aws_web_identity_role_arn / aws_web_identity_token_file,
+	//    which resolveAWSWebIdentityEnv() has already populated from AWS_ROLE_ARN /
+	//    AWS_WEB_IDENTITY_TOKEN_FILE unless an explicit aws_profile suppressed them
+	//    (matching the AWS CLI). So env-sourced web identity yields to an explicit
+	//    profile (case 4), while explicitly-configured web identity still wins here.
+	// 4. followed by a profile (for assume role)
+	// 5. let the default credentials provider figure out the rest (env, ec2, etc..)
 	//
 	// note: if #1 is chosen, then no further providers will be tested, since we've overridden the credentials with just a static provider
 	if conf.awsAccessKeyId != "" {
 		sessOpts.Config.Credentials = awscredentials.NewStaticCredentials(conf.awsAccessKeyId, conf.awsSecretAccessKey, conf.awsSessionToken)
 	} else if conf.awsAssumeRoleArn != "" {
-		if conf.awsAssumeRoleExternalID == "" {
-			conf.awsAssumeRoleExternalID = ""
+		var base *awscredentials.Credentials
+		if conf.awsWebIdentityTokenFile != "" && conf.awsWebIdentityRoleArn != "" {
+			base = assumeRoleWithWebIdentityCredentials(region, conf.awsWebIdentityRoleArn, conf.awsAssumeRoleSessionName, conf.awsWebIdentityTokenFile, endpoint)
 		}
-		sessOpts.Config.Credentials = assumeRoleCredentials(region, conf.awsAssumeRoleArn, conf.awsAssumeRoleExternalID, conf.awsProfile, endpoint)
+		sessOpts.Config.Credentials = assumeRoleCredentials(region, conf.awsAssumeRoleArn, conf.awsAssumeRoleExternalID, conf.awsAssumeRoleSessionName, conf.awsProfile, endpoint, base)
+	} else if conf.awsWebIdentityTokenFile != "" && conf.awsWebIdentityRoleArn != "" {
+		sessOpts.Config.Credentials = assumeRoleWithWebIdentityCredentials(region, conf.awsWebIdentityRoleArn, conf.awsAssumeRoleSessionName, conf.awsWebIdentityTokenFile, endpoint)
 	} else if conf.awsProfile != "" {
 		sessOpts.Profile = conf.awsProfile
 	}

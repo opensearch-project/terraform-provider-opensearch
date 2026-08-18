@@ -1,0 +1,20 @@
+<AssumeRoleWithWebIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+	<AssumeRoleWithWebIdentityResult>
+		<SubjectFromWebIdentityToken>system:serviceaccount:default:opensearch</SubjectFromWebIdentityToken>
+		<Audience>sts.amazonaws.com</Audience>
+		<AssumedRoleUser>
+			<Arn>arn:aws:sts::123456789012:assumed-role/demo/TestWebIdentity</Arn>
+			<AssumedRoleId>ARO123EXAMPLE123:TestWebIdentity</AssumedRoleId>
+		</AssumedRoleUser>
+		<Credentials>
+			<AccessKeyId>ASIAWEBIDENTITYEXAMPLE</AccessKeyId>
+			<SecretAccessKey>wJalrXUtnFEMI/K7MDENG/bPxRfiCYzEXAMPLEKEY</SecretAccessKey>
+			<SessionToken>AQoDYXdzEPT//////////wEXAMPLEtc764bNrC9SAPBSM22wDOk4x4HIZ8j4FZTwdQWLWsKWHGBuFqwAeMicRXmxfpSPfIeoIYRqTflfKD8YUuwthAx7mSEI/qkPpKPi/kMcGd</SessionToken>
+			<Expiration>2019-11-09T13:34:41Z</Expiration>
+		</Credentials>
+		<Provider>arn:aws:iam::123456789012:oidc-provider/oidc.eks.example</Provider>
+	</AssumeRoleWithWebIdentityResult>
+	<ResponseMetadata>
+		<RequestId>ad4156e9-bce1-11e2-82e6-6b6efEXAMPLE</RequestId>
+	</ResponseMetadata>
+</AssumeRoleWithWebIdentityResponse>
