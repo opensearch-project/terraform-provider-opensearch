@@ -69,11 +69,14 @@ EOF
 - `aws_access_key` (String) The access key for use with AWS OpenSearch Service domains
 - `aws_assume_role_arn` (String) Amazon Resource Name of an IAM Role to assume prior to making AWS API calls.
 - `aws_assume_role_external_id` (String) External ID configured in the IAM policy of the IAM Role to assume prior to making AWS API calls.
+- `aws_assume_role_session_name` (String) Session name to use when assuming a role, including via web identity.
 - `aws_profile` (String) The AWS profile for use with AWS OpenSearch Service domains
 - `aws_region` (String) The AWS region for use in signing of AWS OpenSearch requests. Must be specified in order to use AWS URL signing with AWS OpenSearch endpoint exposed on a custom DNS domain.
 - `aws_secret_key` (String) The secret key for use with AWS OpenSearch Service domains
 - `aws_signature_service` (String) AWS service name used in the credential scope of signed requests to OpenSearch.
 - `aws_token` (String) The session token for use with AWS OpenSearch Service domains
+- `aws_web_identity_role_arn` (String) Amazon Resource Name of an IAM Role to assume via AssumeRoleWithWebIdentity. Falls back to the standard AWS_ROLE_ARN environment variable (so EKS IRSA works with no configuration), unless an explicit aws_profile is set, in which case the environment variable is ignored — mirroring the AWS CLI.
+- `aws_web_identity_token_file` (String) Path to a file containing an OIDC web identity token. Falls back to the standard AWS_WEB_IDENTITY_TOKEN_FILE environment variable (so EKS IRSA works with no configuration), unless an explicit aws_profile is set, in which case the environment variable is ignored — mirroring the AWS CLI.
 - `cacert_file` (String) A Custom CA certificate
 - `client_cert_path` (String) A X509 certificate to connect to OpenSearch
 - `client_key_path` (String) A X509 key to connect to OpenSearch
@@ -98,6 +101,7 @@ The provider is flexible in the means of providing credentials for authenticatio
 
 - Static credentials
 - Assume role configuration
+- Web identity (IRSA)
 - Environment variables
 - Shared credentials file
 
@@ -150,6 +154,33 @@ provider "opensearch" {
   aws_assume_role_external_id = "SecretID"
 }
 ```
+
+#### Web identity (IRSA)
+
+If your workload runs with a web identity token (for example, EKS IAM Roles for Service Accounts), the provider will assume the role via `AssumeRoleWithWebIdentity`. On EKS this works with **no configuration**: `aws_web_identity_role_arn` and `aws_web_identity_token_file` default to the standard `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` environment variables that the pod's service account injects.
+
+You can also configure it explicitly:
+
+```tf
+provider "opensearch" {
+  url                         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+  aws_web_identity_role_arn   = "arn:aws:iam::012345678901:role/rolename"
+  aws_web_identity_token_file = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+}
+```
+
+This is independent of `aws_assume_role_arn`. If you set both, the web identity credentials are resolved first and then used to assume `aws_assume_role_arn` (role chaining):
+
+```tf
+provider "opensearch" {
+  url                         = "https://search-foo-bar-pqrhr4w3u4dzervg41frow4mmy.us-east-1.es.amazonaws.com"
+  aws_web_identity_role_arn   = "arn:aws:iam::012345678901:role/irsa-role"
+  aws_web_identity_token_file = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+  aws_assume_role_arn         = "arn:aws:iam::012345678901:role/target-role"
+}
+```
+
+Setting `aws_profile` suppresses the `AWS_ROLE_ARN` / `AWS_WEB_IDENTITY_TOKEN_FILE` environment variable defaults, so the named profile is used instead of ambient IRSA credentials. This mirrors the AWS CLI (botocore) `disable_env_vars` behaviour. Web identity set explicitly via `aws_web_identity_role_arn` / `aws_web_identity_token_file` still applies even when a profile is configured.
 
 #### Environment variables
 

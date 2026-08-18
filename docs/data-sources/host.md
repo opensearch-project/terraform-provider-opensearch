@@ -29,5 +29,3 @@ data "opensearch_host" "test" {
 
 - `id` (String) The ID of this resource.
 - `url` (String) the url of the active cluster
-
-

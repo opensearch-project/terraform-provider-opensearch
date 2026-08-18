@@ -204,7 +204,7 @@ resource "opensearch_ml_connector" "with_client_config" {
 ### Required
 
 - `actions` (Block List, Min: 1) Defines the actions that can run within the connector (see [below for nested schema](#nestedblock--actions))
-- `credential` (Map of String) Defines any credential variables required for connecting to the endpoint
+- `credential` (Map of String, Sensitive) Defines any credential variables required for connecting to the endpoint
 - `description` (String) Description of the ML Connector
 - `name` (String) Name of the ML Connector
 - `parameters` (Map of String) The default ML Connector parameters, including `endpoint`, `model`, and `skip_validating_missing_parameters`. Any parameters indicated in this field can be overridden by parameters specified in a PREDICT request.
