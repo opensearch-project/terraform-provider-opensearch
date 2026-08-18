@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 	"testing"
 
 	elastic7 "github.com/olivere/elastic/v7"
@@ -415,3 +416,87 @@ resource "opensearch_dashboard_object" "test_invalid" {
 EOF
 }
 `
+
+func indexPatternBody(fields string) string {
+	return `[{"_id":"index-pattern:logs","_source":{"type":"index-pattern","index-pattern":{"title":"logs-*","timeFieldName":"@timestamp","fields":"` + fields + `"},"references":[]}}]`
+}
+
+func TestDashboardObjectPopularityDiffSuppress(t *testing.T) {
+	// Popularity counters live inside the JSON-encoded `fields` attribute, so the escaping
+	// here is what an export actually contains.
+	noPopularity := `[{\"count\":0,\"name\":\"@timestamp\",\"type\":\"date\"},{\"count\":0,\"name\":\"message\",\"type\":\"string\"}]`
+	somePopularity := `[{\"count\":7,\"name\":\"@timestamp\",\"type\":\"date\"},{\"count\":3,\"name\":\"message\",\"type\":\"string\"}]`
+	renamedField := `[{\"count\":0,\"name\":\"@timestamp\",\"type\":\"date\"},{\"count\":0,\"name\":\"msg\",\"type\":\"string\"}]`
+
+	visualization := `[{"_id":"visualization:errors","_source":{"type":"visualization","visualization":{"title":"Errors","visState":"{\"aggs\":[{\"type\":\"count\"}]}"},"references":[]}}]`
+	visualizationAvg := `[{"_id":"visualization:errors","_source":{"type":"visualization","visualization":{"title":"Errors","visState":"{\"aggs\":[{\"type\":\"avg\"}]}"},"references":[]}}]`
+
+	testCases := []struct {
+		name     string
+		old      string
+		new      string
+		suppress bool
+	}{
+		{
+			name:     "popularity climbed since export",
+			old:      indexPatternBody(somePopularity),
+			new:      indexPatternBody(noPopularity),
+			suppress: true,
+		},
+		{
+			name:     "identical bodies",
+			old:      indexPatternBody(somePopularity),
+			new:      indexPatternBody(somePopularity),
+			suppress: true,
+		},
+		{
+			name:     "field renamed as well as popularity",
+			old:      indexPatternBody(somePopularity),
+			new:      indexPatternBody(renamedField),
+			suppress: false,
+		},
+		{
+			name:     "title changed",
+			old:      indexPatternBody(somePopularity),
+			new:      strings.Replace(indexPatternBody(noPopularity), "logs-*", "logs-2024-*", 1),
+			suppress: false,
+		},
+		{
+			name: "count in a non index-pattern object is left alone",
+			// `count` here is an aggregation type, not a popularity counter.
+			old:      visualization,
+			new:      visualizationAvg,
+			suppress: false,
+		},
+		{
+			name:     "unparseable body is not suppressed",
+			old:      "not json",
+			new:      indexPatternBody(noPopularity),
+			suppress: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dashboardObjectPopularityDiffSuppress("body", tc.old, tc.new, nil); got != tc.suppress {
+				t.Fatalf("expected suppress %v, got %v", tc.suppress, got)
+			}
+		})
+	}
+}
+
+func TestStripDashboardFieldPopularity(t *testing.T) {
+	stripped, err := stripDashboardFieldPopularity(indexPatternBody(`[{\"count\":7,\"name\":\"@timestamp\"}]`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(stripped, "count") {
+		t.Fatalf("expected popularity counter to be removed, got %s", stripped)
+	}
+	// Everything else about the object has to survive, or unrelated drift would be hidden too.
+	for _, want := range []string{"index-pattern:logs", "logs-*", "@timestamp", "timeFieldName"} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("expected %q to survive stripping, got %s", want, stripped)
+		}
+	}
+}
