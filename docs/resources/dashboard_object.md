@@ -3,12 +3,12 @@
 page_title: "opensearch_dashboard_object Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. For index patterns, per-field popularity counters (`fields[].count`) are ignored when diffing: Dashboards increments them as people use fields in Discover, so they are usage telemetry rather than configuration.
+  Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. Bookkeeping Dashboards maintains itself is ignored when diffing: `updated_at`, which the saved objects API restamps on every write, and an index pattern's per-field popularity counters (`fields[].count`), which Dashboards increments as people use fields in Discover.
 ---
 
 # opensearch_dashboard_object (Resource)
 
-Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. For index patterns, per-field popularity counters (`fields[].count`) are ignored when diffing: Dashboards increments them as people use fields in Discover, so they are usage telemetry rather than configuration.
+Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. Bookkeeping Dashboards maintains itself is ignored when diffing: `updated_at`, which the saved objects API restamps on every write, and an index pattern's per-field popularity counters (`fields[].count`), which Dashboards increments as people use fields in Discover.
 
 ## Example Usage
 

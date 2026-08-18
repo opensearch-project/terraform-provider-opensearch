@@ -20,7 +20,7 @@ const (
 
 func resourceOpensearchDashboardObject() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. For index patterns, per-field popularity counters (`fields[].count`) are ignored when diffing: Dashboards increments them as people use fields in Discover, so they are usage telemetry rather than configuration.",
+		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. Bookkeeping Dashboards maintains itself is ignored when diffing: `updated_at`, which the saved objects API restamps on every write, and an index pattern's per-field popularity counters (`fields[].count`), which Dashboards increments as people use fields in Discover.",
 		Create:      resourceOpensearchDashboardObjectCreate,
 		Read:        resourceOpensearchDashboardObjectRead,
 		Update:      resourceOpensearchDashboardObjectUpdate,
@@ -83,7 +83,7 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 					json, _ := structure.NormalizeJsonString(v)
 					return json
 				},
-				DiffSuppressFunc: dashboardObjectPopularityDiffSuppress,
+				DiffSuppressFunc: dashboardObjectBookkeepingDiffSuppress,
 				Description:      "The JSON body of the dashboard object.",
 			},
 			"tenant_name": {
@@ -106,27 +106,31 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 	}
 }
 
-// Dashboards increments an index pattern's per-field popularity counter every time someone
-// uses that field in Discover, writing it back into the saved object. It is usage telemetry
-// rather than configuration, so a difference confined to those counters is not drift worth
-// reporting: reverting them would only churn the document and they would climb again.
-func dashboardObjectPopularityDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
-	oldStripped, err := stripDashboardFieldPopularity(old)
+// Dashboards maintains bookkeeping of its own inside a saved object: it restamps
+// `updated_at` whenever the saved objects API writes the document, and it increments an index
+// pattern's per-field popularity counter every time someone uses that field in Discover. Both
+// are records of use rather than configuration, and using Dashboards is enough to change them,
+// so a difference confined to them is not drift worth reporting — reverting it would only churn
+// the document and it would come back. Any difference in real content still diffs in full.
+func dashboardObjectBookkeepingDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
+	oldStripped, err := stripDashboardBookkeeping(old)
 	if err != nil {
 		return false
 	}
-	newStripped, err := stripDashboardFieldPopularity(new)
+	newStripped, err := stripDashboardBookkeeping(new)
 	if err != nil {
 		return false
 	}
 	return oldStripped == newStripped
 }
 
-// stripDashboardFieldPopularity returns body with every index pattern's `count` field removed,
-// canonicalised so two bodies differing only in those counters compare equal. Anything that
-// does not parse as the expected shape is left untouched rather than dropped, so an unexpected
-// document still diffs on its real contents.
-func stripDashboardFieldPopularity(body string) (string, error) {
+// stripDashboardBookkeeping returns body without the parts of a saved object that Dashboards
+// maintains on its own — `_source.updated_at`, and each index pattern's `fields[].count` —
+// canonicalised so two bodies differing only in those compare equal. `migrationVersion` is
+// deliberately kept: it records the shape of the stored document, so a change there is real.
+// Anything that does not parse as the expected shape is left untouched rather than dropped, so
+// an unexpected document still diffs on its real contents.
+func stripDashboardBookkeeping(body string) (string, error) {
 	var objects []interface{}
 	if err := json.Unmarshal([]byte(body), &objects); err != nil {
 		return "", err
@@ -141,6 +145,8 @@ func stripDashboardFieldPopularity(body string) (string, error) {
 		if !ok {
 			continue
 		}
+		delete(source, "updated_at")
+
 		objectType, ok := source["type"].(string)
 		if !ok || objectType != "index-pattern" {
 			continue
