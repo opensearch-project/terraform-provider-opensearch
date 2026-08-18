@@ -20,7 +20,7 @@ const (
 
 func resourceOpensearchDashboardObject() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.",
+		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. For index patterns, per-field popularity counters (`fields[].count`) are ignored when diffing: Dashboards increments them as people use fields in Discover, so they are usage telemetry rather than configuration.",
 		Create:      resourceOpensearchDashboardObjectCreate,
 		Read:        resourceOpensearchDashboardObjectRead,
 		Update:      resourceOpensearchDashboardObjectUpdate,
@@ -82,7 +82,8 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 				StateFunc: func(v interface{}) string {
 					return normalizeDashboardObjectForState(v)
 				},
-				Description: "The JSON body of the dashboard object.",
+				DiffSuppressFunc: dashboardObjectPopularityDiffSuppress,
+				Description:      "The JSON body of the dashboard object.",
 			},
 			"tenant_name": {
 				Type:          schema.TypeString,
@@ -102,6 +103,89 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 			},
 		},
 	}
+}
+
+// Dashboards increments an index pattern's per-field popularity counter every time someone
+// uses that field in Discover, writing it back into the saved object. It is usage telemetry
+// rather than configuration, so a difference confined to those counters is not drift worth
+// reporting: reverting them would only churn the document and they would climb again.
+func dashboardObjectPopularityDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
+	oldStripped, err := stripDashboardFieldPopularity(old)
+	if err != nil {
+		return false
+	}
+	newStripped, err := stripDashboardFieldPopularity(new)
+	if err != nil {
+		return false
+	}
+	return oldStripped == newStripped
+}
+
+// stripDashboardFieldPopularity returns body with every index pattern's `count` field removed,
+// canonicalised so two bodies differing only in those counters compare equal. Anything that
+// does not parse as the expected shape is left untouched rather than dropped, so an unexpected
+// document still diffs on its real contents.
+func stripDashboardFieldPopularity(body string) (string, error) {
+	var objects []interface{}
+	if err := json.Unmarshal([]byte(body), &objects); err != nil {
+		return "", err
+	}
+
+	for _, o := range objects {
+		object, ok := o.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		source, ok := object["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		objectType, ok := source["type"].(string)
+		if !ok || objectType != "index-pattern" {
+			continue
+		}
+		attributes, ok := source[objectType].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		// Attributes hold `fields` as a JSON-encoded string, not a nested array.
+		encodedFields, ok := attributes["fields"].(string)
+		if !ok {
+			continue
+		}
+		var fields []interface{}
+		if err := json.Unmarshal([]byte(encodedFields), &fields); err != nil {
+			continue
+		}
+
+		stripped := false
+		for _, f := range fields {
+			field, ok := f.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if _, ok := field["count"]; ok {
+				delete(field, "count")
+				stripped = true
+			}
+		}
+		if !stripped {
+			continue
+		}
+
+		reencoded, err := json.Marshal(fields)
+		if err != nil {
+			continue
+		}
+		attributes["fields"] = string(reencoded)
+	}
+
+	// json.Marshal sorts object keys, so the result is canonical.
+	canonical, err := json.Marshal(objects)
+	if err != nil {
+		return "", err
+	}
+	return string(canonical), nil
 }
 
 func resourceOpensearchDashboardObjectImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
