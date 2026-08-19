@@ -57,18 +57,18 @@ test: up
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
 	export OPENSEARCH_PREFIX=$(OPENSEARCH_PREFIX) && \
 	export TF_LOG=INFO && \
-	TF_ACC=$(TC_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
+	TF_ACC=$(TF_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
 
 test-os2: check-tools
 	$(MAKE) OS_VERSION=2 up
 	$(MAKE) OS_VERSION=2 wait
-	$(MAKE) OS_VERSION=2 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=2 down; exit $EXIT_CODE)
+	$(MAKE) OS_VERSION=2 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=2 down; exit $$EXIT_CODE)
 	$(MAKE) OS_VERSION=2 down
 
 test-os3: check-tools
 	$(MAKE) OS_VERSION=3 up
 	$(MAKE) OS_VERSION=3 wait
-	$(MAKE) OS_VERSION=3 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=3 down; exit $EXIT_CODE)
+	$(MAKE) OS_VERSION=3 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=3 down; exit $$EXIT_CODE)
 	$(MAKE) OS_VERSION=3 down
 
 check-tools:
@@ -100,7 +100,7 @@ ci-test: tidy-check fmt-check validate
 	@echo "=== Starting full CI test for OpenSearch $(OS_VERSOIN) ==="
 	$(MAKE) up
 	$(MAKE) wait
-	$(MAKE) test || (EXIT_CODE=$$?; $(MAKE) down; exit $EXIT_CODE)
+	$(MAKE) test || (EXIT_CODE=$$?; $(MAKE) down; exit $$EXIT_CODE)
 	$(MAKE) down
 	@echo "=== Full CI test completed ==="
 
