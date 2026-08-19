@@ -30,6 +30,7 @@ jobs:
         os: [ubuntu-latest]
         os-major-version:
           - "2-opensearch"
+          - "3-opensearch"
         include:
         - os-major-version: "2-opensearch"
           version: 2
