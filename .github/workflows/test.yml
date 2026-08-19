@@ -37,6 +37,12 @@ jobs:
           OS_IMAGE: "opensearchproject/opensearch:2"
           OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:2"
           OPENSEARCH_PREFIX: "plugins.security"
+        - os-major-version: "3-opensearch"
+          version: "3"
+          oss-image: "opensearchproject/opensearch"
+          OS_IMAGE: "opensearchproject/opensearch:3"
+          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:3"
+          OPENSEARCH_PREFIX: "plugins.security"
     needs: [lint]
     name: Test against OS ${{ matrix.os-major-version }} on ${{ matrix.go-version }}/${{ matrix.os }}
     runs-on: ${{ matrix.os }}
