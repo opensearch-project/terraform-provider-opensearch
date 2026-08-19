@@ -78,6 +78,10 @@ check-tools:
 	@docker compose version > /dev/null 2>&1 || (echo "Error: docker compose is not available" && exit 1)
 	@echo "All required tools are installed."
 	
+check-lint-tool: ## Check if golangci-lint v2.x is installed
+	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed." && exit 1)
+	@golangci-lint --version | grep -q "2\." || (echo "Error: golangci-lint v2.x is required. You have:" && golangci-lint --version && echo "Install the correct version" && exit 1)
+
 check: tidy-check fmt-check
 	@echo "All pre-commit checks passed."
 
@@ -96,7 +100,11 @@ fmt:
 validate:
 	terraform validate -no-color
 
-ci-test: tidy-check fmt-check validate 
+lint: check-lint-tool ## Run golangci-lint and gofmt checks (same as CI)
+	golangci-lint run --verbose --timeout=10m
+	@test -z "$$(gofmt -l .)" || (echo "Go code is not formatted. Run 'gofmt -w .' to fix:" && gofmt -l . && exit 1)
+
+ci-test: check-lint-tool tidy-check fmt-check validate 
 	@echo "=== Starting full CI test for OpenSearch $(OS_VERSOIN) ==="
 	$(MAKE) up
 	$(MAKE) wait
