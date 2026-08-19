@@ -1,0 +1,24 @@
+# Copy this file to terraform.tfvars and uncomment the relevant block.
+# terraform.tfvars is gitignored so credentials stay local.
+
+# =============================================================================
+# Core variables
+# These values match the defaults — no terraform.tfvars needed
+# =============================================================================
+# opensearch_url    = "http://admin:myStrongPassword123%40456@localhost:9200"
+# sign_aws_requests = false
+
+# =============================================================================
+# AWS-related variables
+#
+# AWS credentials required by resources. Set these via TF_VAR_aws_<...> in the
+# environment where the make targets are running — see terraform.tfvars.example.
+# =============================================================================
+# `.tfvars` files don't interpolate env vars, so export them in your shell.
+# Example:
+#   TF_VAR_aws_access_key=$AWS_ACCESS_KEY_ID \
+#   TF_VAR_aws_secret_key=$AWS_SECRET_ACCESS_KEY \
+#   TF_VAR_aws_session_token=$AWS_SESSION_TOKEN \
+#   make dev-apply
+#
+# Or simply update `DEV_TF_ENV` in Makefile to set these environment variables.
