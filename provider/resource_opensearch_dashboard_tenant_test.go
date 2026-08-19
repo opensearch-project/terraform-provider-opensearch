@@ -16,7 +16,7 @@ func TestAccOpensearchOpenDistroDashboardTenant(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var allowed bool = true
+	var allowed = true
 
 	randomName := "test" + acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
 

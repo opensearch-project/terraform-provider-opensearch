@@ -1,16 +1,29 @@
+version: "2"
 run:
-  go: "1.24"
+  go: "1.25"
 linters:
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - staticcheck
+        path: provider/resource_opensearch_index_template.*.go
+        text: 'SA1019:'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
   enable:
     - gofmt
-
-issues:
-  exclude-rules:
-    # aws-sdk-go v1 is deprecated; migration to v2 is tracked separately
-    - linters:
-        - staticcheck
-      text: "SA1019:.*aws-sdk-go"
-    - linters:
-        - staticcheck
-      text: "SA1019:"
-      path: provider/resource_opensearch_index_template.*.go
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

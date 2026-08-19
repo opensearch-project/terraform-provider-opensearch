@@ -15,7 +15,7 @@ func TestAccOpensearchSMPolicy(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var allowed bool = true
+	var allowed = true
 
 	config := testAccOpensearchSMPolicyV7
 

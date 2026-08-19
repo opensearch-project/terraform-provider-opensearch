@@ -2,11 +2,14 @@ package provider
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -14,6 +17,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/mitchellh/go-homedir"
+	"github.com/opensearch-project/opensearch-go/v2"
 )
 
 func normalizeChannelConfiguration(tpl map[string]interface{}) {
@@ -268,7 +272,7 @@ func expandIndexPermissionsSet(resourcesArray []interface{}) ([]IndexPermissions
 	for _, item := range resourcesArray {
 		data, ok := item.(map[string]interface{})
 		if !ok {
-			return vperm, fmt.Errorf("Error asserting data as type []byte : %v", item)
+			return vperm, fmt.Errorf("error asserting data as type []byte : %v", item)
 		}
 
 		fls := data["field_level_security"]
@@ -309,7 +313,7 @@ func expandTenantPermissionsSet(resourcesArray []interface{}) ([]TenantPermissio
 	for _, item := range resourcesArray {
 		data, ok := item.(map[string]interface{})
 		if !ok {
-			return vperm, fmt.Errorf("Error asserting data as type []byte : %v", item)
+			return vperm, fmt.Errorf("error asserting data as type []byte : %v", item)
 		}
 		obj := TenantPermissions{
 			TenantPatterns: expandStringList(data["tenant_patterns"].(*schema.Set).List()),
@@ -339,12 +343,12 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 
 	if v, ok := m["document_level_security"]; ok {
-		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
+		fmt.Fprintf(&buf, "%s-", v.(string))
 	}
 
 	if v, ok := m["fls"]; ok {
@@ -356,7 +360,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 
@@ -369,7 +373,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 	if v, ok := m["masked_fields"]; ok {
@@ -381,7 +385,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 	if v, ok := m["allowed_actions"]; ok {
@@ -393,7 +397,7 @@ func indexPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 
@@ -415,7 +419,7 @@ func tenantPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 	if v, ok := m["allowed_actions"]; ok {
@@ -427,7 +431,7 @@ func tenantPermissionsHash(v interface{}) int {
 		sort.Strings(s)
 
 		for _, v := range s {
-			buf.WriteString(fmt.Sprintf("%s-", v))
+			fmt.Fprintf(&buf, "%s-", v)
 		}
 	}
 
@@ -480,4 +484,87 @@ func readPathOrContent(poc string) (string, bool, error) {
 	}
 
 	return poc, false, nil
+}
+
+// ============================================
+// ===    HTTP Request Helper Functions     ===
+// ============================================
+
+// HTTPError represents a non-2xx response from the OpenSearch API. Callers can
+// use errors.As to inspect StatusCode and branch on specific status codes
+// (e.g. http.StatusNotFound) without resorting to string matching.
+type HTTPError struct {
+	Operation  string
+	StatusCode int
+	Message    string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("%s failed (status %d): %s", e.Operation, e.StatusCode, e.Message)
+}
+
+// Performs an HTTP request to OpenSearch and parses the JSON response.
+// Handles error checking and returns a structured error message on failure.
+func performRequestAndParse(ctx context.Context, client *opensearch.Client, method, url string, body io.Reader, operation string) (map[string]interface{}, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request to %s: %s", operation, err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	res, err := client.Perform(req)
+	if err != nil {
+		return nil, fmt.Errorf("error performing %s: %s", operation, err)
+	}
+
+	responseBody, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("error reading %s response body: %s", operation, err)
+	}
+
+	if res.StatusCode >= 400 {
+		message := string(responseBody)
+		var parsed map[string]interface{}
+		if json.Unmarshal(responseBody, &parsed) == nil {
+			message = extractErrorMessage(parsed)
+		}
+		return nil, &HTTPError{Operation: operation, StatusCode: res.StatusCode, Message: message}
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(responseBody, &result); err != nil {
+		return nil, fmt.Errorf("error parsing %s response: %s", operation, err)
+	}
+
+	return result, nil
+}
+
+// Extracts a human-readable error message from an OpenSearch API error response.
+func extractErrorMessage(result map[string]interface{}) string {
+	if errDetail, ok := result["error"].(map[string]interface{}); ok {
+		if reason, ok := errDetail["reason"].(string); ok {
+			return reason
+		}
+	}
+	return "unknown error"
+}
+
+// ============================================
+// ===  Diff Suppression Helper Functions   ===
+// ============================================
+
+// Suppresses diff for boolean fields that are only returned by the API when 'true'.
+// This function suppresses the diff when:
+//   - the resource is being updated (has ID)
+//   - the old value is empty or 'false' (the API didn't return it)
+//   - the new value is 'false'
+//
+// If the resource is being updated and the old value is 'true' (the API will return it), the diff can be executed normally.
+// If the resource is being updated and the old value is 'false' (the API will NOT return it), and the new value is 'true', the diff can be executed normally.
+// If the resource is being updated and the old value is 'false' (the API will NOT return it), and the new value is 'false', the diff must be suppressed.
+func suppressBooleanFalseWhenNotReturned(k, old, new string, d *schema.ResourceData) bool {
+	return d.Id() != "" && (old == "" || old == "false") && new == "false"
 }
