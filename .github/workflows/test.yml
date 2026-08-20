@@ -69,10 +69,13 @@ jobs:
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: ${{ runner.os }}-go-
     - name: Run Docker containers
+      # The `ccr` profile adds the leader cluster of the cross-cluster
+      # replication tests next to the regular test cluster.
       run: docker compose up --detach
       env:
         OSS_IMAGE: "${{ matrix.oss-image }}:${{ matrix.version }}"
         OS_COMMAND: "${{matrix.OS_COMMAND}}"
+        COMPOSE_PROFILES: ccr
     - name: Check Docker containers
       run: docker ps -a
     # While docker/OS is booting up, run the linters
@@ -95,12 +98,16 @@ jobs:
       # ensure that OS has come up and is available
       run: |
         ./script/wait-for-endpoint --timeout=60 http://admin:myStrongPassword123%40456@localhost:9200
+        ./script/wait-for-endpoint --timeout=60 http://admin:myStrongPassword123%40456@localhost:9201
     - name: Dump docker logs on failure
       if: failure()
       uses: jwalton/gh-docker-logs@2741064ab9d7af54b0b1ffb6076cf64c16f0220e # v2.2.2
     - name: Run the tests
       run: |
         export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
+        # Leader cluster of the cross-cluster replication tests
+        export OPENSEARCH_CCR_LEADER_URL=http://admin:myStrongPassword123%40456@localhost:9201
+        export OPENSEARCH_CCR_LEADER_SEED=opensearch-leader:9300
         export TF_LOG=INFO
         TF_ACC=1 go test ./... -v -parallel 20 -cover -short
         # check goreleaser config for deprecations
