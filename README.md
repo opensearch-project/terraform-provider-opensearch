@@ -28,6 +28,7 @@ Examples of resources can be found in the examples directory.
 #### OpenSearch and OpenSearch Dashboards
 
 - [x] [Cluster Settings](https://opensearch.org/docs/latest/api-reference/cluster-api/cluster-settings/)
+- [x] [Cross-cluster replication](https://docs.opensearch.org/latest/tuning-your-cluster/replication-plugin/getting-started/)
 - [x] [Audit Config](https://opensearch.org/docs/latest/security/audit-logs/index/)
 - [x] [Component templates](https://opensearch.org/docs/latest/dashboards/im-dashboards/component-templates/)
 - [x] [Index and Composable templates](https://opensearch.org/docs/latest/im-plugin/index-templates/)
@@ -68,6 +69,27 @@ TF_ACC=1 go test ./... -v -parallel 20 -cover -short
 ```
 
 Note:  Starting from version `2.12.0`, the `admin` user password is determined by the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable. If testing against a cluster with version `2.12.0` or later and have set `OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456`, please update the URL as follows: `export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200`
+
+#### Cross-cluster replication tests
+
+The tests of the `opensearch_cross_cluster_replication` and `opensearch_cross_cluster_replication_rule` resources need a second cluster to replicate from, so they are skipped by `make test`. Running `make test-ccr` starts a leader cluster next to the regular test cluster (the `ccr` Docker Compose profile) and runs them:
+
+```sh
+make test-ccr
+```
+
+**Manual equivalent** (no `make`):
+
+```sh
+export OSS_IMAGE="opensearchproject/opensearch:2"
+COMPOSE_PROFILES=ccr docker compose up -d
+export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
+# The HTTP URL of the leader cluster, used by the tests to create the replicated indexes
+export OPENSEARCH_CCR_LEADER_URL=http://admin:myStrongPassword123%40456@localhost:9201
+# The transport address of the leader cluster, as reachable from the follower cluster
+export OPENSEARCH_CCR_LEADER_SEED=opensearch-leader:9300
+TF_ACC=1 go test ./provider -v -run CrossCluster -cover
+```
 
 #### To Run Specific Test
 
