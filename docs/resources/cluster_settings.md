@@ -69,6 +69,7 @@ resource "opensearch_cluster_settings" "global" {
 - `network_breaker_inflight_requests_overhead` (Number) A constant that all in flight requests estimations are multiplied by
 - `reset_settings_on_delete` (Boolean) If true, cluster settings will be reset to defaults when this resource is deleted
 - `script_max_compilations_rate` (String) Limit for the number of unique dynamic scripts within a certain interval that are allowed to be compiled, expressed as compilations divided by a time string
+- `search_cancel_after_time_interval` (String) A time string setting the default timeout for all search requests at the coordinating node level, after which the request is cancelled; defaults to -1 (no timeout)
 - `search_default_search_timeout` (String) A time string setting a cluster-wide default timeout for all search requests
 
 ### Read-Only
