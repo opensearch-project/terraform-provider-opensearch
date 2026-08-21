@@ -112,7 +112,7 @@ resource "opensearch_ml_connector" "minimal" {
     action_type = "predict"
     method      = "POST"
     url         = "https://bedrock-runtime.$${parameters.region}.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
-    headers     = {
+    headers = {
       content-type         = "application/json"
       x-amz-content-sha256 = "required"
     }

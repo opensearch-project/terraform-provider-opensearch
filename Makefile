@@ -1,10 +1,23 @@
 .PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
+.PHONY: wait test-os2 test-os3 check-tools check tidy tidy-check fmt fmt-check lint-check validate
+.PHONY: lint ci-test ci-test-os2 ci-test-os3 fix help
 
-OSS_IMAGE ?= opensearchproject/opensearch:2
-OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:2
+# OpenSearch version to test against/use
+OS_VERSION ?= 2
+
+OSS_IMAGE ?= opensearchproject/opensearch:${OS_VERSION}
+OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:${OS_VERSION}
 OPENSEARCH_INITIAL_ADMIN_PASSWORD ?= myStrongPassword123@456
 OPENSEARCH_URL ?= http://admin:myStrongPassword123%40456@localhost:9200
 DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
+
+# Terraform settings
+TF_LOG ?= INFO
+TF_ACC ?= 1
+
+# Test settings
+TEST_PARALLEL := 20
+TEST_TIMEOUT := 120m
 
 # =============================================================================
 # Core targets — generate documentation and run acceptance tests against a
@@ -15,23 +28,108 @@ DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
 #   make up            # start OpenSearch cluster
 #   make down          # stop OpenSearch cluster
 #   make test          # start cluster + run acceptance tests (TF_ACC=1)
+#   make test-os2      # Run tests using OpenSearch 2.x
+#   make test-os2      # Run tests using OpenSearch 3.x
+#   make check-tools   # Checks that the requires tools are installed
+#   make check         # Performs all checks
+#   make fmt           # Perform terraform fmt
+#   make fmt-check     # Perform terraform fmt -check
+#   make tidy          # Performs go mod tidy
+#   make tidy-check    # Performs the tidy check task
+#   make lint          # Performs linting, and applies fixes 
+#   make lint-check    # Checks that the lint tool is installed and the correct version
+#   make fix           # Apply all of the fixes of the various types
+
 # =============================================================================
 
 docs:
 	go generate ./...
 
+wait: ## Wait for OpenSearch to be ready (same as CI)
+	@echo "Waiting for OpenSearch at $(OPENSEARCH_URL)..."
+	./script/wait-for-endpoint --timeout=60 $(OPENSEARCH_URL)
+
 up:
+	@echo "Starting OpenSearch ${OS_VERSION}"
 	@export OSS_IMAGE=$(OSS_IMAGE) && \
 	export OPENSEARCH_INITIAL_ADMIN_PASSWORD=$(OPENSEARCH_INITIAL_ADMIN_PASSWORD) && \
 	docker compose up -d
+	@echo "Containers started. Run 'make wait' to wait for OpenSearch to be ready."
 
 down:
+	@echo "Stopping OpenSearch containers..."
 	@docker compose down
+	@echo "Containers stopped."
 
 test: up
+	@echo "Running tests against OpenSearch $(OS_VERSION)..."
+	go clean -testcache
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
-	export TF_LOG=INFO && \
-	TF_ACC=1 go test ./provider -v -parallel 20 -cover -short
+	export TF_LOG=$(TF_LOG) && \
+	TF_ACC=$(TF_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
+
+test-os2: check-tools
+	$(MAKE) OS_VERSION=2 up
+	$(MAKE) OS_VERSION=2 wait
+	$(MAKE) OS_VERSION=2 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=2 down; exit $$EXIT_CODE)
+	$(MAKE) OS_VERSION=2 down
+
+test-os3: check-tools
+	$(MAKE) OS_VERSION=3 up
+	$(MAKE) OS_VERSION=3 wait
+	$(MAKE) OS_VERSION=3 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=3 down; exit $$EXIT_CODE)
+	$(MAKE) OS_VERSION=3 down
+
+lint-check: ## Check if golangci-lint v2.x is installed
+	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed." && exit 1)
+	@golangci-lint --version | grep -q "2\." || (echo "Error: golangci-lint v2.x is required. You have:" && golangci-lint --version && echo "Install the correct version" && exit 1)
+
+check-tools: lint-check
+	@which go > /dev/null || (echo "Error: Go is not installed" && exit 1)
+	@go generate -n > /dev/null 2>&1 || (echo "Error: tfplugindocs not installed" && exit 1)
+	@which terraform > /dev/null || (echo "Error: terraform is not installed" && exit 1)
+	@which docker > /dev/null || (echo "Error: docker is not installed" && exit 1)
+	@docker compose version > /dev/null 2>&1 || (echo "Error: docker compose is not available" && exit 1)
+	@echo "All required tools are installed."
+	
+
+check: tidy-check fmt-check lint-check validate
+	@echo "All pre-commit checks passed."
+
+tidy:
+	go mod tidy
+
+tidy-check:
+	./script/test-mod-tidy
+
+fmt-check:
+	terraform fmt -check -recursive
+
+fmt: 
+	terraform fmt -recursive
+
+validate:
+	terraform validate -no-color
+
+lint: check-lint ## Run golangci-lint and gofmt checks (same as CI)
+	golangci-lint run --verbose --timeout=10m --fix
+	@test -z "$$(gofmt -l .)" || (echo "Go code is not formatted. Run 'gofmt -w .' to fix:" && gofmt -l . && exit 1)
+
+fix: tidy fmt lint # Clean up the code
+
+ci-test: check  
+	@echo "=== Starting full CI test for OpenSearch $(OS_VERSION) ==="
+	$(MAKE) up
+	$(MAKE) wait
+	$(MAKE) test || (EXIT_CODE=$$?; $(MAKE) down; exit $$EXIT_CODE)
+	$(MAKE) down
+	@echo "=== Full CI test completed ==="
+
+ci-test-os2:
+	$(MAKE) OS_VERSION=2 ci-test
+
+ci-test-os3:
+	$(MAKE) OS_VERSION=3 ci-test
 
 # =============================================================================
 # Developer sandbox — spin up a real cluster (with OpenSearch Dashboards), build
@@ -89,7 +187,10 @@ dev-destroy:
 # Uses `dev-up` instead of `up` to activate the `dashboards` compose profile so OpenSearch Dashboards container is used.
 dev: dev-up
 	@echo "Waiting for OpenSearch to be ready (up to 120s)..."
-	./script/wait-for-endpoint --timeout=120 $(OPENSEARCH_URL)
+	$(MAKE) wait
 	$(MAKE) dev-apply
 
 dev-teardown: dev-destroy down
+
+
+
