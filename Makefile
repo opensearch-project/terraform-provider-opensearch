@@ -1,10 +1,12 @@
 .PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
+.PHONY: wait test-os2 test-os3 check-tools check tidy tidy-check fmt fmt-check check-link-tools validate
+.PHONY: lint ci-test ci-test-os2 ci-test-os3
 
 # OpenSearch version to test against/use
 OS_VERSION ?= 2
 
 OSS_IMAGE ?= opensearchproject/opensearch:${OS_VERSION}
-OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:${OS_VERSIONN}
+OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:${OS_VERSION}
 OPENSEARCH_INITIAL_ADMIN_PASSWORD ?= myStrongPassword123@456
 OPENSEARCH_URL ?= http://admin:myStrongPassword123%40456@localhost:9200
 DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
@@ -56,7 +58,7 @@ test: up
 	go clean -testcache
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
 	export OPENSEARCH_PREFIX=$(OPENSEARCH_PREFIX) && \
-	export TF_LOG=INFO && \
+	export TF_LOG=$(TF_LOG) && \
 	TF_ACC=$(TF_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
 
 test-os2: check-tools
@@ -71,16 +73,18 @@ test-os3: check-tools
 	$(MAKE) OS_VERSION=3 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=3 down; exit $$EXIT_CODE)
 	$(MAKE) OS_VERSION=3 down
 
-check-tools:
+check-lint: ## Check if golangci-lint v2.x is installed
+	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed." && exit 1)
+	@golangci-lint --version | grep -q "2\." || (echo "Error: golangci-lint v2.x is required. You have:" && golangci-lint --version && echo "Install the correct version" && exit 1)
+
+check-tools: check-lint
 	@which go > /dev/null || (echo "Error: Go is not installed" && exit 1)
+	@go generate -n > /dev/null 2>&1 || (echo "Error: tfplugindocs not installed" && exit 1)
 	@which terraform > /dev/null || (echo "Error: terraform is not installed" && exit 1)
 	@which docker > /dev/null || (echo "Error: docker is not installed" && exit 1)
 	@docker compose version > /dev/null 2>&1 || (echo "Error: docker compose is not available" && exit 1)
 	@echo "All required tools are installed."
 	
-check-lint-tool: ## Check if golangci-lint v2.x is installed
-	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed." && exit 1)
-	@golangci-lint --version | grep -q "2\." || (echo "Error: golangci-lint v2.x is required. You have:" && golangci-lint --version && echo "Install the correct version" && exit 1)
 
 check: tidy-check fmt-check
 	@echo "All pre-commit checks passed."
@@ -100,12 +104,12 @@ fmt:
 validate:
 	terraform validate -no-color
 
-lint: check-lint-tool ## Run golangci-lint and gofmt checks (same as CI)
-	golangci-lint run --verbose --timeout=10m
+lint: check-lint ## Run golangci-lint and gofmt checks (same as CI)
+	golangci-lint run --verbose --timeout=10m --fix
 	@test -z "$$(gofmt -l .)" || (echo "Go code is not formatted. Run 'gofmt -w .' to fix:" && gofmt -l . && exit 1)
 
-ci-test: check-lint-tool tidy-check fmt-check validate 
-	@echo "=== Starting full CI test for OpenSearch $(OS_VERSOIN) ==="
+ci-test: check-lint tidy-check fmt-check validate 
+	@echo "=== Starting full CI test for OpenSearch $(OS_VERSION) ==="
 	$(MAKE) up
 	$(MAKE) wait
 	$(MAKE) test || (EXIT_CODE=$$?; $(MAKE) down; exit $$EXIT_CODE)
@@ -179,6 +183,5 @@ dev: dev-up
 
 dev-teardown: dev-destroy down
 
-# Commmands used by CI and local testing
 
 
