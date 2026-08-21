@@ -1,6 +1,6 @@
 .PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
 .PHONY: wait test-os2 test-os3 check-tools check tidy tidy-check fmt fmt-check lint-check validate
-.PHONY: lint ci-test ci-test-os2 ci-test-os3 fix
+.PHONY: lint ci-test ci-test-os2 ci-test-os3 fix help
 
 # OpenSearch version to test against/use
 OS_VERSION ?= 2
@@ -65,7 +65,6 @@ test: up
 	@echo "Running tests against OpenSearch $(OS_VERSION)..."
 	go clean -testcache
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
-	export OPENSEARCH_PREFIX=$(OPENSEARCH_PREFIX) && \
 	export TF_LOG=$(TF_LOG) && \
 	TF_ACC=$(TF_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
 
@@ -94,7 +93,7 @@ check-tools: lint-check
 	@echo "All required tools are installed."
 	
 
-check: tidy-check fmt-check lint-check 
+check: tidy-check fmt-check lint-check validate
 	@echo "All pre-commit checks passed."
 
 tidy:
@@ -118,7 +117,7 @@ lint: check-lint ## Run golangci-lint and gofmt checks (same as CI)
 
 fix: tidy fmt lint # Clean up the code
 
-ci-test: check-lint tidy-check fmt-check validate 
+ci-test: check  
 	@echo "=== Starting full CI test for OpenSearch $(OS_VERSION) ==="
 	$(MAKE) up
 	$(MAKE) wait
