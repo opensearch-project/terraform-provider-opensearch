@@ -549,6 +549,12 @@ func extractErrorMessage(result map[string]interface{}) string {
 			return reason
 		}
 	}
+	// Some responses carry "error" as a plain string rather than an object, notably the
+	// "no handler found for uri [...]" that OpenSearch returns when an endpoint does not
+	// exist on the running version. Without this the caller only ever sees "unknown error".
+	if message, ok := result["error"].(string); ok && message != "" {
+		return message
+	}
 	return "unknown error"
 }
 
