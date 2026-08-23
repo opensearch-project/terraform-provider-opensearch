@@ -1,6 +1,6 @@
 .PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
-.PHONY: wait test-os2 test-os3 check-tools check tidy tidy-check fmt fmt-check lint-check validate
-.PHONY: lint ci-test ci-test-os2 ci-test-os3 fix help
+.PHONY: wait test-os2 test-os3 check-tools check-lint-tools check tidy tidy-check fmt fmt-check lint-check validate
+.PHONY: lint ci-test ci-test-os2 ci-test-os3 fix
 
 # OpenSearch version to test against/use
 OS_VERSION ?= 2
@@ -10,6 +10,7 @@ OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:${OS_VERSION}
 OPENSEARCH_INITIAL_ADMIN_PASSWORD ?= myStrongPassword123@456
 OPENSEARCH_URL ?= http://admin:myStrongPassword123%40456@localhost:9200
 DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
+WAIT_TIMEOUT ?= 120
 
 # Terraform settings
 TF_LOG ?= INFO
@@ -29,7 +30,7 @@ TEST_TIMEOUT := 120m
 #   make down          # stop OpenSearch cluster
 #   make test          # start cluster + run acceptance tests (TF_ACC=1)
 #   make test-os2      # Run tests using OpenSearch 2.x
-#   make test-os2      # Run tests using OpenSearch 3.x
+#   make test-os3      # Run tests using OpenSearch 3.x
 #   make check-tools   # Checks that the requires tools are installed
 #   make check         # Performs all checks
 #   make fmt           # Perform terraform fmt
@@ -47,7 +48,7 @@ docs:
 
 wait: ## Wait for OpenSearch to be ready (same as CI)
 	@echo "Waiting for OpenSearch at $(OPENSEARCH_URL)..."
-	./script/wait-for-endpoint --timeout=60 $(OPENSEARCH_URL)
+	./script/wait-for-endpoint --timeout=$(WAIT_TIMEOUT) $(OPENSEARCH_URL)
 
 up:
 	@echo "Starting OpenSearch ${OS_VERSION}"
@@ -80,11 +81,11 @@ test-os3: check-tools
 	$(MAKE) OS_VERSION=3 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=3 down; exit $$EXIT_CODE)
 	$(MAKE) OS_VERSION=3 down
 
-lint-check: ## Check if golangci-lint v2.x is installed
+check-lint-tools: ## Check if golangci-lint v2.x is installed
 	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed." && exit 1)
 	@golangci-lint --version | grep -q "2\." || (echo "Error: golangci-lint v2.x is required. You have:" && golangci-lint --version && echo "Install the correct version" && exit 1)
 
-check-tools: lint-check
+check-tools: check-lint-tools
 	@which go > /dev/null || (echo "Error: Go is not installed" && exit 1)
 	@go generate -n > /dev/null 2>&1 || (echo "Error: tfplugindocs not installed" && exit 1)
 	@which terraform > /dev/null || (echo "Error: terraform is not installed" && exit 1)
@@ -111,9 +112,12 @@ fmt:
 validate:
 	terraform validate -no-color
 
-lint: check-lint ## Run golangci-lint and gofmt checks (same as CI)
-	golangci-lint run --verbose --timeout=10m --fix
+lint-check: check-lint-tools
+	golangci-lint run --verbose --timeout=10m 
 	@test -z "$$(gofmt -l .)" || (echo "Go code is not formatted. Run 'gofmt -w .' to fix:" && gofmt -l . && exit 1)
+
+lint: check-lint-tools ## Run golangci-lint and gofmt checks (same as CI)
+	golangci-lint run --fix --verbose --timeout=10m 
 
 fix: tidy fmt lint # Clean up the code
 
@@ -186,7 +190,7 @@ dev-destroy:
 
 # Uses `dev-up` instead of `up` to activate the `dashboards` compose profile so OpenSearch Dashboards container is used.
 dev: dev-up
-	@echo "Waiting for OpenSearch to be ready (up to 120s)..."
+	@echo "Waiting for OpenSearch to be ready (up to $(WAIT_TIMEOUT)s)..."
 	$(MAKE) wait
 	$(MAKE) dev-apply
 
