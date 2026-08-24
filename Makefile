@@ -38,7 +38,7 @@ TEST_TIMEOUT := 120m
 #   make tidy          # Performs go mod tidy
 #   make tidy-check    # Performs the tidy check task
 #   make lint          # Performs linting, and applies fixes 
-#   make lint-check    # Checks that the lint tool is installed and the correct version
+#   make lint-check    # Performs the linting, and reports on any issues
 #   make fix           # Apply all of the fixes of the various types
 
 # =============================================================================
@@ -112,11 +112,11 @@ fmt:
 validate:
 	terraform validate -no-color
 
-lint-check: check-lint-tools
+lint-check: check-lint-tools ## Run golangci-lint and gofmt checks (same as CI)
 	golangci-lint run --verbose --timeout=10m 
 	@test -z "$$(gofmt -l .)" || (echo "Go code is not formatted. Run 'gofmt -w .' to fix:" && gofmt -l . && exit 1)
 
-lint: check-lint-tools ## Run golangci-lint and gofmt checks (same as CI)
+lint: check-lint-tools 
 	golangci-lint run --fix --verbose --timeout=10m 
 
 fix: tidy fmt lint # Clean up the code
