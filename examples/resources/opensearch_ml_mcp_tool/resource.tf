@@ -1,0 +1,137 @@
+# Prerequisites
+# -------------
+# 1. OpenSearch 3.1 or later. The register, update and remove APIs arrived in 3.0, but
+#    Terraform's read step depends on the List API, which arrived in 3.1.
+#
+# 2. The MCP server must be enabled. It is off by default:
+#
+#      plugins.ml_commons.mcp_server_enabled: true
+#
+#    The setting is dynamic, so it can also be applied at runtime with
+#    `PUT /_cluster/settings {"persistent":{"plugins.ml_commons.mcp_server_enabled":"true"}}`.
+#    It is not manageable through 'opensearch_cluster_settings', which carries a fixed list
+#    of settings and does not include any 'plugins.ml_commons.*' entry.
+#
+# 3. Availability on Amazon OpenSearch Service is unverified. The managed service restricts
+#    which cluster settings are writable and which plugin APIs are exposed; confirm against
+#    your own domain before relying on this resource there. Self-managed clusters are
+#    unaffected.
+#
+# Notes on updates
+# ----------------
+# The update API merges rather than replaces, and neither an empty value nor an explicit null
+# clears a field. 'description' can still be cleared, because the empty string is an accepted
+# value, but removing 'parameters' or 'attributes' from the configuration forces replacement.
+
+# An approved allowlist of tools. Only what is registered here can be discovered and invoked
+# by an MCP client, so this file is the reviewable record of what the server exposes.
+
+resource "opensearch_ml_mcp_tool" "list_index" {
+  name        = "ListIndexTool"
+  type        = "ListIndexTool"
+  description = "Lists all indices in the cluster, with their health, status, and document count."
+
+  attributes = jsonencode({
+    input_schema = {
+      type = "object"
+      properties = {
+        indices = {
+          type        = "array"
+          items       = { type = "string" }
+          description = "OpenSearch index name list, separated by comma. Leave empty to list every index."
+        }
+      }
+    }
+  })
+}
+
+resource "opensearch_ml_mcp_tool" "index_mapping" {
+  name        = "IndexMappingTool"
+  type        = "IndexMappingTool"
+  description = "Returns the mappings and settings of the given indices."
+
+  attributes = jsonencode({
+    input_schema = {
+      type = "object"
+      properties = {
+        index = {
+          type        = "array"
+          items       = { type = "string" }
+          description = "OpenSearch index name list, separated by comma."
+        }
+      }
+      required             = ["index"]
+      additionalProperties = false
+    }
+  })
+}
+
+resource "opensearch_ml_mcp_tool" "search_index" {
+  name        = "SearchIndexTool"
+  type        = "SearchIndexTool"
+  description = "Searches an index with a query written in OpenSearch query DSL."
+
+  attributes = jsonencode({
+    input_schema = {
+      type = "object"
+      properties = {
+        index = {
+          type        = "string"
+          description = "The index to search."
+        }
+        query = {
+          type        = "object"
+          description = "The query body, in OpenSearch query DSL."
+        }
+      }
+      required             = ["index", "query"]
+      additionalProperties = false
+    }
+  })
+}
+
+# A tool taking parameters. 'parameters' is a flat map of strings; nested parameters are not
+# supported by this resource.
+resource "opensearch_ml_mcp_tool" "ppl" {
+  name        = "PPLTool"
+  type        = "PPLTool"
+  description = "Translates a natural-language question into PPL and runs it."
+
+  parameters = {
+    model_id   = "<ID of a deployed model, e.g. from opensearch_ml_model>"
+    model_type = "FINETUNE"
+    execute    = "true"
+  }
+}
+
+# Fine-grained access control
+# ---------------------------
+# The registry is an administrative surface: whoever can call register, update, or remove
+# decides what every MCP client is able to invoke. Keep that separate from the read-only
+# access developers need to discover the tools.
+
+resource "opensearch_role" "mcp_tools_admin" {
+  role_name   = "mcp_tools_admin"
+  description = "May change which tools the MCP server exposes."
+
+  cluster_permissions = [
+    "cluster:admin/opensearch/ml/mcp_tools/register",
+    "cluster:admin/opensearch/ml/mcp_tools/update",
+    "cluster:admin/opensearch/ml/mcp_tools/remove",
+    "cluster:admin/opensearch/ml/mcp_tools/list",
+  ]
+}
+
+resource "opensearch_role" "mcp_tools_developer" {
+  role_name   = "mcp_tools_developer"
+  description = "May discover the registered tools, but not change the registry."
+
+  cluster_permissions = [
+    "cluster:admin/opensearch/ml/mcp_tools/list",
+  ]
+
+  index_permissions {
+    index_patterns  = ["*"]
+    allowed_actions = ["read"]
+  }
+}

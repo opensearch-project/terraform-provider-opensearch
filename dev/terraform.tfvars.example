@@ -22,3 +22,11 @@
 #   make dev-apply
 #
 # Or simply update `DEV_TF_ENV` in Makefile to set these environment variables.
+
+# =============================================================================
+# Feature toggles
+# =============================================================================
+# Requires an OpenSearch 3.1+ cluster with plugins.ml_commons.mcp_server_enabled=true:
+#   OSS_IMAGE=opensearchproject/opensearch:3 \
+#   OSS_ENV_VAR="plugins.ml_commons.mcp_server_enabled=true" make dev-up
+# enable_mcp_tool = true

@@ -30,6 +30,7 @@ jobs:
         os: [ubuntu-latest]
         os-major-version:
           - "2-opensearch"
+          - "3-opensearch"
         include:
         - os-major-version: "2-opensearch"
           version: 2
@@ -37,6 +38,26 @@ jobs:
           OS_IMAGE: "opensearchproject/opensearch:2"
           OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:2"
           OPENSEARCH_PREFIX: "plugins.security"
+          GO_TEST_TARGET: "./..."
+        # The `opensearch_ml_mcp_tool` tests need the ML Commons MCP server, which arrived
+        # in OpenSearch 3.0 (its List API in 3.1) and is off by default. The flag is unknown
+        # to ml-commons 2.x, where an unrecognised setting stops the node from booting, so it
+        # is set through OSS_ENV_VAR on this entry only.
+        #
+        # This entry deliberately runs only the MCP tests rather than the whole suite. The
+        # suite is not yet 3.x-clean for reasons unrelated to MCP — notably
+        # TestAccOpensearchOpenDistroChannelConfiguration, whose Slack webhook URL the 3.x
+        # notifications plugin rejects because it does not contain "hooks.slack.com/services/".
+        # Widen GO_TEST_TARGET to "./..." once those are fixed, so this entry becomes a
+        # general 3.x signal.
+        - os-major-version: "3-opensearch"
+          version: 3
+          oss-image: "opensearchproject/opensearch"
+          OS_IMAGE: "opensearchproject/opensearch:3"
+          OS_DASHBOARD_IMAGE: "opensearchproject/opensearch-dashboards:3"
+          OPENSEARCH_PREFIX: "plugins.security"
+          OSS_ENV_VAR: "plugins.ml_commons.mcp_server_enabled=true"
+          GO_TEST_TARGET: "./provider -run MCPTool"
     needs: [lint]
     name: Test against OS ${{ matrix.os-major-version }} on ${{ matrix.go-version }}/${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -45,6 +66,7 @@ jobs:
       OS_DASHBOARD_IMAGE: "${{matrix.OS_DASHBOARD_IMAGE}}"
       OPENSEARCH_PREFIX: "${{matrix.OPENSEARCH_PREFIX}}"
       OSS_ENV_VAR: "${{matrix.OSS_ENV_VAR}}"
+      GO_TEST_TARGET: "${{matrix.GO_TEST_TARGET}}"
     steps:
     - name: Prepare tests
       run: |
@@ -102,7 +124,7 @@ jobs:
       run: |
         export OPENSEARCH_URL=http://admin:myStrongPassword123%40456@localhost:9200
         export TF_LOG=INFO
-        TF_ACC=1 go test ./... -v -parallel 20 -cover -short
+        TF_ACC=1 go test $GO_TEST_TARGET -v -parallel 20 -cover -short
         # check goreleaser config for deprecations
         curl -sfL https://git.io/goreleaser | sh -s -- check
   release:

@@ -162,3 +162,18 @@ func diffSuppressAnomalyDetection(k, old, new string, d *schema.ResourceData) bo
 
 	return reflect.DeepEqual(oo, no)
 }
+
+// diffSuppressMCPToolAttributes compares the `attributes` document of an
+// opensearch_ml_mcp_tool. The MCP tools List API does not preserve the key ordering of the
+// registered JSON Schema, so the values are compared structurally rather than textually.
+func diffSuppressMCPToolAttributes(k, old, new string, d *schema.ResourceData) bool {
+	var oo, no interface{}
+	if err := json.Unmarshal([]byte(old), &oo); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(new), &no); err != nil {
+		return false
+	}
+
+	return reflect.DeepEqual(oo, no)
+}
