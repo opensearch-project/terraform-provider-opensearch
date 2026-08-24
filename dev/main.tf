@@ -34,3 +34,33 @@ resource "opensearch_index" "index" {
     }
   })
 }
+
+# ML Commons: MCP tool
+#
+# Off by default, because it needs an OpenSearch 3.1+ cluster with the MCP server enabled,
+# while the sandbox defaults to 2.x. To exercise it:
+#
+#   make down
+#   OSS_IMAGE=opensearchproject/opensearch:3 \
+#   OSS_ENV_VAR="plugins.ml_commons.mcp_server_enabled=true" make dev-up
+#   TF_VAR_enable_mcp_tool=true make dev-apply
+resource "opensearch_ml_mcp_tool" "mcp_tool" {
+  count = var.enable_mcp_tool ? 1 : 0
+
+  name        = "ListIndexTool"
+  type        = "ListIndexTool"
+  description = "Lists all indices in the cluster"
+
+  attributes = jsonencode({
+    input_schema = {
+      type = "object"
+      properties = {
+        indices = {
+          type        = "array"
+          items       = { type = "string" }
+          description = "OpenSearch index name list, separated by comma"
+        }
+      }
+    }
+  })
+}

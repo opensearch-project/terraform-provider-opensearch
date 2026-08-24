@@ -1,7 +1,13 @@
-.PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
+.PHONY: docs up down test up-mcp test-mcp dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
 
 OSS_IMAGE ?= opensearchproject/opensearch:2
 OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:2
+# The ML Commons MCP server landed in OpenSearch 3.0 and its List API in 3.1, so the
+# `opensearch_ml_mcp_tool` tests need a 3.x cluster with the feature flag on. The flag is
+# unknown to ml-commons 2.x and an unknown setting stops the node from booting, so it is
+# passed through OSS_ENV_VAR for this target only and never added to docker-compose.yml.
+OSS_MCP_IMAGE ?= opensearchproject/opensearch:3
+OSS_MCP_ENV_VAR ?= plugins.ml_commons.mcp_server_enabled=true
 OPENSEARCH_INITIAL_ADMIN_PASSWORD ?= myStrongPassword123@456
 OPENSEARCH_URL ?= http://admin:myStrongPassword123%40456@localhost:9200
 DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
@@ -15,6 +21,8 @@ DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
 #   make up            # start OpenSearch cluster
 #   make down          # stop OpenSearch cluster
 #   make test          # start cluster + run acceptance tests (TF_ACC=1)
+#   make up-mcp        # start an OpenSearch 3.x cluster with the MCP server enabled
+#   make test-mcp      # start MCP-enabled 3.x cluster + run acceptance tests (TF_ACC=1)
 # =============================================================================
 
 docs:
@@ -29,6 +37,17 @@ down:
 	@docker compose down
 
 test: up
+	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
+	export TF_LOG=INFO && \
+	TF_ACC=1 go test ./provider -v -parallel 20 -cover -short
+
+up-mcp:
+	@export OSS_IMAGE=$(OSS_MCP_IMAGE) && \
+	export OSS_ENV_VAR=$(OSS_MCP_ENV_VAR) && \
+	export OPENSEARCH_INITIAL_ADMIN_PASSWORD=$(OPENSEARCH_INITIAL_ADMIN_PASSWORD) && \
+	docker compose up -d
+
+test-mcp: up-mcp
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
 	export TF_LOG=INFO && \
 	TF_ACC=1 go test ./provider -v -parallel 20 -cover -short

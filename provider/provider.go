@@ -274,6 +274,7 @@ func Provider() *schema.Provider {
 			"opensearch_ml_connector":              resourceOpensearchMLConnector(),
 			"opensearch_ml_model_group":            resourceOpensearchMLModelGroup(),
 			"opensearch_ml_model":                  resourceOpensearchMLModel(),
+			"opensearch_ml_mcp_tool":               resourceOpensearchMLMCPTool(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{

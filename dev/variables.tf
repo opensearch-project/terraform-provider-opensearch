@@ -39,3 +39,12 @@ variable "aws_session_token" {
   default     = ""
   sensitive   = true
 }
+
+# =============================================================================
+# Feature toggles
+# =============================================================================
+variable "enable_mcp_tool" {
+  type        = bool
+  description = "Create the opensearch_ml_mcp_tool resource. Requires an OpenSearch 3.1+ cluster with plugins.ml_commons.mcp_server_enabled=true, so it is off by default to keep the sandbox working on 2.x."
+  default     = false
+}
