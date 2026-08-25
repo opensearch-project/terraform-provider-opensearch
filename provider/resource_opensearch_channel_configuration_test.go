@@ -149,7 +149,7 @@ resource "opensearch_channel_configuration" "slack_channel_configuration" {
     "config_type": "slack",
     "is_enabled": true,
     "slack": {
-      "url": "https://www.example.com"
+      "url": "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
     }
   }
 }
@@ -169,7 +169,7 @@ resource "opensearch_channel_configuration" "chime_channel_configuration" {
     "config_type": "chime",
     "is_enabled": true,
     "chime": {
-      "url": "https://www.example.com"
+      "url": "https://hooks.chime.aws/incomingwebhooks/XXXXXXXXXXXXXXXXXXXXXXXX?token=XXXXXXXXXXXXXXXXXXXXXXXX"
     }
   }
 }

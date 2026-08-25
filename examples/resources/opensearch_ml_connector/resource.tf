@@ -32,7 +32,7 @@ resource "opensearch_ml_connector" "minimal_aws_sigv4" {
     action_type = "predict"
     method      = "POST"
     url         = "https://bedrock-runtime.$${parameters.region}.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
-    headers     = {
+    headers = {
       Content-Type         = "application/json"
       x-amz-content-sha256 = "required"
     }
@@ -60,7 +60,7 @@ resource "opensearch_ml_connector" "minimal_self_managed_aws_sigv4" {
     action_type = "predict"
     method      = "POST"
     url         = "https://bedrock-runtime.$${parameters.region}.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
-    headers     = {
+    headers = {
       Content-Type         = "application/json"
       x-amz-content-sha256 = "required"
     }
@@ -87,7 +87,7 @@ resource "opensearch_ml_connector" "minimal_http" {
     action_type = "predict"
     method      = "POST"
     url         = "https://$${parameters.endpoint}/v1/completions"
-    headers     = {
+    headers = {
       Authorization = "Bearer $${credential.openAIKey}"
     }
     request_body = "{ \"model\": \"$${parameters.model}\", \"prompt\": \"$${parameters.prompt}\", \"max_tokens\": \"$${parameters.max_tokens}\", \"temperature\": \"$${parameters.temperature}\" }"
@@ -115,7 +115,7 @@ resource "opensearch_ml_connector" "with_pre_post_processing" {
       Content-Type         = "application/json"
       x-amz-content-sha256 = "required"
     }
-    request_body = "{ \"inputText\": \"$${parameters.inputText}\" }"
+    request_body          = "{ \"inputText\": \"$${parameters.inputText}\" }"
     pre_process_function  = "connector.pre_process.bedrock.embedding"
     post_process_function = "connector.post_process.bedrock.embedding"
   }
@@ -138,7 +138,7 @@ resource "opensearch_ml_connector" "with_access_mode_and_backend_roles" {
     action_type = "predict"
     method      = "POST"
     url         = "https://bedrock-runtime.$${parameters.region}.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
-    headers     = {
+    headers = {
       Content-Type         = "application/json"
       x-amz-content-sha256 = "required"
     }
@@ -165,7 +165,7 @@ resource "opensearch_ml_connector" "with_client_config" {
     action_type = "predict"
     method      = "POST"
     url         = "https://bedrock-runtime.$${parameters.region}.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
-    headers     = {
+    headers = {
       Content-Type         = "application/json"
       x-amz-content-sha256 = "required"
     }
