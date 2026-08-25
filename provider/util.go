@@ -17,6 +17,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/mitchellh/go-homedir"
+	"gopkg.in/yaml.v3"
 	"github.com/opensearch-project/opensearch-go/v2"
 )
 
@@ -151,6 +152,11 @@ func normalizedIndexSettings(settings map[string]interface{}) map[string]interfa
 
 func normalizeAnomalyDetection(tpl map[string]interface{}) {
 	delete(tpl, "last_update_time")
+}
+
+func normalizeRule(tpl map[string]interface{}) {
+	delete(tpl, "last_update_time")
+	delete(tpl, "queries")
 }
 
 func flattenMap(m map[string]interface{}) map[string]interface{} {
@@ -486,6 +492,53 @@ func readPathOrContent(poc string) (string, bool, error) {
 	return poc, false, nil
 }
 
+// convertYAMLToJSON converts a YAML string to a JSON string
+func convertYAMLToJSON(yamlStr string) (string, error) {
+	var data interface{}
+	
+	// Parse YAML into Go data structure
+	if err := yaml.Unmarshal([]byte(yamlStr), &data); err != nil {
+		return "", fmt.Errorf("error parsing YAML: %v", err)
+	}
+	
+	// Convert to JSON
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling to JSON: %v", err)
+	}
+	
+	return string(jsonBytes), nil
+}
+
+// convertJSONToYAML converts a JSON string to a YAML string
+func convertJSONToYAML(jsonStr string) (string, error) {
+	var data interface{}
+	
+	// Parse JSON into Go data structure
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return "", fmt.Errorf("error parsing JSON: %v", err)
+	}
+	
+	// Convert to YAML
+	yamlBytes, err := yaml.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling to YAML: %v", err)
+	}
+	
+	return string(yamlBytes), nil
+}
+
+// normalizeToJSON converts either JSON or YAML input to JSON format
+func normalizeToJSON(input string) (string, error) {
+	// First try to parse as JSON (test if it's already JSON)
+	var jsonData interface{}
+	if err := json.Unmarshal([]byte(input), &jsonData); err == nil {
+		// It's valid JSON, return as-is
+		return input, nil
+	}
+	
+	// Not JSON, try to convert from YAML
+	return convertYAMLToJSON(input)
 // ============================================
 // ===    HTTP Request Helper Functions     ===
 // ============================================
