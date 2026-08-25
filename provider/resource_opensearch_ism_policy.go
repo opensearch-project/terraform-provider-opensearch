@@ -173,7 +173,11 @@ func resourceOpensearchGetISMPolicy(policyID string, m interface{}) (GetPolicyRe
 	})
 
 	if err != nil {
-		return *response, fmt.Errorf("error getting policy: %+v : %+v", path, err)
+		// Return the raw err so its *elastic.Error type survives. Read gates
+		// create on IsNotFound, which type-switches on the concrete error and
+		// never unwraps, so a wrapped 404 would be missed and create never fires.
+		log.Printf("[INFO] error getting policy at %s: %+v", path, err)
+		return *response, err
 	}
 	body = &res.Body
 
