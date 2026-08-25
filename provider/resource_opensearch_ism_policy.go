@@ -197,6 +197,17 @@ func resourceOpensearchPutISMPolicy(d *schema.ResourceData, m interface{}) (*Put
 	primTerm := d.Get("primary_term").(int)
 	params := url.Values{}
 
+	// Re-read live seq_no/primary_term right before PUT. State value lags
+	// (ISM writes own policy metadata after create/read); 409 retrier below
+	// replays stale value, never converges. Guard on current version fixes it.
+	if seq >= 0 && primTerm > 0 {
+		// Re-read failed: fall back to state value (original behavior).
+		if cur, gerr := resourceOpensearchGetISMPolicy(d.Get("policy_id").(string), m); gerr == nil {
+			seq = cur.SeqNo
+			primTerm = cur.PrimaryTerm
+		}
+	}
+
 	if seq >= 0 && primTerm > 0 {
 		params.Set("if_seq_no", strconv.Itoa(seq))
 		params.Set("if_primary_term", strconv.Itoa(primTerm))
