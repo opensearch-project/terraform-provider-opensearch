@@ -4,6 +4,7 @@
   - [Supported Functionalities](#supported-functionalities)
     - [OpenSearch and OpenSearch Dashboards](#opensearch-and-opensearch-dashboards)
   - [Running tests locally](#running-tests-locally)
+    - [Terraform test suite](#terraform-test-suite)
     - [To Run Specific Test](#to-run-specific-test)
     - [Fix the go-lint errors](#fix-the-go-lint-errors)
   - [Developer sandbox](#developer-sandbox)
@@ -48,11 +49,44 @@ Examples of resources can be found in the examples directory.
 
 ### Running tests locally
 
-The `Makefile` wraps the most common workflows. Running `make test` starts a local OpenSearch cluster (via Docker Compose) and executes the full acceptance-test suite:
+The `Makefile` wraps the most common workflows. Running `make test` starts a local OpenSearch cluster (via Docker Compose) and executes the Go acceptance-test suite:
 
 ```sh
 make test
 ```
+
+### Terraform test suite
+
+The Terraform test suite uses native `.tftest.hcl` files under `tf-tests/`.
+The Makefile builds the provider, configures Terraform to use the local
+provider, starts the OpenSearch container, waits for it to be ready, loads
+integration test data, runs the tests, and cleans up the container.
+
+Terraform `>= 1.11.0` is required.
+
+```sh
+# Run Terraform tests against OpenSearch 2.x
+make tf-test-local
+
+# Run Terraform tests against OpenSearch 3.x
+make OS_VERSION=3 tf-test-local
+
+# Run both Go and Terraform tests against OpenSearch 2.x
+make test-os2
+
+# Run both Go and Terraform tests against OpenSearch 3.x
+make test-os3
+```
+
+Pass arguments to `terraform test` with `TF_TEST_ARGS`:
+
+```sh
+make tf-test-local TF_TEST_ARGS="-filter=tests/opensearch_index.tftest.hcl"
+make tf-test-local TF_TEST_ARGS="-filter=tests/opensearch_index.tftest.hcl -verbose"
+```
+
+See [tf-tests/TEST_COVERAGE.md](tf-tests/TEST_COVERAGE.md) for the resource
+coverage matrix and integration test scenarios.
 
 **Manual equivalent** (no `make`):
 
