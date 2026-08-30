@@ -25,7 +25,7 @@ run "create_anomaly_detector" {
   variables {
     name = "integration-security-detector"
     body = jsonencode({
-      name        = "Security Audit Anomaly Detector"
+      name        = "security-audit-anomaly-detector"
       description = "Detects unusual access patterns in audit logs"
       time_field  = "@timestamp"
       indices     = ["security-audit-logs"]
