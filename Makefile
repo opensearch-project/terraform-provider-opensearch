@@ -1,4 +1,4 @@
-.PHONY: docs up down test tf-test-vars tf-test-data tf-test-local dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
+.PHONY: docs up down test test-running tf-test-vars tf-test-data tf-test-run tf-test-local dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
 .PHONY: wait test-os2 test-os3 check-tools check-lint-tools check tidy tidy-check fmt fmt-check lint-check validate
 .PHONY: lint ci-test ci-test-os2 ci-test-os3 fix
 
@@ -67,11 +67,19 @@ down:
 	@echo "Containers stopped."
 
 test: up
+	$(MAKE) wait
+	$(MAKE) test-running
+
+test-running:
 	@echo "Running tests against OpenSearch $(OS_VERSION)..."
 	go clean -testcache
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
 	export TF_LOG=$(TF_LOG) && \
 	TF_ACC=$(TF_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
+
+tf-test-run: tf-test-vars tf-test-data
+	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) init -upgrade
+	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) test $(TF_TEST_ARGS)
 
 tf-test-local: dev-build dev-config
 	@set -e; \
@@ -79,10 +87,7 @@ tf-test-local: dev-build dev-config
 	trap cleanup EXIT; \
 	$(MAKE) up; \
 	$(MAKE) wait; \
-	$(MAKE) tf-test-vars; \
-	$(MAKE) tf-test-data; \
-	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) init -upgrade; \
-	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) test $(TF_TEST_ARGS)
+	$(MAKE) tf-test-run
 
 tf-test-vars:
 	@printf 'opensearch_url = "%s"\nopensearch_username = "%s"\nopensearch_password = "%s"\n' \
@@ -93,17 +98,23 @@ tf-test-data:
 	./script/setup-integration-data.sh \
 		"$(OPENSEARCH_URL)" "$(OPENSEARCH_USERNAME)" "$(OPENSEARCH_INITIAL_ADMIN_PASSWORD)"
 
-test-os2: check-tools
-	$(MAKE) OS_VERSION=2 up
-	$(MAKE) OS_VERSION=2 wait
-	$(MAKE) OS_VERSION=2 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=2 down; exit $$EXIT_CODE)
-	$(MAKE) OS_VERSION=2 down
+test-os2: check-tools dev-build dev-config
+	@set -e; \
+	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
+	trap cleanup EXIT; \
+	$(MAKE) OS_VERSION=2 up; \
+	$(MAKE) OS_VERSION=2 wait; \
+	$(MAKE) OS_VERSION=2 test-running; \
+	$(MAKE) OS_VERSION=2 tf-test-run
 
-test-os3: check-tools
-	$(MAKE) OS_VERSION=3 up
-	$(MAKE) OS_VERSION=3 wait
-	$(MAKE) OS_VERSION=3 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=3 down; exit $$EXIT_CODE)
-	$(MAKE) OS_VERSION=3 down
+test-os3: check-tools dev-build dev-config
+	@set -e; \
+	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
+	trap cleanup EXIT; \
+	$(MAKE) OS_VERSION=3 up; \
+	$(MAKE) OS_VERSION=3 wait; \
+	$(MAKE) OS_VERSION=3 test-running; \
+	$(MAKE) OS_VERSION=3 tf-test-run
 
 check-lint-tools: ## Check if golangci-lint v2.x is installed
 	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed." && exit 1)
@@ -149,7 +160,7 @@ ci-test: check
 	@echo "=== Starting full CI test for OpenSearch $(OS_VERSION) ==="
 	$(MAKE) up
 	$(MAKE) wait
-	$(MAKE) test || (EXIT_CODE=$$?; $(MAKE) down; exit $$EXIT_CODE)
+	$(MAKE) test-running || (EXIT_CODE=$$?; $(MAKE) down; exit $$EXIT_CODE)
 	$(MAKE) down
 	@echo "=== Full CI test completed ==="
 
