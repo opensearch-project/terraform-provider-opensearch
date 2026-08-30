@@ -38,7 +38,7 @@ make tf-test-local TF_TEST_ARGS="-verbose"
 ## Prerequisites
 
 - Docker Compose
-- Terraform >= 1.6.0
+- Terraform >= 1.7.0
 - curl
 
 ## Docker Compose

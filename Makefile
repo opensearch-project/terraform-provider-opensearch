@@ -1,6 +1,6 @@
 .PHONY: docs up down test test-running tf-test-vars tf-test-data tf-test-run tf-test-local dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
 .PHONY: wait test-os2 test-os3 check-tools check-lint-tools check tidy tidy-check fmt fmt-check lint-check validate
-.PHONY: lint ci-test ci-test-os2 ci-test-os3 fix
+.PHONY: lint fix
 
 # OpenSearch version to test against/use
 OS_VERSION ?= 2
@@ -32,10 +32,12 @@ TEST_TIMEOUT := 120m
 #   make up            # start OpenSearch cluster
 #   make down          # stop OpenSearch cluster
 #   make test          # start cluster + run acceptance tests (TF_ACC=1)
+#   make test-running  # run Go acceptance tests against an already-running cluster
 #   make tf-test-local # build provider + run Terraform tests against OpenSearch $(OS_VERSION)
-#   make test-os2      # Run tests using OpenSearch 2.x
-#   make test-os3      # Run tests using OpenSearch 3.x
-#   make check-tools   # Checks that the requires tools are installed
+#   make tf-test-run   # run Terraform tests against an already-running cluster
+#   make test-os2      # Run all tests using OpenSearch 2.x
+#   make test-os3      # Run all tests using OpenSearch 3.x
+#   make check-tools   # Check that required tools are installed
 #   make check         # Performs all checks
 #   make fmt           # Perform terraform fmt
 #   make fmt-check     # Perform terraform fmt -check
@@ -43,7 +45,7 @@ TEST_TIMEOUT := 120m
 #   make tidy-check    # Performs the tidy check task
 #   make lint          # Performs linting, and applies fixes 
 #   make lint-check    # Performs the linting, and reports on any issues
-#   make fix           # Apply all of the fixes of the various types
+#   make fix           # Apply all available formatting, lint, and dependency fixes
 
 # =============================================================================
 
@@ -155,20 +157,6 @@ lint: check-lint-tools
 	golangci-lint run --fix --verbose --timeout=10m 
 
 fix: tidy fmt lint # Clean up the code
-
-ci-test: check  
-	@echo "=== Starting full CI test for OpenSearch $(OS_VERSION) ==="
-	$(MAKE) up
-	$(MAKE) wait
-	$(MAKE) test-running || (EXIT_CODE=$$?; $(MAKE) down; exit $$EXIT_CODE)
-	$(MAKE) down
-	@echo "=== Full CI test completed ==="
-
-ci-test-os2:
-	$(MAKE) OS_VERSION=2 ci-test
-
-ci-test-os3:
-	$(MAKE) OS_VERSION=3 ci-test
 
 # =============================================================================
 # Developer sandbox — spin up a real cluster (with OpenSearch Dashboards), build
