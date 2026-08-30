@@ -1,4 +1,4 @@
-.PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
+.PHONY: docs up down test tf-test-vars tf-test-data tf-test-local dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
 .PHONY: wait test-os2 test-os3 check-tools check-lint-tools check tidy tidy-check fmt fmt-check lint-check validate
 .PHONY: lint ci-test ci-test-os2 ci-test-os3 fix
 
@@ -8,8 +8,11 @@ OS_VERSION ?= 2
 OSS_IMAGE ?= opensearchproject/opensearch:${OS_VERSION}
 OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:${OS_VERSION}
 OPENSEARCH_INITIAL_ADMIN_PASSWORD ?= myStrongPassword123@456
+OPENSEARCH_USERNAME ?= admin
 OPENSEARCH_URL ?= http://admin:myStrongPassword123%40456@localhost:9200
 DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
+TF_TEST_DIR = $(CURDIR)/tf-tests
+TF_TEST_ARGS ?=
 WAIT_TIMEOUT ?= 120
 
 # Terraform settings
@@ -29,6 +32,7 @@ TEST_TIMEOUT := 120m
 #   make up            # start OpenSearch cluster
 #   make down          # stop OpenSearch cluster
 #   make test          # start cluster + run acceptance tests (TF_ACC=1)
+#   make tf-test-local # build provider + run Terraform tests against OpenSearch $(OS_VERSION)
 #   make test-os2      # Run tests using OpenSearch 2.x
 #   make test-os3      # Run tests using OpenSearch 3.x
 #   make check-tools   # Checks that the requires tools are installed
@@ -68,6 +72,26 @@ test: up
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
 	export TF_LOG=$(TF_LOG) && \
 	TF_ACC=$(TF_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
+
+tf-test-local: dev-build dev-config
+	@set -e; \
+	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
+	trap cleanup EXIT; \
+	$(MAKE) up; \
+	$(MAKE) wait; \
+	$(MAKE) tf-test-vars; \
+	$(MAKE) tf-test-data; \
+	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) init -upgrade; \
+	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) test $(TF_TEST_ARGS)
+
+tf-test-vars:
+	@printf 'opensearch_url = "%s"\nopensearch_username = "%s"\nopensearch_password = "%s"\n' \
+		"$(OPENSEARCH_URL)" "$(OPENSEARCH_USERNAME)" "$(OPENSEARCH_INITIAL_ADMIN_PASSWORD)" \
+		> "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"
+
+tf-test-data:
+	./script/setup-integration-data.sh \
+		"$(OPENSEARCH_URL)" "$(OPENSEARCH_USERNAME)" "$(OPENSEARCH_INITIAL_ADMIN_PASSWORD)"
 
 test-os2: check-tools
 	$(MAKE) OS_VERSION=2 up
