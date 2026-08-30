@@ -98,7 +98,7 @@ tf-test-data:
 	./script/setup-integration-data.sh \
 		"$(OPENSEARCH_URL)" "$(OPENSEARCH_USERNAME)" "$(OPENSEARCH_INITIAL_ADMIN_PASSWORD)"
 
-test-os2: check-tools dev-build dev-config
+test-os2: dev-build dev-config
 	@set -e; \
 	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
 	trap cleanup EXIT; \
@@ -107,7 +107,7 @@ test-os2: check-tools dev-build dev-config
 	$(MAKE) OS_VERSION=2 test-running; \
 	$(MAKE) OS_VERSION=2 tf-test-run
 
-test-os3: check-tools dev-build dev-config
+test-os3: dev-build dev-config
 	@set -e; \
 	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
 	trap cleanup EXIT; \
