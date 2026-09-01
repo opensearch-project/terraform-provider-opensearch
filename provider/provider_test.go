@@ -516,6 +516,48 @@ func TestAWSCredsWebIdentityEnvSuppressedByProfile(t *testing.T) {
 }
 
 // Given:
+// 1. AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE are set (as EKS IRSA injects them)
+// 2. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are also set (e.g. by a CI/CD
+//    step that assumes a cross-account role)
+//
+// This tests that: the env-sourced static credentials take precedence over
+// env-sourced web identity, matching the AWS SDK default credential chain
+// priority. Without the static-creds guard in resolveAWSWebIdentityEnv, the
+// web identity fields are populated and awsSession case 3 fires before case 5
+// (default chain) can discover the static env creds — a priority inversion
+// that causes the provider to authenticate as the IRSA pod role instead of the
+// assumed cross-account role.
+func TestAWSCredsEnvStaticCredsOverrideWebIdentityEnv(t *testing.T) {
+	envAccessKeyID := "ENV_ACCESS_KEY"
+	testRegion := "us-east-1"
+
+	os.Setenv("AWS_ACCESS_KEY_ID", envAccessKeyID)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", "ENV_SECRET")
+	os.Setenv("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/demo/TestWebIdentity")
+	os.Setenv("AWS_WEB_IDENTITY_TOKEN_FILE", "./test-fixtures/web_identity_token")
+
+	testConfig := &ProviderConf{}
+	resolveAWSWebIdentityEnv(testConfig)
+
+	if testConfig.awsWebIdentityRoleArn != "" {
+		t.Errorf("expected web identity role arn to be suppressed by env static creds, got %s", testConfig.awsWebIdentityRoleArn)
+	}
+	if testConfig.awsWebIdentityTokenFile != "" {
+		t.Errorf("expected web identity token file to be suppressed by env static creds, got %s", testConfig.awsWebIdentityTokenFile)
+	}
+
+	creds := getCreds(t, testRegion, testConfig, "")
+	if creds.AccessKeyID != envAccessKeyID {
+		t.Errorf("access key id should have been %s (we got %s)", envAccessKeyID, creds.AccessKeyID)
+	}
+
+	os.Unsetenv("AWS_ACCESS_KEY_ID")
+	os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+	os.Unsetenv("AWS_ROLE_ARN")
+	os.Unsetenv("AWS_WEB_IDENTITY_TOKEN_FILE")
+}
+
+// Given:
 // 1. A web identity role ARN and token file are configured
 // 2. aws_assume_role_arn is also configured
 //
