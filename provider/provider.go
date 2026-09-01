@@ -343,6 +343,15 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 // an explicit aws_profile wins over ambient IRSA env vars. Web identity set
 // explicitly in the provider config is left untouched and still applies.
 //
+// Static credentials — whether from the provider config (aws_access_key) or
+// from the environment (AWS_ACCESS_KEY_ID) — also suppress env-sourced web
+// identity. Provider-config static creds already win unconditionally in
+// awsSession (case 1), but env-var static creds are only discovered by the
+// SDK default chain (case 5). If we populate the web identity fields here,
+// case 3 fires first and the static env creds are never reached — a priority
+// inversion that breaks EKS pods where IRSA vars coexist with CI/CD-assumed
+// role credentials (e.g. Jenkins withAWS).
+//
 // This matches botocore at commit d6092247:
 //   - create_credential_resolver derives disable_env_vars from whether a profile
 //     was explicitly selected:
@@ -352,10 +361,10 @@ func providerConfigure(c context.Context, d *schema.ResourceData) (interface{}, 
 //     when a profile was explicitly selected:
 //     https://github.com/boto/botocore/blob/d6092247/botocore/credentials.py#L1918-L1924
 func resolveAWSWebIdentityEnv(conf *ProviderConf) {
-	// An explicit profile disables env-var-sourced web identity (botocore's
-	// disable_env_vars). aws_access_key is not checked here because static keys
-	// already take unconditional precedence in awsSession.
 	if conf.awsProfile != "" {
+		return
+	}
+	if conf.awsAccessKeyId != "" || os.Getenv("AWS_ACCESS_KEY_ID") != "" {
 		return
 	}
 	if conf.awsWebIdentityRoleArn == "" {
