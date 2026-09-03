@@ -67,10 +67,12 @@ func testAccCheckOpensearchDashboardTenantDestroy(s *terraform.State) error {
 			continue
 		}
 
-		meta := testAccOpendistroProvider.Meta()
+		providerConf, err := getDashboardTenantTestProviderConf()
+		if err != nil {
+			return err
+		}
 
-		var err error
-		_, err = resourceOpensearchGetOpenDistroDashboardTenant(rs.Primary.ID, meta.(*ProviderConf))
+		_, err = resourceOpensearchGetOpenDistroDashboardTenant(rs.Primary.ID, providerConf)
 
 		if err != nil {
 			return nil // should be not found error
@@ -88,10 +90,12 @@ func testCheckOpensearchDashboardTenantExists(name string) resource.TestCheckFun
 				continue
 			}
 
-			meta := testAccOpendistroProvider.Meta()
+			providerConf, err := getDashboardTenantTestProviderConf()
+			if err != nil {
+				return err
+			}
 
-			var err error
-			_, err = resourceOpensearchGetOpenDistroDashboardTenant(rs.Primary.ID, meta.(*ProviderConf))
+			_, err = resourceOpensearchGetOpenDistroDashboardTenant(rs.Primary.ID, providerConf)
 
 			if err != nil {
 				return err
@@ -102,6 +106,22 @@ func testCheckOpensearchDashboardTenantExists(name string) resource.TestCheckFun
 
 		return nil
 	}
+}
+
+func getDashboardTenantTestProviderConf() (*ProviderConf, error) {
+	if testAccOpendistroProvider != nil {
+		if meta, ok := testAccOpendistroProvider.Meta().(*ProviderConf); ok && meta != nil {
+			return meta, nil
+		}
+	}
+
+	if testAccProvider != nil {
+		if meta, ok := testAccProvider.Meta().(*ProviderConf); ok && meta != nil {
+			return meta, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no configured provider metadata available for dashboard tenant test helpers")
 }
 
 func testAccOpenDistroDashboardTenantResource(resourceName string) string {

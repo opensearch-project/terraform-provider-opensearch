@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 	"testing"
 
 	elastic7 "github.com/olivere/elastic/v7"
@@ -12,6 +13,75 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
+
+func TestParseDashboardObjectImportID(t *testing.T) {
+	testCases := []struct {
+		name       string
+		input      string
+		objectID   string
+		tenantName string
+		indexName  string
+		expectErr  bool
+	}{
+		{
+			name:      "default",
+			input:     "response-time-percentile",
+			objectID:  "response-time-percentile",
+			indexName: "",
+		},
+		{
+			name:       "tenant name",
+			input:      "response-time-percentile,tenant_name=tenant_test",
+			objectID:   "response-time-percentile",
+			tenantName: "tenant_test",
+		},
+		{
+			name:      "custom index",
+			input:     "response-time-percentile,index=.kibana_custom",
+			objectID:  "response-time-percentile",
+			indexName: ".kibana_custom",
+		},
+		{
+			name:      "empty object id",
+			input:     ",tenant_name=tenant_test",
+			expectErr: true,
+		},
+		{
+			name:      "unknown key",
+			input:     "response-time-percentile,foo=bar",
+			expectErr: true,
+		},
+		{
+			name:      "conflicting keys",
+			input:     "response-time-percentile,tenant_name=tenant_test,index=.kibana_custom",
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			objectID, tenantName, indexName, err := parseDashboardObjectImportID(tc.input)
+			if tc.expectErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if objectID != tc.objectID {
+				t.Fatalf("expected object_id %q, got %q", tc.objectID, objectID)
+			}
+			if tenantName != tc.tenantName {
+				t.Fatalf("expected tenant_name %q, got %q", tc.tenantName, tenantName)
+			}
+			if indexName != tc.indexName {
+				t.Fatalf("expected index %q, got %q", tc.indexName, indexName)
+			}
+		})
+	}
+}
 
 func TestAccOpensearchDashboardObject(t *testing.T) {
 	provider := Provider()
@@ -32,6 +102,12 @@ func TestAccOpensearchDashboardObject(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_visualization", "response-time-percentile", ""),
 				),
+			},
+			{
+				ResourceName:      "opensearch_dashboard_object.test_visualization",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateId:     "response-time-percentile",
 			},
 			{
 				Config: indexPatternConfig,
@@ -70,6 +146,12 @@ func TestAccOpensearchDashboardObjectWithTenant(t *testing.T) {
 					resource.TestCheckResourceAttr("opensearch_dashboard_tenant.tenant_test", "tenant_name", "tenant_test"),
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_visualization", "response-time-percentile", "tenant_test"),
 				),
+			},
+			{
+				ResourceName:      "opensearch_dashboard_object.test_visualization",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateId:     "response-time-percentile,tenant_name=tenant_test",
 			},
 			{
 				Config: indexPatternConfig,
@@ -348,3 +430,119 @@ resource "opensearch_dashboard_object" "test_invalid" {
 EOF
 }
 `
+
+func indexPatternBody(fields string) string {
+	return indexPatternBodyAt(fields, "2026-01-01T00:00:00.000Z")
+}
+
+func indexPatternBodyAt(fields, updatedAt string) string {
+	return `[{"_id":"index-pattern:logs","_source":{"type":"index-pattern","index-pattern":{"title":"logs-*","timeFieldName":"@timestamp","fields":"` + fields + `"},"references":[],"updated_at":"` + updatedAt + `"}}]`
+}
+
+func TestDashboardObjectBookkeepingDiffSuppress(t *testing.T) {
+	// Popularity counters live inside the JSON-encoded `fields` attribute, so the escaping
+	// here is what an export actually contains.
+	noPopularity := `[{\"count\":0,\"name\":\"@timestamp\",\"type\":\"date\"},{\"count\":0,\"name\":\"message\",\"type\":\"string\"}]`
+	somePopularity := `[{\"count\":7,\"name\":\"@timestamp\",\"type\":\"date\"},{\"count\":3,\"name\":\"message\",\"type\":\"string\"}]`
+	renamedField := `[{\"count\":0,\"name\":\"@timestamp\",\"type\":\"date\"},{\"count\":0,\"name\":\"msg\",\"type\":\"string\"}]`
+
+	visualization := `[{"_id":"visualization:errors","_source":{"type":"visualization","visualization":{"title":"Errors","visState":"{\"aggs\":[{\"type\":\"count\"}]}"},"references":[]}}]`
+	visualizationAvg := `[{"_id":"visualization:errors","_source":{"type":"visualization","visualization":{"title":"Errors","visState":"{\"aggs\":[{\"type\":\"avg\"}]}"},"references":[]}}]`
+
+	testCases := []struct {
+		name     string
+		old      string
+		new      string
+		suppress bool
+	}{
+		{
+			name:     "popularity climbed since export",
+			old:      indexPatternBody(somePopularity),
+			new:      indexPatternBody(noPopularity),
+			suppress: true,
+		},
+		{
+			name:     "identical bodies",
+			old:      indexPatternBody(somePopularity),
+			new:      indexPatternBody(somePopularity),
+			suppress: true,
+		},
+		{
+			name:     "field renamed as well as popularity",
+			old:      indexPatternBody(somePopularity),
+			new:      indexPatternBody(renamedField),
+			suppress: false,
+		},
+		{
+			name:     "title changed",
+			old:      indexPatternBody(somePopularity),
+			new:      strings.Replace(indexPatternBody(noPopularity), "logs-*", "logs-2024-*", 1),
+			suppress: false,
+		},
+		{
+			name: "count in a non index-pattern object is left alone",
+			// `count` here is an aggregation type, not a popularity counter.
+			old:      visualization,
+			new:      visualizationAvg,
+			suppress: false,
+		},
+		{
+			// What Dashboards actually does: bumping a counter restamps updated_at too.
+			name:     "popularity climbed and updated_at was restamped",
+			old:      indexPatternBodyAt(somePopularity, "2026-08-17T21:04:11.884Z"),
+			new:      indexPatternBodyAt(noPopularity, "2026-01-01T00:00:00.000Z"),
+			suppress: true,
+		},
+		{
+			name:     "updated_at alone",
+			old:      indexPatternBodyAt(somePopularity, "2026-08-17T21:04:11.884Z"),
+			new:      indexPatternBodyAt(somePopularity, "2026-01-01T00:00:00.000Z"),
+			suppress: true,
+		},
+		{
+			name:     "updated_at restamped alongside a real edit",
+			old:      indexPatternBodyAt(somePopularity, "2026-08-17T21:04:11.884Z"),
+			new:      strings.Replace(indexPatternBodyAt(noPopularity, "2026-01-01T00:00:00.000Z"), "logs-*", "logs-2024-*", 1),
+			suppress: false,
+		},
+		{
+			// migrationVersion is real content, so it must still diff.
+			name:     "migrationVersion changed",
+			old:      strings.Replace(indexPatternBody(somePopularity), `"references":[]`, `"references":[],"migrationVersion":{"index-pattern":"7.6.0"}`, 1),
+			new:      strings.Replace(indexPatternBody(noPopularity), `"references":[]`, `"references":[],"migrationVersion":{"index-pattern":"7.11.0"}`, 1),
+			suppress: false,
+		},
+		{
+			name:     "unparseable body is not suppressed",
+			old:      "not json",
+			new:      indexPatternBody(noPopularity),
+			suppress: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dashboardObjectBookkeepingDiffSuppress("body", tc.old, tc.new, nil); got != tc.suppress {
+				t.Fatalf("expected suppress %v, got %v", tc.suppress, got)
+			}
+		})
+	}
+}
+
+func TestStripDashboardBookkeeping(t *testing.T) {
+	stripped, err := stripDashboardBookkeeping(indexPatternBody(`[{\"count\":7,\"name\":\"@timestamp\"}]`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, unwanted := range []string{"count", "updated_at"} {
+		if strings.Contains(stripped, unwanted) {
+			t.Fatalf("expected %q to be removed, got %s", unwanted, stripped)
+		}
+	}
+	// Everything else about the object has to survive, or unrelated drift would be hidden too.
+	for _, want := range []string{"index-pattern:logs", "logs-*", "@timestamp", "timeFieldName"} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("expected %q to survive stripping, got %s", want, stripped)
+		}
+	}
+}

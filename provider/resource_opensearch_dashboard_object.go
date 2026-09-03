@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -19,11 +20,14 @@ const (
 
 func resourceOpensearchDashboardObject() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.",
+		Description: "Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. Bookkeeping Dashboards maintains itself is ignored when diffing: `updated_at`, which the saved objects API restamps on every write, and an index pattern's per-field popularity counters (`fields[].count`), which Dashboards increments as people use fields in Discover.",
 		Create:      resourceOpensearchDashboardObjectCreate,
 		Read:        resourceOpensearchDashboardObjectRead,
 		Update:      resourceOpensearchDashboardObjectUpdate,
 		Delete:      resourceOpensearchDashboardObjectDelete,
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceOpensearchDashboardObjectImport,
+		},
 		CustomizeDiff: customdiff.ForceNewIfChange(
 			"body",
 			// force recreation if _id of object changed
@@ -78,7 +82,8 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 				StateFunc: func(v interface{}) string {
 					return normalizeDashboardObjectForState(v)
 				},
-				Description: "The JSON body of the dashboard object.",
+				DiffSuppressFunc: dashboardObjectBookkeepingDiffSuppress,
+				Description:      "The JSON body of the dashboard object.",
 			},
 			"tenant_name": {
 				Type:          schema.TypeString,
@@ -98,6 +103,129 @@ func resourceOpensearchDashboardObject() *schema.Resource {
 			},
 		},
 	}
+}
+
+// Dashboards maintains bookkeeping of its own inside a saved object: it restamps
+// `updated_at` whenever the saved objects API writes the document, and it increments an index
+// pattern's per-field popularity counter every time someone uses that field in Discover. Both
+// are records of use rather than configuration, and using Dashboards is enough to change them,
+// so a difference confined to them is not drift worth reporting — reverting it would only churn
+// the document and it would come back. Any difference in real content still diffs in full.
+func dashboardObjectBookkeepingDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
+	oldStripped, err := stripDashboardBookkeeping(old)
+	if err != nil {
+		return false
+	}
+	newStripped, err := stripDashboardBookkeeping(new)
+	if err != nil {
+		return false
+	}
+	return oldStripped == newStripped
+}
+
+// stripDashboardBookkeeping returns body without the parts of a saved object that Dashboards
+// maintains on its own — `_source.updated_at`, and each index pattern's `fields[].count` —
+// canonicalised so two bodies differing only in those compare equal. `migrationVersion` is
+// deliberately kept: it records the shape of the stored document, so a change there is real.
+// Anything that does not parse as the expected shape is left untouched rather than dropped, so
+// an unexpected document still diffs on its real contents.
+func stripDashboardBookkeeping(body string) (string, error) {
+	var objects []interface{}
+	if err := json.Unmarshal([]byte(body), &objects); err != nil {
+		return "", err
+	}
+
+	for _, o := range objects {
+		object, ok := o.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		source, ok := object["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		delete(source, "updated_at")
+
+		objectType, ok := source["type"].(string)
+		if !ok || objectType != "index-pattern" {
+			continue
+		}
+		attributes, ok := source[objectType].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		// Attributes hold `fields` as a JSON-encoded string, not a nested array.
+		encodedFields, ok := attributes["fields"].(string)
+		if !ok {
+			continue
+		}
+		var fields []interface{}
+		if err := json.Unmarshal([]byte(encodedFields), &fields); err != nil {
+			continue
+		}
+
+		stripped := false
+		for _, f := range fields {
+			field, ok := f.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if _, ok := field["count"]; ok {
+				delete(field, "count")
+				stripped = true
+			}
+		}
+		if !stripped {
+			continue
+		}
+
+		reencoded, err := json.Marshal(fields)
+		if err != nil {
+			continue
+		}
+		attributes["fields"] = string(reencoded)
+	}
+
+	// json.Marshal sorts object keys, so the result is canonical.
+	canonical, err := json.Marshal(objects)
+	if err != nil {
+		return "", err
+	}
+	return string(canonical), nil
+}
+
+func resourceOpensearchDashboardObjectImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	objectID, tenantName, indexName, err := parseDashboardObjectImportID(d.Id())
+	if err != nil {
+		return nil, err
+	}
+
+	if tenantName != "" {
+		if err := d.Set("tenant_name", tenantName); err != nil {
+			return nil, err
+		}
+	}
+	if indexName != "" {
+		if err := d.Set("index", indexName); err != nil {
+			return nil, err
+		}
+	}
+
+	d.SetId(objectID)
+
+	seedBodyBytes, err := json.Marshal([]map[string]interface{}{{
+		"_id":     objectID,
+		"_source": map[string]interface{}{},
+	}})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := d.Set("body", string(seedBodyBytes)); err != nil {
+		return nil, err
+	}
+
+	return []*schema.ResourceData{d}, nil
 }
 
 func resourceOpensearchDashboardObjectCreate(d *schema.ResourceData, meta interface{}) error {
@@ -306,7 +434,13 @@ type dashboardObjectState struct {
 func readDashboardObjectState(d *schema.ResourceData) (*dashboardObjectState, error) {
 	dashboardObject, err := readBodyInterface(d.Get("body"))
 	if err != nil {
-		return nil, fmt.Errorf("could not read body interface: %+v", err)
+		if d.Id() == "" {
+			return nil, fmt.Errorf("could not read body interface: %+v", err)
+		}
+		dashboardObject = map[string]interface{}{
+			"_id":     d.Id(),
+			"_source": map[string]interface{}{},
+		}
 	}
 	// Calculate index if tenantName is given
 	indexName := d.Get("index").(string)
@@ -321,12 +455,80 @@ func readDashboardObjectState(d *schema.ResourceData) (*dashboardObjectState, er
 	if indexName == "" {
 		indexName = ".kibana"
 	}
+
+	objectID, ok := dashboardObject["_id"].(string)
+	if !ok || objectID == "" {
+		if d.Id() == "" {
+			return nil, fmt.Errorf("dashboard object body missing valid _id")
+		}
+		objectID = d.Id()
+		dashboardObject["_id"] = objectID
+	}
+
+	if dashboardObject["_source"] == nil {
+		dashboardObject["_source"] = map[string]interface{}{}
+	}
+
 	return &dashboardObjectState{
 		index:           indexName,
 		tenantName:      tenantName,
 		dashboardObject: dashboardObject,
-		id:              dashboardObject["_id"].(string),
+		id:              objectID,
 	}, nil
+}
+
+func parseDashboardObjectImportID(input string) (string, string, string, error) {
+	if input == "" {
+		return "", "", "", fmt.Errorf("invalid import ID: expected object_id[,tenant_name=<name>][,index=<name>]")
+	}
+
+	parts := strings.Split(input, ",")
+	objectID := strings.TrimSpace(parts[0])
+	if objectID == "" {
+		return "", "", "", fmt.Errorf("invalid import ID %q: object_id cannot be empty", input)
+	}
+
+	tenantName := ""
+	indexName := ""
+
+	for _, raw := range parts[1:] {
+		part := strings.TrimSpace(raw)
+		if part == "" {
+			continue
+		}
+
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			return "", "", "", fmt.Errorf("invalid import ID %q: expected key=value segment %q", input, part)
+		}
+
+		key := strings.TrimSpace(kv[0])
+		value := strings.TrimSpace(kv[1])
+		if value == "" {
+			return "", "", "", fmt.Errorf("invalid import ID %q: value for %q cannot be empty", input, key)
+		}
+
+		switch key {
+		case "tenant_name":
+			if tenantName != "" {
+				return "", "", "", fmt.Errorf("invalid import ID %q: tenant_name provided more than once", input)
+			}
+			tenantName = value
+		case "index":
+			if indexName != "" {
+				return "", "", "", fmt.Errorf("invalid import ID %q: index provided more than once", input)
+			}
+			indexName = value
+		default:
+			return "", "", "", fmt.Errorf("invalid import ID %q: unsupported key %q", input, key)
+		}
+	}
+
+	if tenantName != "" && indexName != "" {
+		return "", "", "", fmt.Errorf("invalid import ID %q: tenant_name conflicts with index", input)
+	}
+
+	return objectID, tenantName, indexName, nil
 }
 
 func readBodyInterface(i interface{}) (map[string]interface{}, error) {
