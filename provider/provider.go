@@ -418,7 +418,7 @@ func getOSClient(conf *ProviderConf) (*opensearch.Client, error) {
 
 func createOSHttpClient(conf *ProviderConf) (*http.Client, error) {
 	if !conf.signAWSRequests {
-		return createNonAWSHttpClient(conf), nil
+		return createNonAWSHttpClient(conf)
 	}
 
 	if m := awsUrlRegexp.FindStringSubmatch(conf.parsedUrl.Hostname()); m != nil {
@@ -447,23 +447,26 @@ func createOSHttpClient(conf *ProviderConf) (*http.Client, error) {
 		return awsHttpClient(conf.awsRegion, conf, map[string]string{})
 	}
 
-	return createNonAWSHttpClient(conf), nil
+	return createNonAWSHttpClient(conf)
 }
 
-func createNonAWSHttpClient(conf *ProviderConf) *http.Client {
+func createNonAWSHttpClient(conf *ProviderConf) (*http.Client, error) {
 	if conf.insecure || conf.cacertFile != "" {
-		client := tlsHttpClient(conf, map[string]string{})
-		if conf.token != "" {
-			return tokenHttpClient(conf, map[string]string{})
+		client, err := tlsHttpClient(conf, map[string]string{})
+		if err != nil {
+			return nil, err
 		}
-		return client
+		if conf.token != "" {
+			return tokenHttpClient(conf, map[string]string{}), nil
+		}
+		return client, nil
 	}
 
 	if conf.token != "" {
-		return tokenHttpClient(conf, map[string]string{})
+		return tokenHttpClient(conf, map[string]string{}), nil
 	}
 
-	return defaultHttpClient(conf, map[string]string{})
+	return defaultHttpClient(conf, map[string]string{}), nil
 }
 
 func getClient(conf *ProviderConf) (*elastic7.Client, error) {
@@ -516,7 +519,11 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 		}
 		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
 	} else if conf.insecure || conf.cacertFile != "" {
-		opts = append(opts, elastic7.SetHttpClient(tlsHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
+		client, err := tlsHttpClient(conf, map[string]string{})
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
 		if conf.token != "" {
 			opts = append(opts, elastic7.SetHttpClient(tokenHttpClient(conf, map[string]string{})), elastic7.SetSniff(false))
 		}
@@ -560,8 +567,16 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 	client, err := elastic7.NewClient(opts...)
 	if err != nil {
 		if errors.Is(err, elastic7.ErrNoClient) {
-			log.Printf("[INFO] couldn't create client: %T, %s, %T", err, err.Error(), errors.Unwrap(err))
-			return nil, errors.New("HEAD healthcheck failed: This is usually due to network or permission issues. The underlying error isn't accessible, please debug by disabling healthchecks")
+			// elastic7 wraps the real transport failure (TLS trust, DNS, proxy,
+			// a security plugin declining HEAD) inside ErrNoClient. Surface it
+			// rather than telling the user it is inaccessible: without it every
+			// cause produces the same text and the only way forward is to turn
+			// the healthcheck off and re-run.
+			cause := errors.Unwrap(err)
+			if cause == nil {
+				cause = err
+			}
+			return nil, fmt.Errorf("healthcheck failed: HEAD %s: %w (set healthcheck = false to skip this probe)", conf.rawUrl, cause)
 		}
 		return nil, err
 	}
@@ -771,31 +786,48 @@ func tokenHttpClient(conf *ProviderConf, headers map[string]string) *http.Client
 	return client
 }
 
-func tlsHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
+func tlsHttpClient(conf *ProviderConf, headers map[string]string) (*http.Client, error) {
 	// Configure TLS/SSL
 	tlsConfig := &tls.Config{}
 	if conf.certPemPath != "" && conf.keyPemPath != "" {
 		certPem, _, err := readPathOrContent(conf.certPemPath)
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("cert_pem: cannot read %q: %w", conf.certPemPath, err)
 		}
 		keyPem, _, err := readPathOrContent(conf.keyPemPath)
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("key_pem: cannot read %q: %w", conf.keyPemPath, err)
 		}
 		cert, err := tls.X509KeyPair([]byte(certPem), []byte(keyPem))
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("cert_pem/key_pem: invalid keypair: %w", err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	// If a cacertFile has been specified, use that for cert validation
+	// If a cacertFile has been specified, use that for cert validation.
+	//
+	// Both failure modes here are silent unless we check for them, and both
+	// end in the same misleading "certificate signed by unknown authority":
+	// RootCAs is set to a pool that ended up empty, which trusts nothing
+	// rather than falling back to the system roots.
 	if conf.cacertFile != "" {
-		caCert, _, _ := readPathOrContent(conf.cacertFile)
+		caCert, wasPath, err := readPathOrContent(conf.cacertFile)
+		if err != nil {
+			return nil, fmt.Errorf("cacert_file: cannot read %q: %w", conf.cacertFile, err)
+		}
 
 		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM([]byte(caCert))
+		if !caCertPool.AppendCertsFromPEM([]byte(caCert)) {
+			// readPathOrContent falls back to treating its argument as inline
+			// content when the path does not exist, so a typo'd path arrives
+			// here as unparseable "PEM". Distinguish the two so the message
+			// names the actual problem.
+			if wasPath {
+				return nil, fmt.Errorf("cacert_file: no certificates found in %q; expected a PEM-encoded CA bundle", conf.cacertFile)
+			}
+			return nil, fmt.Errorf("cacert_file: %q is neither a readable file nor a PEM-encoded CA bundle", conf.cacertFile)
+		}
 		tlsConfig.RootCAs = caCertPool
 	}
 
@@ -821,7 +853,7 @@ func tlsHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
 
 	client := &http.Client{Transport: rt}
 
-	return client
+	return client, nil
 }
 
 func defaultHttpClient(conf *ProviderConf, headers map[string]string) *http.Client {
