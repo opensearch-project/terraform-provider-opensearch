@@ -250,6 +250,7 @@ func Provider() *schema.Provider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
+			"opensearch_action_group":              resourceOpenSearchActionGroup(),
 			"opensearch_cluster_settings":          resourceOpensearchClusterSettings(),
 			"opensearch_component_template":        resourceOpensearchComponentTemplate(),
 			"opensearch_composable_index_template": resourceOpensearchComposableIndexTemplate(),
