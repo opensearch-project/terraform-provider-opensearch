@@ -67,6 +67,7 @@ var (
 		"cluster.routing.allocation.disk.threshold_enabled",
 		"cluster.routing.allocation.same_shard.host",
 		"action.destructive_requires_name",
+		"plugins.ml_commons.mcp_server_enabled",
 	}
 	typeListClusterSettings = []string{
 		"cluster.routing.allocation.awareness.force.zone.values",
@@ -316,6 +317,11 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Description: "When set to true, you must specify the index name to delete an index and it is not possible to delete all indices with _all or use wildcards",
+			},
+			"plugins_ml_commons_mcp_server_enabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: "Enables OpenSearch's native Model Context Protocol (MCP) server, exposed at /_plugins/_ml/mcp. Requires OpenSearch 3.0 or later.",
 			},
 		},
 		Importer: &schema.ResourceImporter{
