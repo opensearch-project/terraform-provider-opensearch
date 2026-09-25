@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/olivere/elastic/uritemplates"
@@ -56,6 +57,29 @@ func validateDetectorIndices(d *schema.ResourceData) error {
 	return nil
 }
 
+// validateScheduleBlocks enforces that exactly one of 'period' or 'cron' is set
+// inside a schedule block.
+func validateScheduleBlocks(d *schema.ResourceDiff) error {
+	scheduleList, ok := d.GetOk("schedule")
+	if !ok {
+		return nil
+	}
+	schedules := scheduleList.([]interface{})
+	if len(schedules) == 0 {
+		return nil
+	}
+	schedule := schedules[0].(map[string]interface{})
+	hasPeriod := len(schedule["period"].([]interface{})) > 0
+	hasCron := len(schedule["cron"].([]interface{})) > 0
+	if hasPeriod && hasCron {
+		return fmt.Errorf("schedule must have exactly one of 'period' or 'cron', not both")
+	}
+	if !hasPeriod && !hasCron {
+		return fmt.Errorf("schedule must have exactly one of 'period' or 'cron'")
+	}
+	return nil
+}
+
 func resourceOpenSearchDetector() *schema.Resource {
 	return &schema.Resource{
 		Description: "Provides an OpenSearch Security Analytics detector. Please refer to the OpenSearch Security Analytics detector documentation for details.",
@@ -67,6 +91,11 @@ func resourceOpenSearchDetector() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
+		CustomizeDiff: customdiff.All(
+			func(ctx context.Context, d *schema.ResourceDiff, m interface{}) error {
+				return validateScheduleBlocks(d)
+			},
+		),
 	}
 }
 
@@ -93,14 +122,14 @@ func detectorSchema() map[string]*schema.Schema {
 			Type:        schema.TypeList,
 			Required:    true,
 			MaxItems:    1,
-			Description: "The schedule that determines how often the detector runs.",
+			Description: "The schedule that determines how often the detector runs. Exactly one of 'period' or 'cron' must be specified.",
 			Elem: &schema.Resource{
 				Schema: map[string]*schema.Schema{
 					"period": {
 						Type:        schema.TypeList,
-						Required:    true,
+						Optional:    true,
 						MaxItems:    1,
-						Description: "Details for the frequency of the schedule.",
+						Description: "Interval-based schedule for the detector.",
 						Elem: &schema.Resource{
 							Schema: map[string]*schema.Schema{
 								"interval": {
@@ -115,6 +144,28 @@ func detectorSchema() map[string]*schema.Schema {
 									ValidateFunc: validation.StringInSlice([]string{
 										"MINUTES", "HOURS", "DAYS",
 									}, false),
+								},
+							},
+						},
+					},
+					"cron": {
+						Type:        schema.TypeList,
+						Optional:    true,
+						MaxItems:    1,
+						Description: "Cron expression-based schedule for the detector.",
+						Elem: &schema.Resource{
+							Schema: map[string]*schema.Schema{
+								"expression": {
+									Type:         schema.TypeString,
+									Required:     true,
+									Description:  "Cron expression (e.g. \"0 */6 * * *\").",
+									ValidateFunc: validation.StringIsNotEmpty,
+								},
+								"timezone": {
+									Type:         schema.TypeString,
+									Required:     true,
+									Description:  "IANA timezone (e.g. \"UTC\", \"America/New_York\").",
+									ValidateFunc: validation.StringIsNotEmpty,
 								},
 							},
 						},
@@ -566,8 +617,16 @@ func buildDetectorBody(d *schema.ResourceData) map[string]interface{} {
 		scheduleList := v.([]interface{})
 		if len(scheduleList) > 0 {
 			schedule := scheduleList[0].(map[string]interface{})
-			periodList := schedule["period"].([]interface{})
-			if len(periodList) > 0 {
+
+			if cronList, ok := schedule["cron"].([]interface{}); ok && len(cronList) > 0 {
+				cron := cronList[0].(map[string]interface{})
+				body["schedule"] = map[string]interface{}{
+					"cron": map[string]interface{}{
+						"expression": cron["expression"].(string),
+						"timezone":   cron["timezone"].(string),
+					},
+				}
+			} else if periodList, ok := schedule["period"].([]interface{}); ok && len(periodList) > 0 {
 				period := periodList[0].(map[string]interface{})
 				body["schedule"] = map[string]interface{}{
 					"period": map[string]interface{}{
@@ -781,18 +840,32 @@ func flattenDetector(d *schema.ResourceData, detector map[string]interface{}) er
 
 	// Schedule
 	if schedule, ok := detector["schedule"].(map[string]interface{}); ok {
-		if period, ok := schedule["period"].(map[string]interface{}); ok {
-			scheduleList := []interface{}{
-				map[string]interface{}{
-					"period": []interface{}{
-						map[string]interface{}{
-							"interval": int(period["interval"].(float64)),
-							"unit":     period["unit"].(string),
-						},
+		var scheduleEntry map[string]interface{}
+
+		if cron, ok := schedule["cron"].(map[string]interface{}); ok {
+			scheduleEntry = map[string]interface{}{
+				"period": []interface{}{},
+				"cron": []interface{}{
+					map[string]interface{}{
+						"expression": cron["expression"].(string),
+						"timezone":   cron["timezone"].(string),
 					},
 				},
 			}
-			d.Set("schedule", scheduleList)
+		} else if period, ok := schedule["period"].(map[string]interface{}); ok {
+			scheduleEntry = map[string]interface{}{
+				"cron": []interface{}{},
+				"period": []interface{}{
+					map[string]interface{}{
+						"interval": int(period["interval"].(float64)),
+						"unit":     period["unit"].(string),
+					},
+				},
+			}
+		}
+
+		if scheduleEntry != nil {
+			d.Set("schedule", []interface{}{scheduleEntry})
 		}
 	}
 

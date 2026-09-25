@@ -38,7 +38,7 @@ resource "opensearch_detector" "windows_security_detector" {
 
     sev_levels = ["critical", "high"]
     tags       = ["attack.defense_evasion", "attack.credential_access"]
-    
+
     # detection_types defaults to ["rules"] if not specified
 
     actions {
@@ -47,7 +47,7 @@ resource "opensearch_detector" "windows_security_detector" {
       destination_id = "${opensearch_channel_configuration.security_notifications.id}"
 
       subject_template {
-        source = "🚨 Windows Security Alert: {{ctx.detector.name}}"
+        source = "Windows Security Alert: {{ctx.detector.name}}"
         lang   = "mustache"
       }
 
@@ -74,6 +74,31 @@ EOT
       throttle {
         unit  = "MINUTES"
         value = 15
+      }
+    }
+  }
+}
+
+# Detector with cron-based schedule (runs every 6 hours)
+resource "opensearch_detector" "cron_scheduled_detector" {
+  name          = "cron-scheduled-detector"
+  detector_type = "windows"
+  enabled       = true
+
+  schedule {
+    cron {
+      expression = "0 */6 * * *"
+      timezone   = "UTC"
+    }
+  }
+
+  inputs {
+    detector_input { # only one is supported right now https://docs.opensearch.org/latest/security-analytics/api-tools/detector-api/#create-detector-api
+      description = "Detector running on a cron schedule"
+      indices     = ["windows-logs"] # only one is supported right now https://docs.opensearch.org/latest/security-analytics/api-tools/detector-api/#create-detector-api
+
+      pre_packaged_rules {
+        id = "06724a9a-52fc-11ed-bdc3-0242ac120002"
       }
     }
   }
@@ -132,7 +157,7 @@ resource "opensearch_detector" "advanced_linux_detector" {
       destination_id = "${opensearch_channel_configuration.security_team.id}"
 
       subject_template {
-        source = "🚨 HIGH SEVERITY: {{ctx.detector.name}}"
+        source = "HIGH SEVERITY: {{ctx.detector.name}}"
         lang   = "mustache"
       }
 
@@ -167,7 +192,7 @@ resource "opensearch_detector" "advanced_linux_detector" {
       destination_id = "${opensearch_channel_configuration.monitoring_team.id}"
 
       subject_template {
-        source = "⚠️ Medium Severity: {{ctx.detector.name}}"
+        source = "Medium Severity: {{ctx.detector.name}}"
         lang   = "mustache"
       }
 
@@ -212,22 +237,22 @@ resource "opensearch_detector" "network_intrusion_detector" {
   triggers {
     name     = "network-intrusion-alert"
     severity = "2"
-    
-    ids = ["1a4bd6e3-4c6e-405d-a9a3-53a116e341d4"]
+
+    ids        = ["1a4bd6e3-4c6e-405d-a9a3-53a116e341d4"]
     sev_levels = ["high", "medium"]
-    
+
     # detection_types will automatically default to ["rules"] since it's not specified
-    
+
     actions {
       id             = "network-alert-action"
       name           = "Network Intrusion Alert"
       destination_id = "network-security-channel"
-      
+
       subject_template {
         source = "Network Intrusion Detected"
         lang   = "mustache"
       }
-      
+
       message_template {
         source = "Network intrusion detected by {{ctx.detector.name}}"
         lang   = "mustache"

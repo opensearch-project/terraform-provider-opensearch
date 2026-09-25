@@ -62,7 +62,7 @@ resource "opensearch_detector" "windows_security_detector" {
       destination_id = "${opensearch_channel_configuration.security_notifications.id}"
 
       subject_template {
-        source = "🚨 Windows Security Alert: {{ctx.detector.name}}"
+        source = "Windows Security Alert: {{ctx.detector.name}}"
         lang   = "mustache"
       }
 
@@ -89,6 +89,31 @@ EOT
       throttle {
         unit  = "MINUTES"
         value = 15
+      }
+    }
+  }
+}
+
+# Detector with cron-based schedule (runs every 6 hours)
+resource "opensearch_detector" "cron_scheduled_detector" {
+  name          = "cron-scheduled-detector"
+  detector_type = "windows"
+  enabled       = true
+
+  schedule {
+    cron {
+      expression = "0 */6 * * *"
+      timezone   = "UTC"
+    }
+  }
+
+  inputs {
+    detector_input {
+      description = "Detector running on a cron schedule"
+      indices     = ["windows-logs"]
+
+      pre_packaged_rules {
+        id = "06724a9a-52fc-11ed-bdc3-0242ac120002"
       }
     }
   }
@@ -320,7 +345,7 @@ resource "opensearch_detector" "cloudtrail_detector" {
 - `detector_type` (String) The log type that defines the detector.
 - `inputs` (Block List, Min: 1) Detector inputs. (see [below for nested schema](#nestedblock--inputs))
 - `name` (String) Name of the detector. Must be between 5 and 50 characters and consist of upper and lowercase letters, numbers 0-9, hyphens, spaces, and underscores.
-- `schedule` (Block List, Min: 1, Max: 1) The schedule that determines how often the detector runs. (see [below for nested schema](#nestedblock--schedule))
+- `schedule` (Block List, Min: 1, Max: 1) The schedule that determines how often the detector runs. Exactly one of `period` or `cron` must be specified. (see [below for nested schema](#nestedblock--schedule))
 
 ### Optional
 
@@ -375,9 +400,21 @@ Required:
 <a id="nestedblock--schedule"></a>
 ### Nested Schema for `schedule`
 
+Exactly one of `period` or `cron` must be specified.
+
+Optional:
+
+- `cron` (Block List, Max: 1) Cron expression-based schedule for the detector. (see [below for nested schema](#nestedblock--schedule--cron))
+- `period` (Block List, Max: 1) Interval-based schedule for the detector. (see [below for nested schema](#nestedblock--schedule--period))
+
+<a id="nestedblock--schedule--cron"></a>
+### Nested Schema for `schedule.cron`
+
 Required:
 
-- `period` (Block List, Min: 1, Max: 1) Details for the frequency of the schedule. (see [below for nested schema](#nestedblock--schedule--period))
+- `expression` (String) Cron expression (e.g. `0 */6 * * *`).
+- `timezone` (String) IANA timezone (e.g. `UTC`, `America/New_York`).
+
 
 <a id="nestedblock--schedule--period"></a>
 ### Nested Schema for `schedule.period`
