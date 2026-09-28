@@ -1,4 +1,4 @@
-.PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
+.PHONY: docs up down test ccr-up ccr-down test-ccr dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
 .PHONY: wait test-os2 test-os3 check-tools check-lint-tools check tidy tidy-check fmt fmt-check lint-check validate
 .PHONY: lint ci-test ci-test-os2 ci-test-os3 fix
 
@@ -9,6 +9,8 @@ OSS_IMAGE ?= opensearchproject/opensearch:${OS_VERSION}
 OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:${OS_VERSION}
 OPENSEARCH_INITIAL_ADMIN_PASSWORD ?= myStrongPassword123@456
 OPENSEARCH_URL ?= http://admin:myStrongPassword123%40456@localhost:9200
+OPENSEARCH_CCR_LEADER_URL ?= http://admin:myStrongPassword123%40456@localhost:9201
+OPENSEARCH_CCR_LEADER_SEED ?= opensearch-leader:9300
 DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
 WAIT_TIMEOUT ?= 120
 
@@ -134,6 +136,37 @@ ci-test-os2:
 
 ci-test-os3:
 	$(MAKE) OS_VERSION=3 ci-test
+
+# =============================================================================
+# Cross-cluster replication — the tests of the opensearch_cross_cluster_*
+# resources need a second cluster to replicate from, so they are skipped by
+# `make test` and run by `make test-ccr`, which starts the `ccr` compose
+# profile (a leader cluster on port 9201 next to the follower cluster on 9200).
+#
+# Usage:
+#   make ccr-up        # start the follower + leader clusters
+#   make ccr-down      # stop them
+#   make test-ccr      # start both clusters + run the replication tests
+# =============================================================================
+
+ccr-up:
+	@export OSS_IMAGE=$(OSS_IMAGE) && \
+	export OPENSEARCH_INITIAL_ADMIN_PASSWORD=$(OPENSEARCH_INITIAL_ADMIN_PASSWORD) && \
+	export COMPOSE_PROFILES=ccr && \
+	docker compose up -d
+
+ccr-down:
+	@export COMPOSE_PROFILES=ccr && \
+	docker compose down
+
+test-ccr: ccr-up
+	./script/wait-for-endpoint --timeout=$(WAIT_TIMEOUT) $(OPENSEARCH_URL)
+	./script/wait-for-endpoint --timeout=$(WAIT_TIMEOUT) $(OPENSEARCH_CCR_LEADER_URL)
+	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
+	export OPENSEARCH_CCR_LEADER_URL=$(OPENSEARCH_CCR_LEADER_URL) && \
+	export OPENSEARCH_CCR_LEADER_SEED=$(OPENSEARCH_CCR_LEADER_SEED) && \
+	export TF_LOG=$(TF_LOG) && \
+	TF_ACC=$(TF_ACC) go test ./provider -v -run 'CrossCluster' -cover -timeout $(TEST_TIMEOUT)
 
 # =============================================================================
 # Developer sandbox — spin up a real cluster (with OpenSearch Dashboards), build

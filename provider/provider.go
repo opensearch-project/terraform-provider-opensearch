@@ -272,10 +272,15 @@ func Provider() *schema.Provider {
 			"opensearch_ml_connector":              resourceOpensearchMLConnector(),
 			"opensearch_ml_model_group":            resourceOpensearchMLModelGroup(),
 			"opensearch_ml_model":                  resourceOpensearchMLModel(),
+
+			"opensearch_cross_cluster_connection":       resourceOpensearchCrossClusterConnection(),
+			"opensearch_cross_cluster_replication":      resourceOpensearchCrossClusterReplication(),
+			"opensearch_cross_cluster_replication_rule": resourceOpensearchCrossClusterReplicationRule(),
 		},
 
 		DataSourcesMap: map[string]*schema.Resource{
-			"opensearch_host": dataSourceOpensearchHost(),
+			"opensearch_host":    dataSourceOpensearchHost(),
+			"opensearch_indices": dataSourceOpensearchIndices(),
 		},
 
 		ConfigureContextFunc: providerConfigure,
