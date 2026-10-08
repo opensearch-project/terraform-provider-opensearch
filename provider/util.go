@@ -35,6 +35,7 @@ func normalizeMonitor(tpl map[string]interface{}) {
 	delete(tpl, "enabled_time")
 	delete(tpl, "schema_version")
 	delete(tpl, "user")
+	delete(tpl, "created_by")
 }
 
 func normalizeMonitorTriggers(triggers []interface{}) {
