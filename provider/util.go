@@ -147,6 +147,7 @@ func normalizedIndexSettings(settings map[string]interface{}) map[string]interfa
 
 func normalizeAnomalyDetection(tpl map[string]interface{}) {
 	delete(tpl, "last_update_time")
+	delete(tpl, "detector_state")
 }
 
 func flattenMap(m map[string]interface{}) map[string]interface{} {

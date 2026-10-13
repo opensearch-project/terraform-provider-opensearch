@@ -20,6 +20,7 @@ func TestAccOpensearchAnomalyDetection(t *testing.T) {
 				Config: testAccOpensearchAnomalyDetection,
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchAnomalyDetectionExists("opensearch_anomaly_detection.test-detector12"),
+					resource.TestCheckResourceAttr("opensearch_anomaly_detection.test-detector12", "enabled", "false"),
 				),
 				ExpectNonEmptyPlan: true,
 			},
@@ -27,6 +28,46 @@ func TestAccOpensearchAnomalyDetection(t *testing.T) {
 				Config: testAccOpensearchAnomalyDetectionUpdate,
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchAnomalyDetectionExists("opensearch_anomaly_detection.test-detector12"),
+					resource.TestCheckResourceAttr("opensearch_anomaly_detection.test-detector12", "enabled", "false"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+func TestAccOpensearchAnomalyDetectionEnabled(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		Providers:    testAccOpendistroProviders,
+		CheckDestroy: testCheckOpensearchAnomalyDetectionDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchAnomalyDetectionEnabled,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchAnomalyDetectionExists("opensearch_anomaly_detection.test-detector-enabled"),
+					resource.TestCheckResourceAttr("opensearch_anomaly_detection.test-detector-enabled", "enabled", "true"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			// Update the body while the detector is still running (enabled=true).
+			// OpenSearch rejects a PUT on a running detector with 409; the provider
+			// must stop it first, apply the body change, then restart it.
+			{
+				Config: testAccOpensearchAnomalyDetectionEnabledBodyUpdate,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchAnomalyDetectionExists("opensearch_anomaly_detection.test-detector-enabled"),
+					resource.TestCheckResourceAttr("opensearch_anomaly_detection.test-detector-enabled", "enabled", "true"),
+				),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				Config: testAccOpensearchAnomalyDetectionDisabled,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchAnomalyDetectionExists("opensearch_anomaly_detection.test-detector-enabled"),
+					resource.TestCheckResourceAttr("opensearch_anomaly_detection.test-detector-enabled", "enabled", "false"),
 				),
 				ExpectNonEmptyPlan: true,
 			},
@@ -129,6 +170,7 @@ resource "opensearch_audit_config" "test" {
 
 resource "opensearch_anomaly_detection" "test-detector12" {
   depends_on = [opensearch_audit_config.test]
+  enabled    = false
   body       = <<EOF
 {
   "name": "test-detector12",
@@ -234,6 +276,7 @@ resource "opensearch_audit_config" "test" {
 
 resource "opensearch_anomaly_detection" "test-detector12" {
   depends_on = [opensearch_audit_config.test]
+  enabled    = false
   body       = <<EOF
 {
   "name": "test-detector12",
@@ -283,6 +326,140 @@ resource "opensearch_anomaly_detection" "test-detector12" {
     }
   },
   "result_index" : "opensearch-ad-plugin-result-test"
+}
+EOF
+}
+`
+
+var testAccOpensearchAnomalyDetectionEnabled = `
+resource "opensearch_anomaly_detection" "test-detector-enabled" {
+  enabled = true
+  body    = <<EOF
+{
+  "name": "test-detector-enabled",
+  "description": "Test detector for enabled attribute",
+  "time_field": "@timestamp",
+  "indices": [
+    "security-auditlog*"
+  ],
+  "feature_attributes": [
+    {
+      "feature_name": "test",
+      "feature_enabled": true,
+      "aggregation_query": {
+        "test": {
+          "value_count": {
+            "field": "audit_category.keyword"
+          }
+        }
+      }
+    }
+  ],
+  "filter_query": {
+    "match_all": {}
+  },
+  "detection_interval": {
+    "period": {
+      "interval": 1,
+      "unit": "Minutes"
+    }
+  },
+  "window_delay": {
+    "period": {
+      "interval": 1,
+      "unit": "Minutes"
+    }
+  }
+}
+EOF
+}
+`
+
+// testAccOpensearchAnomalyDetectionEnabledBodyUpdate keeps enabled=true but
+// changes the description. This exercises the stop-PUT-start path in Update.
+var testAccOpensearchAnomalyDetectionEnabledBodyUpdate = `
+resource "opensearch_anomaly_detection" "test-detector-enabled" {
+  enabled = true
+  body    = <<EOF
+{
+  "name": "test-detector-enabled",
+  "description": "Test detector for enabled attribute - updated description",
+  "time_field": "@timestamp",
+  "indices": [
+    "security-auditlog*"
+  ],
+  "feature_attributes": [
+    {
+      "feature_name": "test",
+      "feature_enabled": true,
+      "aggregation_query": {
+        "test": {
+          "value_count": {
+            "field": "audit_category.keyword"
+          }
+        }
+      }
+    }
+  ],
+  "filter_query": {
+    "match_all": {}
+  },
+  "detection_interval": {
+    "period": {
+      "interval": 1,
+      "unit": "Minutes"
+    }
+  },
+  "window_delay": {
+    "period": {
+      "interval": 1,
+      "unit": "Minutes"
+    }
+  }
+}
+EOF
+}
+`
+
+var testAccOpensearchAnomalyDetectionDisabled = `
+resource "opensearch_anomaly_detection" "test-detector-enabled" {
+  enabled = false
+  body    = <<EOF
+{
+  "name": "test-detector-enabled",
+  "description": "Test detector for enabled attribute",
+  "time_field": "@timestamp",
+  "indices": [
+    "security-auditlog*"
+  ],
+  "feature_attributes": [
+    {
+      "feature_name": "test",
+      "feature_enabled": true,
+      "aggregation_query": {
+        "test": {
+          "value_count": {
+            "field": "audit_category.keyword"
+          }
+        }
+      }
+    }
+  ],
+  "filter_query": {
+    "match_all": {}
+  },
+  "detection_interval": {
+    "period": {
+      "interval": 1,
+      "unit": "Minutes"
+    }
+  },
+  "window_delay": {
+    "period": {
+      "interval": 1,
+      "unit": "Minutes"
+    }
+  }
 }
 EOF
 }
