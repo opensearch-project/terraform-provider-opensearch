@@ -566,7 +566,7 @@ func resourceOpensearchIndexCreate(d *schema.ResourceData, meta interface{}) err
 func settingsFromIndexResourceData(d *schema.ResourceData) map[string]interface{} {
 	settings := make(map[string]interface{})
 	for _, key := range settingsKeys {
-		schemaName := strings.Replace(key, ".", "_", -1)
+		schemaName := strings.ReplaceAll(key, ".", "_")
 		if raw, ok := d.GetOk(schemaName); ok {
 			log.Printf("[INFO] settingsFromIndexResourceData: key:%+v schemaName:%+v value:%+v, %+v", key, schemaName, raw, settings)
 			settings[key] = raw
@@ -589,7 +589,7 @@ func indexResourceDataFromSettings(settings map[string]interface{}, d *schema.Re
 			value = rawPrefixedValue
 		}
 
-		schemaName := strings.Replace(key, ".", "_", -1)
+		schemaName := strings.ReplaceAll(key, ".", "_")
 
 		if configSchema[schemaName].Type == schema.TypeBool {
 			str := value.(string)
@@ -620,7 +620,7 @@ func resourceOpensearchIndexDelete(d *schema.ResourceData, meta interface{}) err
 	// check to see if there are documents in the index
 	allowed := allowIndexDestroy(name, d, meta)
 	if !allowed {
-		return fmt.Errorf("There are documents in the index (or the index could not be , set force_destroy to true to allow destroying.")
+		return fmt.Errorf("there are documents in the index (or the index could not be , set force_destroy to true to allow destroying")
 	}
 
 	osClient, err := getClient(meta.(*ProviderConf))
@@ -660,7 +660,7 @@ func allowIndexDestroy(indexName string, d *schema.ResourceData, meta interface{
 func resourceOpensearchIndexUpdate(d *schema.ResourceData, meta interface{}) error {
 	settings := make(map[string]interface{})
 	for _, key := range settingsKeys {
-		schemaName := strings.Replace(key, ".", "_", -1)
+		schemaName := strings.ReplaceAll(key, ".", "_")
 		if _, ok := d.GetOk(schemaName); ok {
 			if d.HasChange(schemaName) {
 				settings[key] = d.Get(schemaName)

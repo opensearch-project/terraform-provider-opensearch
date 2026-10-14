@@ -1,0 +1,21 @@
+<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+	<AssumeRoleResult>
+		<AssumedRoleUser>
+			<Arn>arn:aws:sts::123456789012:assumed-role/demo/TestChainedRole</Arn>
+			<AssumedRoleId>ARO123EXAMPLE123:TestChainedRole</AssumedRoleId>
+		</AssumedRoleUser>
+		<Credentials>
+			<AccessKeyId>ASIACHAINEDROLEEXAMPLE</AccessKeyId>
+			<SecretAccessKey>wJalrXUtnFEMI/K7MDENG/bPxRfiCYzEXAMPLEKEY</SecretAccessKey>
+			<SessionToken>
+				AQoDYXdzEPT//////////wEXAMPLEtc764bNrC9SAPBSM22wDOk4x4HIZ8j4FZTwdQW
+				LWsKWHGBuFqwAeMicRXmxfpSPfIeoIYRqTflfKD8YUuwthAx7mSEI/qkPpKPi/kMcGd
+			</SessionToken>
+			<Expiration>2019-11-09T13:34:41Z</Expiration>
+		</Credentials>
+		<PackedPolicySize>6</PackedPolicySize>
+	</AssumeRoleResult>
+	<ResponseMetadata>
+		<RequestId>c6104cbe-af31-11e0-8154-cbc7ccf896c7</RequestId>
+	</ResponseMetadata>
+</AssumeRoleResponse>

@@ -39,6 +39,13 @@ func TestAccOpensearchDashboardObject(t *testing.T) {
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_pattern", "index-pattern:cloudwatch", ""),
 				),
 			},
+			{
+				// Verify that server-managed fields (index-pattern.fields, updated_at)
+				// do not cause a perpetual diff after the index pattern is created.
+				Config:             indexPatternConfig,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
 		},
 	})
 }
@@ -71,6 +78,13 @@ func TestAccOpensearchDashboardObjectWithTenant(t *testing.T) {
 					testCheckOpensearchDashboardObjectExists("opensearch_dashboard_object.test_pattern", "index-pattern:cloudwatch", "tenant_test"),
 				),
 			},
+			{
+				// Verify that server-managed fields (index-pattern.fields, updated_at)
+				// do not cause a perpetual diff after the index pattern is created.
+				Config:             indexPatternConfig,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+			},
 		},
 	})
 }
@@ -100,7 +114,7 @@ func TestAccOpensearchDashboardObject_Rejected(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var allowed bool = false
+	var allowed = false
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {

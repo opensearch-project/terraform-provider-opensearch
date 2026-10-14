@@ -115,7 +115,7 @@ func resourceOpensearchOpenDistroUserDelete(d *schema.ResourceData, m interface{
 		"name": d.Get("username").(string),
 	})
 	if err != nil {
-		return fmt.Errorf("Error building URL path for user: %+v", err)
+		return fmt.Errorf("error building URL path for user: %+v", err)
 	}
 
 	osClient, err := getClient(m.(*ProviderConf))
@@ -142,7 +142,7 @@ func resourceOpensearchGetOpenDistroUser(userID string, m interface{}) (UserBody
 	})
 	log.Printf("The resourceOpensearchGetOpenDistroUser path is %s", path)
 	if err != nil {
-		return *user, fmt.Errorf("Error building URL path for user: %+v", err)
+		return *user, fmt.Errorf("error building URL path for user: %+v", err)
 	}
 
 	var body json.RawMessage
@@ -165,7 +165,7 @@ func resourceOpensearchGetOpenDistroUser(userID string, m interface{}) (UserBody
 	var userDefinition map[string]UserBody
 
 	if err := json.Unmarshal(body, &userDefinition); err != nil {
-		return *user, fmt.Errorf("Error unmarshalling user body: %+v: %+v", err, body)
+		return *user, fmt.Errorf("error unmarshalling user body: %+v: %+v", err, body)
 	}
 
 	*user = userDefinition[userID]
@@ -191,14 +191,14 @@ func resourceOpensearchPutOpenDistroUser(d *schema.ResourceData, m interface{}) 
 
 	userJSON, err := json.Marshal(userDefinition)
 	if err != nil {
-		return response, fmt.Errorf("Body Error : %s", userJSON)
+		return response, fmt.Errorf("body Error : %s", userJSON)
 	}
 
 	path, err := uritemplates.Expand("/_plugins/_security/api/internalusers/{name}", map[string]string{
 		"name": d.Get("username").(string),
 	})
 	if err != nil {
-		return response, fmt.Errorf("Error building URL path for user: %+v", err)
+		return response, fmt.Errorf("error building URL path for user: %+v", err)
 	}
 
 	var body json.RawMessage
@@ -235,7 +235,7 @@ func resourceOpensearchPutOpenDistroUser(d *schema.ResourceData, m interface{}) 
 	body = res.Body
 
 	if err := json.Unmarshal(body, response); err != nil {
-		return response, fmt.Errorf("Error unmarshalling user body: %+v: %+v", err, body)
+		return response, fmt.Errorf("error unmarshalling user body: %+v: %+v", err, body)
 	}
 
 	return response, nil

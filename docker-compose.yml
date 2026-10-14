@@ -3,7 +3,7 @@ services:
     image:  ${OSS_IMAGE:-opensearchproject/opensearch:2}
     hostname: opensearch
     container_name: opensearch
-    networks: 
+    networks:
       - opensearch # used by OpenSearch Dashboard
     environment:
       - cluster.name=opensearch
@@ -12,9 +12,24 @@ services:
       - path.repo=/tmp
       - network.publish_host=127.0.0.1
       - logger.org.opensearch=warn
-      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "OPENSEARCH_JAVA_OPTS=-Xms3g -Xmx3g"
       - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456"
       - "plugins.security.ssl.http.enabled=false"
+      - "plugins.ml_commons.only_run_on_ml_node=false"
+      # Disable the ML Commons memory circuit breakers in the test cluster. Tests
+      # register and deploy several real models back-to-back; and undeploy asynchronously on
+      # destroy so memory from a prior test can still be held when the next test deploys,
+      # tripping the breaker on resource-constrained CI runners ("Memory Circuit Breaker
+      # is open"). Both the native and JVM-heap breakers must be disabled.
+      - "plugins.ml_commons.native_memory_threshold=100"
+      - "plugins.ml_commons.jvm_heap_memory_threshold=100"
+      - "plugins.ml_commons.connector_access_control_enabled=true"
+      - "plugins.ml_commons.trusted_connector_endpoints_regex=^https?://.*"
+      - "plugins.ml_commons.model_access_control_enabled=true"
+      - "plugins.ml_commons.allow_registering_model_via_url=true"
+      - "cluster.blocks.create_index=false"
+      - "cluster.blocks.read_only_allow_delete=false"
+      - "cluster.routing.allocation.disk.threshold_enabled=false"
       - ${OSS_ENV_VAR:-FOO=bar}
     command: ${OS_COMMAND:-}
     ulimits:
@@ -27,6 +42,20 @@ services:
         hard: -1
     ports:
       - 9200:9200
+  opensearch-dashboards:
+    profiles:
+      - dashboards
+    image: ${OSS_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:2}
+    container_name: opensearch-dashboards
+    hostname: opensearch-dashboards
+    networks:
+      - opensearch
+    ports:
+      - 5601:5601
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+    depends_on:
+      - opensearch
 networks:
   opensearch:
     driver: bridge

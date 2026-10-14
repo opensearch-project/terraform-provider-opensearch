@@ -197,7 +197,7 @@ func resourceOpensearchPutOpenDistroRolesMapping(d *schema.ResourceData, m inter
 	roleJSON, err := json.Marshal(rolesMappingDefinition)
 
 	if err != nil {
-		return response, fmt.Errorf("Body Error : %s", roleJSON)
+		return response, fmt.Errorf("body Error : %s", roleJSON)
 	}
 
 	path, err := uritemplates.Expand("/_plugins/_security/api/rolesmapping/{name}", map[string]string{

@@ -59,7 +59,7 @@ func resourceOpenSearchSMPolicy() *schema.Resource {
 		Schema:      openSearchSMPolicySchema,
 		Importer: &schema.ResourceImporter{
 			StateContext: func(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
-				var err error = d.Set("policy_name", d.Id())
+				var err = d.Set("policy_name", d.Id())
 				if err != nil {
 					return nil, err
 				}

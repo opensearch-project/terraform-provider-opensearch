@@ -18,7 +18,7 @@ func TestAccOpensearchOpenDistroISMPolicyMapping(t *testing.T) {
 	if diags.HasError() {
 		t.Skipf("err: %#v", diags)
 	}
-	var allowed bool = true
+	var allowed = true
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
