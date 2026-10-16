@@ -15,12 +15,13 @@ import (
 // fakeMLModelServer simulates the OpenSearch ML Model API for unit-testing the
 // deployment retry path. Each GET against /_plugins/_ml/models/<id> returns the
 // next state from a scripted FIFO queue (DEPLOYED if the queue is exhausted),
-// and POSTs to /_deploy and /_undeploy are counted but otherwise no-ops.
+// and POSTs to /_deploy and /_undeploy, and DELETEs, are counted but otherwise no-ops.
 type fakeMLModelServer struct {
 	t             *testing.T
 	server        *httptest.Server
 	deployCalls   atomic.Int32
 	undeployCalls atomic.Int32
+	deleteCalls   atomic.Int32
 	getCalls      atomic.Int32
 	modelStates   []string
 }
@@ -43,6 +44,9 @@ func (f *fakeMLModelServer) handle(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/_undeploy"):
 		f.undeployCalls.Add(1)
 		_, _ = w.Write([]byte(`{}`))
+	case r.Method == http.MethodDelete:
+		f.deleteCalls.Add(1)
+		_, _ = w.Write([]byte(`{"result":"deleted"}`))
 	case r.Method == http.MethodGet:
 		idx := int(f.getCalls.Add(1) - 1)
 		state := "DEPLOYED"

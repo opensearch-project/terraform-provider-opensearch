@@ -988,7 +988,11 @@ func undeployMLModel(ctx context.Context, conf *ProviderConf, modelID string) er
 		return err
 	}
 
-	_, err = waitForModelDeploymentStateChange(ctx, conf.osClient, conf.rawUrl, modelID, "UNDEPLOYED", "REGISTERED")
+	// DEPLOY_FAILED counts as undeployed here: such a model runs on no node, and an
+	// undeploy request never moves it out of that state. Waiting only for UNDEPLOYED
+	// or REGISTERED would fail every destroy, and every replacement, of a model whose
+	// deployment failed, leaving no way to remove it through Terraform.
+	_, err = waitForModelDeploymentStateChange(ctx, conf.osClient, conf.rawUrl, modelID, "UNDEPLOYED", "REGISTERED", "DEPLOY_FAILED")
 	return err
 }
 
