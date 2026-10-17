@@ -40,6 +40,7 @@ var (
 		"cluster.search.request.slowlog.threshold.info",
 		"cluster.search.request.slowlog.threshold.debug",
 		"cluster.search.request.slowlog.threshold.trace",
+		"prometheus.nodes.filter",
 	}
 	intClusterSettings = []string{
 		"cluster.max_shards_per_node",
@@ -290,6 +291,11 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Optional:    true,
 				Description: "A constant that all in flight requests estimations are multiplied by",
 			},
+			"prometheus_nodes_filter": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Which nodes the prometheus-exporter plugin reports node statistics for, as an OpenSearch node filter (e.g. _local, _all, _master, a node name or attribute); the plugin defaults to _local and is not part of the default OpenSearch distribution",
+			},
 			"reset_settings_on_delete": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -428,7 +434,8 @@ func clearAllSettings(meta interface{}) error {
 			"script.*": null,
 			"network.*": null,
 			"search.*": null,
-			"plugins.*": null
+			"plugins.*": null,
+			"prometheus.*": null
 		}
 	  }`
 
