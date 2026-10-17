@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/opensearch-project/opensearch-go/v2"
 )
@@ -17,12 +18,13 @@ import (
 // next state from a scripted FIFO queue (DEPLOYED if the queue is exhausted),
 // and POSTs to /_deploy and /_undeploy are counted but otherwise no-ops.
 type fakeMLModelServer struct {
-	t             *testing.T
-	server        *httptest.Server
-	deployCalls   atomic.Int32
-	undeployCalls atomic.Int32
-	getCalls      atomic.Int32
-	modelStates   []string
+	t                *testing.T
+	server           *httptest.Server
+	deployCalls      atomic.Int32
+	undeployCalls    atomic.Int32
+	getCalls         atomic.Int32
+	modelStates      []string
+	deletedAfterGets int32
 }
 
 func newFakeMLModelServer(t *testing.T, modelStates []string) *fakeMLModelServer {
@@ -45,6 +47,11 @@ func (f *fakeMLModelServer) handle(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{}`))
 	case r.Method == http.MethodGet:
 		idx := int(f.getCalls.Add(1) - 1)
+		if f.deletedAfterGets > 0 && idx >= int(f.deletedAfterGets) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"model not found"}`))
+			return
+		}
 		state := "DEPLOYED"
 		if idx < len(f.modelStates) {
 			state = f.modelStates[idx]
@@ -53,6 +60,24 @@ func (f *fakeMLModelServer) handle(w http.ResponseWriter, r *http.Request) {
 	default:
 		f.t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
+func TestWaitForMLModelDeletion_WaitsUntilNotFound(t *testing.T) {
+	originalPollInterval := modelDeletionPollInterval
+	modelDeletionPollInterval = time.Millisecond
+	t.Cleanup(func() {
+		modelDeletionPollInterval = originalPollInterval
+	})
+
+	fake := newFakeMLModelServer(t, []string{"REGISTERED"})
+	fake.deletedAfterGets = 1
+
+	if err := waitForMLModelDeletion(context.Background(), fake.conf(t), "m1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got, want := fake.getCalls.Load(), int32(2); got != want {
+		t.Errorf("GET calls: got %d, want %d", got, want)
 	}
 }
 

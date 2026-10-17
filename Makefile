@@ -1,6 +1,6 @@
-.PHONY: docs up down test dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
+.PHONY: docs up down test test-running tf-test-vars tf-test-data tf-test-run tf-test-local dev-up dev-down dev-build dev-config dev-plan dev-apply dev-destroy dev dev-teardown
 .PHONY: wait test-os2 test-os3 check-tools check-lint-tools check tidy tidy-check fmt fmt-check lint-check validate
-.PHONY: lint ci-test ci-test-os2 ci-test-os3 fix
+.PHONY: lint fix
 
 # OpenSearch version to test against/use
 OS_VERSION ?= 2
@@ -8,8 +8,11 @@ OS_VERSION ?= 2
 OSS_IMAGE ?= opensearchproject/opensearch:${OS_VERSION}
 OSS_DASHBOARDS_IMAGE ?=opensearchproject/opensearch-dashboards:${OS_VERSION}
 OPENSEARCH_INITIAL_ADMIN_PASSWORD ?= myStrongPassword123@456
+OPENSEARCH_USERNAME ?= admin
 OPENSEARCH_URL ?= http://admin:myStrongPassword123%40456@localhost:9200
 DEV_TF_ENV = TF_CLI_CONFIG_FILE=$(CURDIR)/.dev.terraformrc
+TF_TEST_DIR = $(CURDIR)/tf-tests
+TF_TEST_ARGS ?=
 WAIT_TIMEOUT ?= 120
 
 # Terraform settings
@@ -29,9 +32,12 @@ TEST_TIMEOUT := 120m
 #   make up            # start OpenSearch cluster
 #   make down          # stop OpenSearch cluster
 #   make test          # start cluster + run acceptance tests (TF_ACC=1)
-#   make test-os2      # Run tests using OpenSearch 2.x
-#   make test-os3      # Run tests using OpenSearch 3.x
-#   make check-tools   # Checks that the requires tools are installed
+#   make test-running  # run Go acceptance tests against an already-running cluster
+#   make tf-test-local # build provider + run Terraform tests against OpenSearch $(OS_VERSION)
+#   make tf-test-run   # run Terraform tests against an already-running cluster
+#   make test-os2      # Run all tests using OpenSearch 2.x
+#   make test-os3      # Run all tests using OpenSearch 3.x
+#   make check-tools   # Check that required tools are installed
 #   make check         # Performs all checks
 #   make fmt           # Perform terraform fmt
 #   make fmt-check     # Perform terraform fmt -check
@@ -39,7 +45,7 @@ TEST_TIMEOUT := 120m
 #   make tidy-check    # Performs the tidy check task
 #   make lint          # Performs linting, and applies fixes 
 #   make lint-check    # Performs the linting, and reports on any issues
-#   make fix           # Apply all of the fixes of the various types
+#   make fix           # Apply all available formatting, lint, and dependency fixes
 
 # =============================================================================
 
@@ -63,23 +69,54 @@ down:
 	@echo "Containers stopped."
 
 test: up
+	$(MAKE) wait
+	$(MAKE) test-running
+
+test-running:
 	@echo "Running tests against OpenSearch $(OS_VERSION)..."
 	go clean -testcache
 	@export OPENSEARCH_URL=$(OPENSEARCH_URL) && \
 	export TF_LOG=$(TF_LOG) && \
 	TF_ACC=$(TF_ACC) go test ./provider -v -parallel $(TEST_PARALLEL) -cover -short -timeout $(TEST_TIMEOUT)
 
-test-os2: check-tools
-	$(MAKE) OS_VERSION=2 up
-	$(MAKE) OS_VERSION=2 wait
-	$(MAKE) OS_VERSION=2 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=2 down; exit $$EXIT_CODE)
-	$(MAKE) OS_VERSION=2 down
+tf-test-run: tf-test-vars tf-test-data
+	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) init -upgrade
+	$(DEV_TF_ENV) terraform -chdir=$(TF_TEST_DIR) test $(TF_TEST_ARGS)
 
-test-os3: check-tools
-	$(MAKE) OS_VERSION=3 up
-	$(MAKE) OS_VERSION=3 wait
-	$(MAKE) OS_VERSION=3 test || (EXIT_CODE=$$?; $(MAKE) OS_VERSION=3 down; exit $$EXIT_CODE)
-	$(MAKE) OS_VERSION=3 down
+tf-test-local: dev-build dev-config
+	@set -e; \
+	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
+	trap cleanup EXIT; \
+	$(MAKE) up; \
+	$(MAKE) wait; \
+	$(MAKE) tf-test-run
+
+tf-test-vars:
+	@printf 'opensearch_url = "%s"\nopensearch_username = "%s"\nopensearch_password = "%s"\n' \
+		"$(OPENSEARCH_URL)" "$(OPENSEARCH_USERNAME)" "$(OPENSEARCH_INITIAL_ADMIN_PASSWORD)" \
+		> "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"
+
+tf-test-data:
+	./script/setup-integration-data.sh \
+		"$(OPENSEARCH_URL)" "$(OPENSEARCH_USERNAME)" "$(OPENSEARCH_INITIAL_ADMIN_PASSWORD)"
+
+test-os2: dev-build dev-config
+	@set -e; \
+	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
+	trap cleanup EXIT; \
+	$(MAKE) OS_VERSION=2 up; \
+	$(MAKE) OS_VERSION=2 wait; \
+	$(MAKE) OS_VERSION=2 test-running; \
+	$(MAKE) OS_VERSION=2 tf-test-run
+
+test-os3: dev-build dev-config
+	@set -e; \
+	cleanup() { $(MAKE) down; rm -f "$(TF_TEST_DIR)/tests/terraform.auto.tfvars"; }; \
+	trap cleanup EXIT; \
+	$(MAKE) OS_VERSION=3 up; \
+	$(MAKE) OS_VERSION=3 wait; \
+	$(MAKE) OS_VERSION=3 test-running; \
+	$(MAKE) OS_VERSION=3 tf-test-run
 
 check-lint-tools: ## Check if golangci-lint v2.x is installed
 	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed." && exit 1)
@@ -120,20 +157,6 @@ lint: check-lint-tools
 	golangci-lint run --fix --verbose --timeout=10m 
 
 fix: tidy fmt lint # Clean up the code
-
-ci-test: check  
-	@echo "=== Starting full CI test for OpenSearch $(OS_VERSION) ==="
-	$(MAKE) up
-	$(MAKE) wait
-	$(MAKE) test || (EXIT_CODE=$$?; $(MAKE) down; exit $$EXIT_CODE)
-	$(MAKE) down
-	@echo "=== Full CI test completed ==="
-
-ci-test-os2:
-	$(MAKE) OS_VERSION=2 ci-test
-
-ci-test-os3:
-	$(MAKE) OS_VERSION=3 ci-test
 
 # =============================================================================
 # Developer sandbox — spin up a real cluster (with OpenSearch Dashboards), build

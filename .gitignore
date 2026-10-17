@@ -12,3 +12,7 @@ dev/terraform.tfstate
 dev/terraform.tfstate.backup
 dev/.terraform/
 dev/.terraform.lock.hcl
+
+# Terraform test artifacts
+tf-tests/.terraform/
+tf-tests/tests/terraform.auto.tfvars
