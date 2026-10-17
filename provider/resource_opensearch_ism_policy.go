@@ -173,7 +173,11 @@ func resourceOpensearchGetISMPolicy(policyID string, m interface{}) (GetPolicyRe
 	})
 
 	if err != nil {
-		return *response, fmt.Errorf("error getting policy: %+v : %+v", path, err)
+		// Return the raw err so its *elastic.Error type survives. IsNotFound ->
+		// IsStatusCode does a bare type switch and never unwraps, so neither %+v
+		// (drops the type) nor %w (type present but not unwrapped) would work.
+		log.Printf("[INFO] error getting policy at %s: %+v", path, err)
+		return *response, err
 	}
 	body = &res.Body
 
