@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func TestAccOpensearchDataSourceRule(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: testAccProviderFactories,
+		ProviderFactories: testAccProviderFactories(&[]*schema.Provider{}),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchDataSourceRuleConfig(),
@@ -25,7 +26,7 @@ func TestAccOpensearchDataSourceRule(t *testing.T) {
 func TestAccOpensearchDataSourceRuleWithFilters(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
-		ProviderFactories: testAccProviderFactories,
+		ProviderFactories: testAccProviderFactories(&[]*schema.Provider{}),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOpensearchDataSourceRuleConfigWithFilters(),
