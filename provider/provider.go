@@ -198,14 +198,12 @@ func Provider() *schema.Provider {
 			"client_cert_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
 				Description: "A X509 certificate to connect to OpenSearch",
 				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_CERTIFICATE_PATH", ""),
 			},
 			"client_key_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
 				Description: "A X509 key to connect to OpenSearch",
 				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_KEY_PATH", ""),
 			},
