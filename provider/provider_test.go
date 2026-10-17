@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -90,6 +91,56 @@ func TestInvalidCredentials(t *testing.T) {
 	errString := "HTTP 401 Unauthorized: Please ensure that the correct credentials are being used to access the cluster"
 	if err.Error() != errString {
 		t.Errorf("Error thrown should be %s", errString)
+	}
+}
+
+// Given:
+// 1. an OpenSearch Serverless collection, which serves no operation on the root path
+// 2. healthchecking enabled, as it is by default
+//
+// this tests that getClient skips the client's startup healthcheck, a HEAD
+// request to the root path, which can never succeed against Serverless however
+// the collection's data access policy is configured
+func TestServerlessSkipsHealthcheck(t *testing.T) {
+	var rootPathCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "" || r.URL.Path == "/" {
+			// Serverless has no handler for the root path
+			rootPathCalls.Add(1)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	parsedUrl, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("Failed parsing test server url: %v", err)
+	}
+
+	// An aoss signature service with a region selects the Serverless code path
+	// for endpoints outside of *.aoss.amazonaws.com, and static credentials keep
+	// the test off the ambient credential chain.
+	testConfig := &ProviderConf{
+		rawUrl:             server.URL,
+		parsedUrl:          parsedUrl,
+		awsSig4Service:     "aoss",
+		awsRegion:          "us-east-1",
+		signAWSRequests:    true,
+		awsAccessKeyId:     "ACCESS_KEY",
+		awsSecretAccessKey: "SECRET_KEY",
+		healthchecking:     true,
+		sniffing:           false,
+		pingTimeoutSeconds: 10,
+	}
+
+	if _, err := getClient(testConfig); err != nil {
+		t.Fatalf("getClient failed against a Serverless collection: %v", err)
+	}
+
+	if calls := rootPathCalls.Load(); calls != 0 {
+		t.Errorf("healthcheck should not have run, got %d requests to the root path", calls)
 	}
 }
 
