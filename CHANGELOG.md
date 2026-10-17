@@ -6,6 +6,7 @@
 * Support for `AssumeRoleWithWebIdentity` via the new `aws_web_identity_role_arn` and `aws_web_identity_token_file` arguments, which default to the standard `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` environment variables so EKS IRSA works with no configuration ([#89](https://github.com/opensearch-project/terraform-provider-opensearch/issues/89))
 
 ### Fixed
+* Destroying or replacing an `opensearch_ml_model` whose deployment failed no longer errors: the undeploy step treats `DEPLOY_FAILED` as undeployed ([#350](https://github.com/opensearch-project/terraform-provider-opensearch/pull/350))
 
 ## [1.0.0] - 2023-04-15
 ### Added
