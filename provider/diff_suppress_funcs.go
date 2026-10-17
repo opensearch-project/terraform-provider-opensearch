@@ -103,12 +103,16 @@ func diffSuppressChannelConfiguration(k, old, new string, d *schema.ResourceData
 		return false
 	}
 
+	// config_id is the resource id. GET returns it next to "config", configs do
+	// not carry it. It is only dropped here because Read needs it for the id.
 	if om, ok := oo.(map[string]interface{}); ok {
 		normalizeChannelConfiguration(om)
+		delete(om, "config_id")
 	}
 
 	if nm, ok := no.(map[string]interface{}); ok {
 		normalizeChannelConfiguration(nm)
+		delete(nm, "config_id")
 	}
 
 	return reflect.DeepEqual(oo, no)
@@ -121,6 +125,13 @@ func diffSuppressIngestPipeline(k, old, new string, d *schema.ResourceData) bool
 	}
 	if err := json.Unmarshal([]byte(new), &no); err != nil {
 		return false
+	}
+
+	if om, ok := oo.(map[string]interface{}); ok {
+		normalizeIngestPipeline(om)
+	}
+	if nm, ok := no.(map[string]interface{}); ok {
+		normalizeIngestPipeline(nm)
 	}
 
 	return reflect.DeepEqual(oo, no)

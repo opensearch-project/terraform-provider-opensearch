@@ -26,6 +26,59 @@ func normalizeChannelConfiguration(tpl map[string]interface{}) {
 	delete(tpl, "created_time_ms")
 }
 
+// normalizeIngestPipeline drops an empty description, which OpenSearch returns
+// for pipelines created without one.
+func normalizeIngestPipeline(tpl map[string]any) {
+	if d, ok := tpl["description"]; ok && (d == nil || d == "") {
+		delete(tpl, "description")
+	}
+}
+
+// Defaults the alerting plugin adds to every doc-level monitor on read.
+var monitorDefaultDataSources = map[string]any{
+	"alerts_history_index":         ".opendistro-alerting-alert-history-write",
+	"alerts_history_index_pattern": "<.opendistro-alerting-alert-history-{now/d}-1>",
+	"alerts_index":                 ".opendistro-alerting-alerts",
+	"comments_index":               ".opensearch-alerting-comments-history-write",
+	"comments_index_pattern":       "<.opensearch-alerting-comments-history-{now/d}-1>",
+	"findings_enabled":             false,
+	"findings_index":               ".opensearch-alerting-finding-history-write",
+	"findings_index_pattern":       "<.opensearch-alerting-finding-history-{now/d}-1>",
+	"query_index":                  ".opensearch-alerting-queries",
+	"query_index_mappings_by_type": map[string]any{},
+}
+
+// deleteIfEqual removes key from m when its value equals def, so a server
+// default and an omitted key compare equal while explicit non-defaults still diff.
+func deleteIfEqual(m map[string]any, key string, def any) {
+	if v, ok := m[key]; ok && reflect.DeepEqual(v, def) {
+		delete(m, key)
+	}
+}
+
+func normalizeMonitorDefaults(tpl map[string]any) {
+	deleteIfEqual(tpl, "owner", "alerting")
+	deleteIfEqual(tpl, "delete_query_index_in_every_run", false)
+	deleteIfEqual(tpl, "should_create_single_alert_for_findings", false)
+	deleteIfEqual(tpl, "data_sources", monitorDefaultDataSources)
+	inputs, _ := tpl["inputs"].([]any)
+	for _, in := range inputs {
+		input, _ := in.(map[string]any)
+		dli, _ := input["doc_level_input"].(map[string]any)
+		if dli == nil {
+			continue
+		}
+		deleteIfEqual(dli, "fan_out_enabled", true)
+		queries, _ := dli["queries"].([]any)
+		for _, q := range queries {
+			if query, ok := q.(map[string]any); ok {
+				deleteIfEqual(query, "fields", []any{})
+				deleteIfEqual(query, "query_field_names", []any{})
+			}
+		}
+	}
+}
+
 func normalizeMonitor(tpl map[string]interface{}) {
 	if triggers, ok := tpl["triggers"].([]interface{}); ok {
 		normalizeMonitorTriggers(triggers)
@@ -36,6 +89,7 @@ func normalizeMonitor(tpl map[string]interface{}) {
 	delete(tpl, "enabled_time")
 	delete(tpl, "schema_version")
 	delete(tpl, "user")
+	normalizeMonitorDefaults(tpl)
 }
 
 func normalizeMonitorTriggers(triggers []interface{}) {
@@ -539,6 +593,8 @@ func normalizeToJSON(input string) (string, error) {
 	
 	// Not JSON, try to convert from YAML
 	return convertYAMLToJSON(input)
+}
+
 // ============================================
 // ===    HTTP Request Helper Functions     ===
 // ============================================
