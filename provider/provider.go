@@ -110,12 +110,14 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_PASSWORD", nil),
 				Description: "Password to use to connect to OpenSearch using basic auth",
+				Sensitive:   true,
 			},
 			"token": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				DefaultFunc: schema.EnvDefaultFunc("OPENSEARCH_TOKEN", nil),
 				Description: "A bearer token or ApiKey for an Authorization header, e.g. Active Directory API key.",
+				Sensitive:   true,
 			},
 			"token_name": {
 				Type:        schema.TypeString,
@@ -158,18 +160,21 @@ func Provider() *schema.Provider {
 				Optional:    true,
 				Default:     "",
 				Description: "The access key for use with AWS OpenSearch Service domains",
+				Sensitive:   true,
 			},
 			"aws_secret_key": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
 				Description: "The secret key for use with AWS OpenSearch Service domains",
+				Sensitive:   true,
 			},
 			"aws_token": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Default:     "",
 				Description: "The session token for use with AWS OpenSearch Service domains",
+				Sensitive:   true,
 			},
 			"aws_profile": {
 				Type:        schema.TypeString,
