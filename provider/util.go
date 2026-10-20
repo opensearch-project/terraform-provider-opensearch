@@ -17,12 +17,66 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/mitchellh/go-homedir"
+	"gopkg.in/yaml.v3"
 	"github.com/opensearch-project/opensearch-go/v2"
 )
 
 func normalizeChannelConfiguration(tpl map[string]interface{}) {
 	delete(tpl, "last_updated_time_ms")
 	delete(tpl, "created_time_ms")
+}
+
+// normalizeIngestPipeline drops an empty description, which OpenSearch returns
+// for pipelines created without one.
+func normalizeIngestPipeline(tpl map[string]any) {
+	if d, ok := tpl["description"]; ok && (d == nil || d == "") {
+		delete(tpl, "description")
+	}
+}
+
+// Defaults the alerting plugin adds to every doc-level monitor on read.
+var monitorDefaultDataSources = map[string]any{
+	"alerts_history_index":         ".opendistro-alerting-alert-history-write",
+	"alerts_history_index_pattern": "<.opendistro-alerting-alert-history-{now/d}-1>",
+	"alerts_index":                 ".opendistro-alerting-alerts",
+	"comments_index":               ".opensearch-alerting-comments-history-write",
+	"comments_index_pattern":       "<.opensearch-alerting-comments-history-{now/d}-1>",
+	"findings_enabled":             false,
+	"findings_index":               ".opensearch-alerting-finding-history-write",
+	"findings_index_pattern":       "<.opensearch-alerting-finding-history-{now/d}-1>",
+	"query_index":                  ".opensearch-alerting-queries",
+	"query_index_mappings_by_type": map[string]any{},
+}
+
+// deleteIfEqual removes key from m when its value equals def, so a server
+// default and an omitted key compare equal while explicit non-defaults still diff.
+func deleteIfEqual(m map[string]any, key string, def any) {
+	if v, ok := m[key]; ok && reflect.DeepEqual(v, def) {
+		delete(m, key)
+	}
+}
+
+func normalizeMonitorDefaults(tpl map[string]any) {
+	deleteIfEqual(tpl, "owner", "alerting")
+	deleteIfEqual(tpl, "delete_query_index_in_every_run", false)
+	deleteIfEqual(tpl, "should_create_single_alert_for_findings", false)
+	deleteIfEqual(tpl, "data_sources", monitorDefaultDataSources)
+	inputs, _ := tpl["inputs"].([]any)
+	for _, in := range inputs {
+		input, _ := in.(map[string]any)
+		dli, _ := input["doc_level_input"].(map[string]any)
+		if dli == nil {
+			continue
+		}
+		deleteIfEqual(dli, "fan_out_enabled", true)
+		queries, _ := dli["queries"].([]any)
+		for _, q := range queries {
+			if query, ok := q.(map[string]any); ok {
+				deleteIfEqual(query, "fields", []any{})
+				deleteIfEqual(query, "query_field_names", []any{})
+			}
+		}
+	}
 }
 
 func normalizeMonitor(tpl map[string]interface{}) {
@@ -35,6 +89,7 @@ func normalizeMonitor(tpl map[string]interface{}) {
 	delete(tpl, "enabled_time")
 	delete(tpl, "schema_version")
 	delete(tpl, "user")
+	normalizeMonitorDefaults(tpl)
 }
 
 func normalizeMonitorTriggers(triggers []interface{}) {
@@ -151,6 +206,11 @@ func normalizedIndexSettings(settings map[string]interface{}) map[string]interfa
 
 func normalizeAnomalyDetection(tpl map[string]interface{}) {
 	delete(tpl, "last_update_time")
+}
+
+func normalizeRule(tpl map[string]interface{}) {
+	delete(tpl, "last_update_time")
+	delete(tpl, "queries")
 }
 
 func flattenMap(m map[string]interface{}) map[string]interface{} {
@@ -484,6 +544,55 @@ func readPathOrContent(poc string) (string, bool, error) {
 	}
 
 	return poc, false, nil
+}
+
+// convertYAMLToJSON converts a YAML string to a JSON string
+func convertYAMLToJSON(yamlStr string) (string, error) {
+	var data interface{}
+	
+	// Parse YAML into Go data structure
+	if err := yaml.Unmarshal([]byte(yamlStr), &data); err != nil {
+		return "", fmt.Errorf("error parsing YAML: %v", err)
+	}
+	
+	// Convert to JSON
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling to JSON: %v", err)
+	}
+	
+	return string(jsonBytes), nil
+}
+
+// convertJSONToYAML converts a JSON string to a YAML string
+func convertJSONToYAML(jsonStr string) (string, error) {
+	var data interface{}
+	
+	// Parse JSON into Go data structure
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return "", fmt.Errorf("error parsing JSON: %v", err)
+	}
+	
+	// Convert to YAML
+	yamlBytes, err := yaml.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling to YAML: %v", err)
+	}
+	
+	return string(yamlBytes), nil
+}
+
+// normalizeToJSON converts either JSON or YAML input to JSON format
+func normalizeToJSON(input string) (string, error) {
+	// First try to parse as JSON (test if it's already JSON)
+	var jsonData interface{}
+	if err := json.Unmarshal([]byte(input), &jsonData); err == nil {
+		// It's valid JSON, return as-is
+		return input, nil
+	}
+	
+	// Not JSON, try to convert from YAML
+	return convertYAMLToJSON(input)
 }
 
 // ============================================

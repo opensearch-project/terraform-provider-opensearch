@@ -239,6 +239,11 @@ func resourceOpensearchDashboardObjectDelete(d *schema.ResourceData, meta interf
 // from a dashboard object body array:
 //   - _source.updated_at 			   – always overwritten by OpenSearch on every write
 //   - _source["index-pattern"].fields – a cached field list maintained by Dashboards
+//   - _type                           – OpenSearch 2+ has no mapping types, so it is
+//     read back as "" while configs usually carry "doc"; it is never written
+//   - _source.migrationVersion        – set by the Dashboards saved-object migration
+//   - _source.references              – folded back into the attributes, see
+//     normalizeDashboardObjectReferences
 //
 // This is called both from the StateFunc (to normalize the config value) and
 // from the Read function (to normalize the value written to state via d.Set,
@@ -261,14 +266,17 @@ func normalizeDashboardObjectForState(v interface{}) string {
 		if !ok {
 			continue
 		}
+		delete(obj, "_type")
 		source, ok := obj["_source"].(map[string]interface{})
 		if !ok {
 			continue
 		}
 		delete(source, "updated_at")
+		delete(source, "migrationVersion")
 		if ip, ok := source["index-pattern"].(map[string]interface{}); ok {
 			delete(ip, "fields")
 		}
+		normalizeDashboardObjectReferences(source)
 	}
 	result, err := json.Marshal(body)
 	if err != nil {

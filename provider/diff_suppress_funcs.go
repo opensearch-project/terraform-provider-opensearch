@@ -2,9 +2,12 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"gopkg.in/yaml.v3"
 )
 
 func diffSuppressIndexTemplate(k, old, new string, d *schema.ResourceData) bool {
@@ -100,12 +103,16 @@ func diffSuppressChannelConfiguration(k, old, new string, d *schema.ResourceData
 		return false
 	}
 
+	// config_id is the resource id. GET returns it next to "config", configs do
+	// not carry it. It is only dropped here because Read needs it for the id.
 	if om, ok := oo.(map[string]interface{}); ok {
 		normalizeChannelConfiguration(om)
+		delete(om, "config_id")
 	}
 
 	if nm, ok := no.(map[string]interface{}); ok {
 		normalizeChannelConfiguration(nm)
+		delete(nm, "config_id")
 	}
 
 	return reflect.DeepEqual(oo, no)
@@ -118,6 +125,13 @@ func diffSuppressIngestPipeline(k, old, new string, d *schema.ResourceData) bool
 	}
 	if err := json.Unmarshal([]byte(new), &no); err != nil {
 		return false
+	}
+
+	if om, ok := oo.(map[string]interface{}); ok {
+		normalizeIngestPipeline(om)
+	}
+	if nm, ok := no.(map[string]interface{}); ok {
+		normalizeIngestPipeline(nm)
 	}
 
 	return reflect.DeepEqual(oo, no)
@@ -161,4 +175,33 @@ func diffSuppressAnomalyDetection(k, old, new string, d *schema.ResourceData) bo
 	}
 
 	return reflect.DeepEqual(oo, no)
+}
+
+func diffSuppressRule(k, old, new string, d *schema.ResourceData) bool {
+	// Parse both values as YAML/JSON into Go data structures
+	oldData, err := parseYAMLOrJSON(old)
+	if err != nil {
+		// Fall back to string comparison if parsing fails
+		return strings.TrimSpace(old) == strings.TrimSpace(new)
+	}
+	
+	newData, err := parseYAMLOrJSON(new)
+	if err != nil {
+		// Fall back to string comparison if parsing fails
+		return strings.TrimSpace(old) == strings.TrimSpace(new)
+	}
+	
+	// Compare the parsed data structures semantically
+	return reflect.DeepEqual(oldData, newData)
+}
+
+func parseYAMLOrJSON(input string) (interface{}, error) {
+	var data interface{}
+	
+	// Try YAML first (YAML is a superset of JSON, so this handles both)
+	if err := yaml.Unmarshal([]byte(input), &data); err != nil {
+		return nil, fmt.Errorf("failed to parse as YAML: %v", err)
+	}
+	
+	return data, nil
 }
