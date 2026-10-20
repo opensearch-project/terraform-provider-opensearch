@@ -75,6 +75,10 @@ EOF
 
 - `body` (String) The anomaly detection document
 
+### Optional
+
+- `enabled` (Boolean) Whether the anomaly detector is active. When `true`, the provider starts the detector after creation and update. The provider always stops the detector before deletion, regardless of this value. Defaults to `false`.
+
 ### Read-Only
 
 - `id` (String) The ID of this resource.
