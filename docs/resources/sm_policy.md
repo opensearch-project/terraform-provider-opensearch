@@ -67,6 +67,10 @@ resource "opensearch_sm_policy" "snapshot_to_s3" {
       "timezone"   = "UTC"
       "indices"    = "*"
       "repository" = opensearch_snapshot_repository.repo.name
+      "ignore_unavailable" : "true",
+      "include_global_state" : "false",
+      "date_format" : "yyyy-MM-dd-HH:mm",
+      "partial" : "false"
     }
   })
 }
