@@ -269,6 +269,7 @@ func Provider() *schema.Provider {
 			"opensearch_channel_configuration":     resourceOpenSearchChannelConfiguration(),
 			"opensearch_anomaly_detection":         resourceOpenSearchAnomalyDetection(),
 			"opensearch_sm_policy":                 resourceOpenSearchSMPolicy(),
+			"opensearch_transform":                 resourceOpensearchTransform(),
 			"opensearch_ml_connector":              resourceOpensearchMLConnector(),
 			"opensearch_ml_model_group":            resourceOpensearchMLModelGroup(),
 			"opensearch_ml_model":                  resourceOpensearchMLModel(),

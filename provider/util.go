@@ -37,6 +37,14 @@ func normalizeMonitor(tpl map[string]interface{}) {
 	delete(tpl, "user")
 }
 
+func normalizeTransform(tpl map[string]interface{}) {
+	delete(tpl, "transform_id")
+	delete(tpl, "schema_version")
+	delete(tpl, "enabled_at")
+	delete(tpl, "metadata_id")
+	delete(tpl, "updated_at")
+}
+
 func normalizeMonitorTriggers(triggers []interface{}) {
 	for _, t := range triggers {
 		if trigger, ok := t.(map[string]interface{}); ok {

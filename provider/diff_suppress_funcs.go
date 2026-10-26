@@ -143,6 +143,34 @@ func diffSuppressPolicy(k, old, new string, d *schema.ResourceData) bool {
 	return reflect.DeepEqual(oo, no)
 }
 
+func transformDiffSuppressPolicy(k, old, new string, d *schema.ResourceData) bool {
+	var oo, no interface{}
+	if err := json.Unmarshal([]byte(old), &oo); err != nil {
+		return false
+	}
+	if err := json.Unmarshal([]byte(new), &no); err != nil {
+		return false
+	}
+
+	om, ok := oo.(map[string]interface{})
+	if !ok {
+		return reflect.DeepEqual(oo, no)
+	}
+	nm, ok := no.(map[string]interface{})
+	if !ok {
+		return reflect.DeepEqual(oo, no)
+	}
+
+	if oTransform, ok := om["transform"].(map[string]interface{}); ok {
+		normalizeTransform(oTransform)
+	}
+	if nTransform, ok := nm["transform"].(map[string]interface{}); ok {
+		normalizeTransform(nTransform)
+	}
+
+	return reflect.DeepEqual(oo, no)
+}
+
 func diffSuppressAnomalyDetection(k, old, new string, d *schema.ResourceData) bool {
 	var oo, no interface{}
 	if err := json.Unmarshal([]byte(old), &oo); err != nil {
