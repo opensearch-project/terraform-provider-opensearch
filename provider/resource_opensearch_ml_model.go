@@ -21,13 +21,15 @@ const (
 	modelRegistrationPollInterval          = 2 * time.Second
 	maxModelDeploymentStateChangeWait      = 120 * time.Second
 	modelDeploymentStateChangePollInterval = 2 * time.Second
+	maxModelDeletionWait                   = 120 * time.Second
 )
 
 // Declared as vars so unit tests can override them.
 var (
-	maxPredictProbeWait      = 60 * time.Second
-	predictProbePollInterval = 5 * time.Second
-	defaultPredictProbeBody  = `{"parameters": {"inputText": "healthcheck"}}`
+	maxPredictProbeWait       = 60 * time.Second
+	predictProbePollInterval  = 5 * time.Second
+	modelDeletionPollInterval = time.Second
+	defaultPredictProbeBody   = `{"parameters": {"inputText": "healthcheck"}}`
 )
 
 func resourceOpensearchMLModel() *schema.Resource {
@@ -798,6 +800,10 @@ func resourceOpensearchMLModelDelete(ctx context.Context, d *schema.ResourceData
 		return diag.FromErr(err)
 	}
 
+	if err := waitForMLModelDeletion(ctx, conf, d.Id()); err != nil {
+		return diag.Errorf("error waiting for ML Model deletion: %s", err)
+	}
+
 	return nil
 }
 
@@ -808,6 +814,41 @@ func resourceOpensearchMLModelDelete(ctx context.Context, d *schema.ResourceData
 func getMLModelFromAPI(ctx context.Context, conf *ProviderConf, modelID string) (map[string]interface{}, error) {
 	url := conf.rawUrl + fmt.Sprintf("/_plugins/_ml/models/%s", modelID)
 	return performRequestAndParse(ctx, conf.osClient, "GET", url, nil, "get ML Model")
+}
+
+func waitForMLModelDeletion(ctx context.Context, conf *ProviderConf, modelID string) error {
+	deadline := time.Now().Add(maxModelDeletionWait)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context cancelled while waiting for ML Model %s deletion: %w", modelID, ctx.Err())
+		default:
+		}
+
+		_, err := getMLModelFromAPI(ctx, conf, modelID)
+		if err != nil {
+			var httpErr *HTTPError
+			if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+				return nil
+			}
+			return err
+		}
+
+		timer := time.NewTimer(modelDeletionPollInterval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return fmt.Errorf("context cancelled while waiting for ML Model %s deletion: %w", modelID, ctx.Err())
+		case <-timer.C:
+		}
+	}
+
+	return fmt.Errorf("timeout waiting for ML Model %s to be deleted after %s", modelID, maxModelDeletionWait)
 }
 
 func buildGuardrailsPayload(guardrailsMap map[string]interface{}) map[string]interface{} {

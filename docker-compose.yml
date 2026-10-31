@@ -13,7 +13,7 @@ services:
       - network.publish_host=127.0.0.1
       - logger.org.opensearch=warn
       - "OPENSEARCH_JAVA_OPTS=-Xms3g -Xmx3g"
-      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=myStrongPassword123@456"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-myStrongPassword123@456}"
       - "plugins.security.ssl.http.enabled=false"
       - "plugins.ml_commons.only_run_on_ml_node=false"
       # Disable the ML Commons memory circuit breakers in the test cluster. Tests
