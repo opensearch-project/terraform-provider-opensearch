@@ -198,14 +198,12 @@ func Provider() *schema.Provider {
 			"client_cert_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
 				Description: "A X509 certificate to connect to OpenSearch",
 				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_CERTIFICATE_PATH", ""),
 			},
 			"client_key_path": {
 				Type:        schema.TypeString,
 				Optional:    true,
-				Default:     "",
 				Description: "A X509 key to connect to OpenSearch",
 				DefaultFunc: schema.EnvDefaultFunc("OS_CLIENT_KEY_PATH", ""),
 			},
@@ -503,7 +501,12 @@ func getClient(conf *ProviderConf) (*elastic7.Client, error) {
 			return nil, err
 		}
 		client.Transport = Wrap(client.Transport)
-		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false))
+		// Serverless serves no operation on the root path, so the client's
+		// startup healthcheck, a HEAD request to it, always fails and is not a
+		// signal that the collection is unreachable. Disable it for the same
+		// reason sniffing is disabled: Serverless supports neither.
+		// https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-genref.html
+		opts = append(opts, elastic7.SetHttpClient(client), elastic7.SetSniff(false), elastic7.SetHealthcheck(false))
 		conf.flavor = OpenSearch
 		if conf.osVersion == "" {
 			conf.osVersion = minimalOpensearchServerlessVersion
