@@ -42,6 +42,42 @@ services:
         hard: -1
     ports:
       - 9200:9200
+  # Second, independent cluster used as the leader cluster of the
+  # cross-cluster replication tests (`make test-ccr`). It shares the demo
+  # certificates of the `opensearch` service, so the transport connection
+  # between both clusters is trusted. Its publish host is its container name so
+  # that the follower cluster can reach it in sniff mode.
+  opensearch-leader:
+    profiles:
+      - ccr
+    image: ${OSS_IMAGE:-opensearchproject/opensearch:2}
+    hostname: opensearch-leader
+    container_name: opensearch-leader
+    networks:
+      - opensearch
+    environment:
+      - cluster.name=opensearch-leader
+      - bootstrap.memory_lock=true
+      - discovery.type=single-node
+      - path.repo=/tmp
+      - network.publish_host=opensearch-leader
+      - logger.org.opensearch=warn
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-myStrongPassword123@456}"
+      - "plugins.security.ssl.http.enabled=false"
+      - "cluster.blocks.create_index=false"
+      - "cluster.blocks.read_only_allow_delete=false"
+      - "cluster.routing.allocation.disk.threshold_enabled=false"
+    ulimits:
+      nproc: 65536
+      nofile:
+        soft: 65536
+        hard: 65536
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9201:9200
   opensearch-dashboards:
     profiles:
       - dashboards
