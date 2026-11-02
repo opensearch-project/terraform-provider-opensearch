@@ -3,12 +3,12 @@
 page_title: "opensearch_dashboard_object Resource - terraform-provider-opensearch"
 subcategory: ""
 description: |-
-  Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.
+  Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. Bookkeeping Dashboards maintains itself is ignored when diffing: `updated_at`, which the saved objects API restamps on every write, and an index pattern's per-field popularity counters (`fields[].count`), which Dashboards increments as people use fields in Discover.
 ---
 
 # opensearch_dashboard_object (Resource)
 
-Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround.
+Provides an OpenSearch Dashboards object resource. This resource interacts directly with the underlying OpenSearch index backing Dashboards, so the format must match what Dashboards the version of Dashboards is expecting. Dashboards with older versions - directly pulling the JSON from a Dashboards index of the same version of OpenSearch targeted by the provider is a workaround. Bookkeeping Dashboards maintains itself is ignored when diffing: `updated_at`, which the saved objects API restamps on every write, and an index pattern's per-field popularity counters (`fields[].count`), which Dashboards increments as people use fields in Discover.
 
 ## Example Usage
 
@@ -111,3 +111,20 @@ EOF
 ### Read-Only
 
 - `id` (String) The ID of this resource.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import from default (.kibana/global) scope
+terraform import opensearch_dashboard_object.test_visualization response-time-percentile
+
+# Import from a tenant scope
+terraform import opensearch_dashboard_object.test_visualization 'response-time-percentile,tenant_name=tenant_test'
+
+# Import from a custom Dashboards index
+terraform import opensearch_dashboard_object.test_visualization 'response-time-percentile,index=.kibana_custom'
+```
