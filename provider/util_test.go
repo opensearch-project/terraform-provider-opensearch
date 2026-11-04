@@ -59,3 +59,26 @@ func TestExtractErrorMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeMonitorRemovesServerOwnedFields(t *testing.T) {
+	monitor := map[string]interface{}{
+		"name":             "my-monitor",
+		"id":               "abc",
+		"last_update_time": 1,
+		"enabled_time":     1,
+		"schema_version":   10,
+		"user":             map[string]interface{}{"name": "creator"},
+		"created_by":       "creator",
+	}
+
+	normalizeMonitor(monitor)
+
+	for _, field := range []string{"id", "last_update_time", "enabled_time", "schema_version", "user", "created_by"} {
+		if _, ok := monitor[field]; ok {
+			t.Errorf("normalizeMonitor() should remove %q", field)
+		}
+	}
+	if monitor["name"] != "my-monitor" {
+		t.Errorf("normalizeMonitor() must keep user-defined fields, got name=%v", monitor["name"])
+	}
+}
