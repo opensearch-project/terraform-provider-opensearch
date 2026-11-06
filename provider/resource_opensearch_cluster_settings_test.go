@@ -1,8 +1,11 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -54,6 +57,42 @@ func TestAccOpensearchClusterSettingsTypeList(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
 					testCheckOpensearchClusterSettingExists("cluster.routing.allocation.awareness.force.zone.values"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchClusterSettingsMLCommonsMCPServer(t *testing.T) {
+	provider := Provider()
+	diags := provider.Configure(context.Background(), &terraform.ResourceConfig{})
+	if diags.HasError() {
+		t.Skipf("err: %#v", diags)
+	}
+
+	// plugins.ml_commons.mcp_server_enabled is only available on OpenSearch >= 3.0.0.
+	var allowed = false
+	if meta, ok := provider.Meta().(*ProviderConf); ok {
+		if major, err := strconv.Atoi(strings.SplitN(meta.osVersion, ".", 2)[0]); err == nil {
+			allowed = major >= 3
+		}
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			if !allowed {
+				t.Skip("plugins.ml_commons.mcp_server_enabled only supported on OS >= 3.0.0")
+			}
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchClusterSettingsMLCommonsMCPServer,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+					testCheckOpensearchClusterSettingExists("plugins.ml_commons.mcp_server_enabled"),
 				),
 			},
 		},
@@ -137,5 +176,12 @@ var testAccOpensearchClusterSettingsTypeList = `
 resource "opensearch_cluster_settings" "global" {
   reset_settings_on_delete                               = true
   cluster_routing_allocation_awareness_force_zone_values = ["zone1", "zone2", "zone3"]
+}
+`
+
+var testAccOpensearchClusterSettingsMLCommonsMCPServer = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete              = true
+  plugins_ml_commons_mcp_server_enabled = true
 }
 `
