@@ -155,11 +155,13 @@ func resourceOpensearchGetOpenDistroUser(userID string, m interface{}) (UserBody
 		Method: "GET",
 		Path:   path,
 	})
-	log.Printf("The resourceOpensearchGetOpenDistroUser res is %s", res.Body)
-	log.Printf("The resourceOpensearchGetOpenDistroUser res StatusCode is %d", res.StatusCode)
+	// PerformRequest returns a nil response on transport failures (connection
+	// refused, TLS errors, cancelled context), so check err before reading res.
 	if err != nil {
 		return *user, err
 	}
+	log.Printf("The resourceOpensearchGetOpenDistroUser res is %s", res.Body)
+	log.Printf("The resourceOpensearchGetOpenDistroUser res StatusCode is %d", res.StatusCode)
 	body = res.Body
 
 	var userDefinition map[string]UserBody
