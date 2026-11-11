@@ -6,6 +6,7 @@
 * Support for `AssumeRoleWithWebIdentity` via the new `aws_web_identity_role_arn` and `aws_web_identity_token_file` arguments, which default to the standard `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` environment variables so EKS IRSA works with no configuration ([#89](https://github.com/opensearch-project/terraform-provider-opensearch/issues/89))
 
 ### Fixed
+* `opensearch_user` no longer crashes the provider with a nil pointer dereference when reading a user fails at the transport level (for example connection refused or a TLS error); the underlying error is returned instead ([#353](https://github.com/opensearch-project/terraform-provider-opensearch/issues/353))
 
 ## [1.0.0] - 2023-04-15
 ### Added
