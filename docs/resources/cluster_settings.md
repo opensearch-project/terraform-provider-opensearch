@@ -70,6 +70,7 @@ resource "opensearch_cluster_settings" "global" {
 - `reset_settings_on_delete` (Boolean) If true, cluster settings will be reset to defaults when this resource is deleted
 - `script_max_compilations_rate` (String) Limit for the number of unique dynamic scripts within a certain interval that are allowed to be compiled, expressed as compilations divided by a time string
 - `search_default_search_timeout` (String) A time string setting a cluster-wide default timeout for all search requests
+- `search_max_buckets` (Number) The maximum number of aggregation buckets allowed in a single response
 
 ### Read-Only
 

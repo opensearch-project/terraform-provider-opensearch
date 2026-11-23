@@ -51,6 +51,9 @@ var (
 		"cluster.routing.allocation.node_initial_primaries_recoveries",
 		"cluster.routing.allocation.total_shards_per_node",
 	}
+	intSearchSettings = []string{
+		"search.max_buckets",
+	}
 	floatClusterSettings = []string{
 		"cluster.routing.allocation.balance.index",
 		"cluster.routing.allocation.balance.shard",
@@ -71,7 +74,7 @@ var (
 	typeListClusterSettings = []string{
 		"cluster.routing.allocation.awareness.force.zone.values",
 	}
-	dynamicClusterSettings = concatStringSlice(stringClusterSettings, intClusterSettings, floatClusterSettings, boolClusterSettings, typeListClusterSettings)
+	dynamicClusterSettings = concatStringSlice(stringClusterSettings, intClusterSettings, intSearchSettings, floatClusterSettings, boolClusterSettings, typeListClusterSettings)
 )
 
 func resourceOpensearchClusterSettings() *schema.Resource {
@@ -306,6 +309,11 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Optional:    true,
 				Description: "A time string setting a cluster-wide default timeout for all search requests",
 			},
+			"search_max_buckets": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "The maximum number of aggregation buckets allowed in a single response",
+			},
 			"action_auto_create_index": {
 				Type:         schema.TypeString,
 				Optional:     true,
@@ -477,7 +485,7 @@ func clusterResourceDataFromSettings(settings map[string]interface{}, d *schema.
 			}
 		} else {
 			var err error
-			if containsString(intClusterSettings, key) && reflect.TypeOf(value).String() == "string" {
+			if (containsString(intClusterSettings, key) || containsString(intSearchSettings, key)) && reflect.TypeOf(value).String() == "string" {
 				value, err = strconv.Atoi(value.(string))
 				if err != nil {
 					return fmt.Errorf("error converting %s to int: %s", key, err)
