@@ -43,6 +43,23 @@ func TestAccOpensearchClusterSettingsSlowLogs(t *testing.T) {
 	})
 }
 
+func TestAccOpensearchClusterSettingsCancelAfterTimeInterval(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchClusterSettingsCancelAfterTimeInterval,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+					testCheckOpensearchClusterSettingExists("search.cancel_after_time_interval"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccOpensearchClusterSettingsTypeList(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -130,6 +147,13 @@ resource "opensearch_cluster_settings" "global" {
   reset_settings_on_delete                      = true
   cluster_search_request_slowlog_level          = "WARN"
   cluster_search_request_slowlog_threshold_warn = "10s"
+}
+`
+
+var testAccOpensearchClusterSettingsCancelAfterTimeInterval = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete          = true
+  search_cancel_after_time_interval = "10s"
 }
 `
 
