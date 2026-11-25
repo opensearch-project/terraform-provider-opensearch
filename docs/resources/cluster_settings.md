@@ -69,6 +69,9 @@ resource "opensearch_cluster_settings" "global" {
 - `network_breaker_inflight_requests_overhead` (Number) A constant that all in flight requests estimations are multiplied by
 - `reset_settings_on_delete` (Boolean) If true, cluster settings will be reset to defaults when this resource is deleted
 - `script_max_compilations_rate` (String) Limit for the number of unique dynamic scripts within a certain interval that are allowed to be compiled, expressed as compilations divided by a time string
+- `search_concurrent_max_slice_count` (Number) Maximum number of slices for concurrent search requests. Use positive integer (2-8 recommended) or 0 for Lucene default mechanism. Requires OpenSearch 2.13+.
+- `search_concurrent_segment_search_enabled` (Boolean) Enable or disable concurrent segment search. Requires OpenSearch 2.12+.
+- `search_concurrent_segment_search_mode` (String) Sets the concurrent segment search mode. Accepted values are `auto`, `all`, or `none`. Requires OpenSearch 2.17+.
 - `search_default_search_timeout` (String) A time string setting a cluster-wide default timeout for all search requests
 
 ### Read-Only

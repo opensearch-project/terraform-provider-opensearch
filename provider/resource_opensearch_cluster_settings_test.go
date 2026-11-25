@@ -139,3 +139,131 @@ resource "opensearch_cluster_settings" "global" {
   cluster_routing_allocation_awareness_force_zone_values = ["zone1", "zone2", "zone3"]
 }
 `
+
+func TestAccOpensearchClusterSettingsConcurrentSegmentSearch(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, versionRequirements["search_concurrent_segment_search_mode"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchClusterSettingsConcurrentSegmentSearch,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+				resource.TestCheckResourceAttr("opensearch_cluster_settings.global", "search_concurrent_segment_search_enabled", "true"),
+				resource.TestCheckResourceAttr("opensearch_cluster_settings.global", "search_concurrent_segment_search_mode", "auto"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchClusterSettingsConcurrentSegmentSearchModeValidation(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, versionRequirements["search_concurrent_segment_search_mode"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchClusterSettingsConcurrentSegmentSearchModeAll,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+					resource.TestCheckResourceAttr("opensearch_cluster_settings.global", "search_concurrent_segment_search_mode", "all"),
+				),
+			},
+			{
+				Config: testAccOpensearchClusterSettingsConcurrentSegmentSearchModeNone,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+					resource.TestCheckResourceAttr("opensearch_cluster_settings.global", "search_concurrent_segment_search_mode", "none"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchClusterSettingsConcurrentMaxSliceCount(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, versionRequirements["search_concurrent_max_slice_count"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchClusterSettingsConcurrentMaxSliceCountZero,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+					testCheckOpensearchClusterSettingExists("search.concurrent.max_slice_count"),
+					resource.TestCheckResourceAttr("opensearch_cluster_settings.global", "search_concurrent_max_slice_count", "0"),
+				),
+			},
+			{
+				Config: testAccOpensearchClusterSettingsConcurrentMaxSliceCountEight,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+					testCheckOpensearchClusterSettingExists("search.concurrent.max_slice_count"),
+					resource.TestCheckResourceAttr("opensearch_cluster_settings.global", "search_concurrent_max_slice_count", "8"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccOpensearchClusterSettingsConcurrentSegmentSearchEnabled(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheckMinVersion(t, versionRequirements["search_concurrent_segment_search_enabled"]) },
+		Providers:    testAccProviders,
+		CheckDestroy: checkOpensearchClusterSettingsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccOpensearchClusterSettingsConcurrentSegmentSearchEnabledOnly,
+				Check: resource.ComposeTestCheckFunc(
+					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
+					resource.TestCheckResourceAttr("opensearch_cluster_settings.global", "search_concurrent_segment_search_enabled", "true"),
+				),
+			},
+		},
+	})
+}
+
+var testAccOpensearchClusterSettingsConcurrentSegmentSearch = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete                 = true
+  search_concurrent_segment_search_enabled = true
+  search_concurrent_segment_search_mode    = "auto"
+}
+`
+
+var testAccOpensearchClusterSettingsConcurrentSegmentSearchEnabledOnly = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete                 = true
+  search_concurrent_segment_search_enabled = true
+}
+`
+
+var testAccOpensearchClusterSettingsConcurrentSegmentSearchModeAll = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete              = true
+  search_concurrent_segment_search_mode = "all"
+}
+`
+
+var testAccOpensearchClusterSettingsConcurrentSegmentSearchModeNone = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete              = true
+  search_concurrent_segment_search_mode = "none"
+}
+`
+
+var testAccOpensearchClusterSettingsConcurrentMaxSliceCountZero = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete       = true
+  search_concurrent_max_slice_count = 0
+}
+`
+
+var testAccOpensearchClusterSettingsConcurrentMaxSliceCountEight = `
+resource "opensearch_cluster_settings" "global" {
+  reset_settings_on_delete       = true
+  search_concurrent_max_slice_count = 8
+}
+`
