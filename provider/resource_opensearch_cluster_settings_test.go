@@ -20,6 +20,7 @@ func TestAccOpensearchClusterSettings(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testCheckOpensearchClusterSettingInState("opensearch_cluster_settings.global"),
 					testCheckOpensearchClusterSettingExists("action.auto_create_index"),
+					testCheckOpensearchClusterSettingExists("search.max_buckets"),
 				),
 			},
 		},
@@ -122,6 +123,7 @@ resource "opensearch_cluster_settings" "global" {
   cluster_max_shards_per_node       = 10
   cluster_routing_allocation_enable = "all"
   action_auto_create_index          = "my-index-000001,index10,-index1*,+ind*,-.aws_cold_catalog*,+*"
+  search_max_buckets                = 20000
 }
 `
 

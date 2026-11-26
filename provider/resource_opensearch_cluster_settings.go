@@ -50,6 +50,7 @@ var (
 		"cluster.routing.allocation.node_concurrent_recoveries",
 		"cluster.routing.allocation.node_initial_primaries_recoveries",
 		"cluster.routing.allocation.total_shards_per_node",
+		"search.max_buckets",
 	}
 	floatClusterSettings = []string{
 		"cluster.routing.allocation.balance.index",
@@ -305,6 +306,11 @@ func resourceOpensearchClusterSettings() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "A time string setting a cluster-wide default timeout for all search requests",
+			},
+			"search_max_buckets": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Description: "The maximum number of aggregation buckets allowed in a single response",
 			},
 			"action_auto_create_index": {
 				Type:         schema.TypeString,
